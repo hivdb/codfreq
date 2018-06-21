@@ -1,0 +1,85 @@
+#! /bin/bash
+
+set -e
+
+
+SKIP_EXISTS=false
+NPROCALL=`nproc --all`
+PATTERN='(.+)_[12]\.fastq\.gz$'
+REPLACEMENT='\1'
+FQ1SUFFIX='_1.fastq.gz'
+FQ2SUFFIX='_2.fastq.gz'
+NTHREADS=$(($NPROCALL * 19 / 20))
+USAGE="command usage: $(basename $0) [-s] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
+BTIDX="$(realpath $(dirname $0)/..)/bt/hiv1b-pol"
+
+
+while getopts ':sn:p:r:1:2:' OPT; do
+    case "$OPT" in
+        s)
+            SKIP_EXISTS=true
+            ;;
+        n)
+            NTHREADS=$OPTARG
+            ;;
+        p)
+            PATTERN=$OPTARG
+            ;;
+        r)
+            REPLACEMENT=$OPTARG
+            ;;
+        1)
+            FQ1SUFFIX=$OPTARG
+            ;;
+        2)
+            FQ2SUFFIX=$OPTARG
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :)
+            echo -e "Missing option argument for -$OPTARG\n$USAGE" >&2
+            exit 2
+            ;;
+        *)
+            echo -e "Unimplemented option: -$OPTARG\n$USAGE" >&2
+            exit 3
+            ;;
+    esac
+done
+
+shift $(($OPTIND - 1))
+
+if [ -z "$1" ]; then
+    echo -e "Missing parameter DIRECTORY\n$USAGE" >&2
+    exit 1
+fi
+
+NTHREADS=$(($NTHREADS > 0 ? $NTHREADS : 1))
+NTHREADS=$(($NTHREADS < $NPROCALL ? $NTHREADS : $NPROCALL - 1))
+BOWTIE2_OPTIONS="--local --rdg 8,3 --rfg 8,3 --ma 1 --mp 2,2 -p${NTHREADS}"
+
+knowns=""
+while [ -n "$1" ]; do
+    directory=$(realpath $1)
+    for filename in `find $directory -regextype posix-extended -regex "$PATTERN"`; do
+        noext=$(echo $filename | sed -r "s/${PATTERN}/${REPLACEMENT}/g")
+        if [[ $knowns =~ (^|[[:space:]])$noext($|[[:space:]]) ]]; then
+            continue
+        fi
+        knowns="$known $noext"
+        out="$noext.sam"
+        if $SKIP_EXISTS && [ -f $out ]; then
+            echo "Skipped: $noext"
+            continue
+        fi
+        if [ -f ${noext}${FQ2SUFFIX} ]; then
+            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -1 ${noext}${FQ2SUFFIX} -2 ${noext}${FQ2SUFFIX} -S $out > $noext.bt.log
+        else
+            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $out > $noext.bt.log
+        fi
+        cat $noext.bt.log
+    done
+    shift
+done
