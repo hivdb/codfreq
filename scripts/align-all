@@ -3,6 +3,7 @@
 set -e
 
 
+VERBOSE=false
 SKIP_EXISTS=false
 NPROCALL=`nproc --all`
 PATTERN='(.+)_[12]\.fastq\.gz$'
@@ -10,12 +11,16 @@ REPLACEMENT='\1'
 FQ1SUFFIX='_1.fastq.gz'
 FQ2SUFFIX='_2.fastq.gz'
 NTHREADS=$(($NPROCALL * 19 / 20))
-USAGE="command usage: $(basename $0) [-s] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
+USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
+SCRIPTDIR="$(realpath $(dirname $0))"
 BTIDX="$(realpath $(dirname $0)/..)/bt/hiv1b-pol"
 
 
-while getopts ':sn:p:r:1:2:' OPT; do
+while getopts ':svn:p:r:1:2:' OPT; do
     case "$OPT" in
+        v)
+            VERBOSE=true
+            ;;
         s)
             SKIP_EXISTS=true
             ;;
@@ -57,7 +62,7 @@ if [ -z "$1" ]; then
 fi
 
 NTHREADS=$(($NTHREADS > 0 ? $NTHREADS : 1))
-NTHREADS=$(($NTHREADS < $NPROCALL ? $NTHREADS : $NPROCALL - 1))
+export NTHREADS=$(($NTHREADS < $NPROCALL ? $NTHREADS : $NPROCALL - 1))
 BOWTIE2_OPTIONS="--local --rdg 8,3 --rfg 8,3 --ma 1 --mp 2,2 -p${NTHREADS}"
 
 knowns=""
@@ -69,17 +74,22 @@ while [ -n "$1" ]; do
             continue
         fi
         knowns="$known $noext"
-        out="$noext.sam"
+        samout="$noext.sam"
+        codfishout="$noext.codfish"
         if $SKIP_EXISTS && [ -f $out ]; then
             echo "Skipped: $noext"
             continue
         fi
         if [ -f ${noext}${FQ2SUFFIX} ]; then
-            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -1 ${noext}${FQ2SUFFIX} -2 ${noext}${FQ2SUFFIX} -S $out > $noext.bt.log
+            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -1 ${noext}${FQ2SUFFIX} -2 ${noext}${FQ2SUFFIX} -S $samout 2> $noext.log
         else
-            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $out > $noext.bt.log
+            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $samout 2> $noext.log
         fi
-        cat $noext.bt.log
+        # cat $noext.bt.log
+        python ${SCRIPTDIR}/sam2codfish.py $samout $codfishout >> $noext.log
+        if $VERBOSE; then
+            cat $noext.log >&2
+        fi
     done
     shift
 done
