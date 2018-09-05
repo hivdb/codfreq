@@ -17,18 +17,16 @@ GENE_AA_RANGE = (
     ('IN', 56 + 99 + 560 + 1, 56 + 99 + 560 + 288)
 )
 
-REMOVE_ABNORMALS = True
-
 # see https://en.wikipedia.org/wiki/Phred_quality_score
 OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 30))
 LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 100))
 SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 30))
 
-INPUT_QUEUE = Queue()
+NUM_PROCESSES = int(os.environ.get('NTHREADS', 2))
+INPUT_QUEUE = Queue(NUM_PROCESSES)
 OUTPUT_QUEUE = Queue()
 
 PRODUCER_CAPACITY = 50000
-NUM_PROCESSES = int(os.environ.get('NTHREADS', 2))
 
 CHUNKSIZE = 500
 
@@ -37,7 +35,7 @@ ERR_TOO_SHORT = 0b01
 ERR_LOW_QUAL = 0b10
 
 
-def get_codon_counts(seq, qua, aligned_pairs):
+def get_codon_counts(seq, qua, aligned_pairs, header):
 
     # pre-filter
     err = ERR_OK
@@ -50,7 +48,7 @@ def get_codon_counts(seq, qua, aligned_pairs):
 
     codons = {}
     prev_seqpos = -1
-    min_cdpos = len(seq)
+    min_cdpos = aligned_pairs[-1][1] if aligned_pairs else 0xffffffff
     max_cdpos = 0
     for seqpos, refpos in aligned_pairs:
         if prev_seqpos > -1:
@@ -77,8 +75,8 @@ def get_codon_counts(seq, qua, aligned_pairs):
     results = []
     for cdpos in range(min_cdpos, max_cdpos + 1):
         codon = ''.join(codons.get(cdpos, ['---']))
-        if REMOVE_ABNORMALS and '-' in codon:
-            continue
+        codon = codon if codon == '---' else codon.replace('-', '')
+        # codon = codon.replace('-', '')
         if len(codon) - codon.count('*') < 3:
             continue
         codon = codon.replace('*', 'N')
@@ -110,7 +108,7 @@ def reads_producer(filename, offset):
             if len(chunk) == CHUNKSIZE:
                 INPUT_QUEUE.put(chunk)
                 chunk = []
-            chunk.append((seq, qua, aligned_pairs))
+            chunk.append((seq, qua, aligned_pairs, idx + offset))
         if chunk:
             INPUT_QUEUE.put(chunk)
 

@@ -7,9 +7,14 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-WORKDIR=$PWD/$(echo $1 | rev | cut -d "." -f2- | rev)
-mkdir -p $WORKDIR
-cd $WORKDIR
-for acc in $(cat $PWD/$1); do
-   fastq-dump -I --split-files --gzip $acc
+_PWD=$(pwd)
+
+while [ -n "$1" ]; do
+    WORKDIR=$_PWD/$(echo $1 | rev | cut -d "." -f2- | rev)
+    mkdir -p $WORKDIR
+    cd $WORKDIR
+    for acc in $(sed '1d' $_PWD/$1 | awk -F',' '{print $1}'); do
+       fastq-dump -I --split-files --gzip $acc || true
+    done
+    shift
 done

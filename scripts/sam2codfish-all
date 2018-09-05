@@ -6,17 +6,12 @@ set -e
 VERBOSE=false
 SKIP_EXISTS=false
 NPROCALL=`nproc --all`
-PATTERN='(.+)_[12]\.fastq\.gz$'
-REPLACEMENT='\1'
-FQ1SUFFIX='_1.fastq.gz'
-FQ2SUFFIX='_2.fastq.gz'
 NTHREADS=$(($NPROCALL * 19 / 20))
-USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
+USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] <DIRECTORY>"
 SCRIPTDIR="$(realpath $(dirname $0))"
-BTIDX="$(realpath $(dirname $0)/..)/bt/hiv1b-pol"
 
 
-while getopts ':svn:p:r:1:2:' OPT; do
+while getopts ':svn:' OPT; do
     case "$OPT" in
         v)
             VERBOSE=true
@@ -26,18 +21,6 @@ while getopts ':svn:p:r:1:2:' OPT; do
             ;;
         n)
             NTHREADS=$OPTARG
-            ;;
-        p)
-            PATTERN=$OPTARG
-            ;;
-        r)
-            REPLACEMENT=$OPTARG
-            ;;
-        1)
-            FQ1SUFFIX=$OPTARG
-            ;;
-        2)
-            FQ2SUFFIX=$OPTARG
             ;;
         \?)
             echo $USAGE >&2
@@ -63,17 +46,13 @@ fi
 
 NTHREADS=$(($NTHREADS > 0 ? $NTHREADS : 1))
 export NTHREADS=$(($NTHREADS < $NPROCALL ? $NTHREADS : $NPROCALL - 1))
-BOWTIE2_OPTIONS="--local --rdg 8,3 --rfg 8,3 --ma 1 --mp 2,2 -p${NTHREADS}"
 
 . ~/.virtualenvs/SRALoader/bin/activate
 knowns=""
 while [ -n "$1" ]; do
     directory=$(realpath $1)
-    for filename in `find $directory -regextype posix-extended -regex "$PATTERN"`; do
-        noext=$(echo $filename | sed -r "s/${PATTERN}/${REPLACEMENT}/g")
-        if [[ $knowns =~ (^|[[:space:]])$noext($|[[:space:]]) ]]; then
-            continue
-        fi
+    for filename in `find $directory -name "*.sam"`; do
+        noext=$(echo $filename | sed -r "s/\.sam$//g")
         knowns="$known $noext"
         samout="$noext.sam"
         codfishout="$noext.codfish"
@@ -81,12 +60,6 @@ while [ -n "$1" ]; do
             echo "Skipped: $noext"
             continue
         fi
-        if [ -f ${noext}${FQ2SUFFIX} ]; then
-            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -1 ${noext}${FQ1SUFFIX} -2 ${noext}${FQ2SUFFIX} -S $samout 2> $noext.log
-        else
-            bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $samout 2> $noext.log
-        fi
-        # cat $noext.bt.log
         python ${SCRIPTDIR}/sam2codfish.py $samout $codfishout >> $noext.log
         if $VERBOSE; then
             cat $noext.log >&2
