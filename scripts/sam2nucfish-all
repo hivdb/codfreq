@@ -49,12 +49,12 @@ while [ -n "$1" ]; do
     for filename in `find $directory -name "*.sam" -o -name "*.bam"`; do
         noext=$(echo $filename | sed -r "s/\.[bs]am$//g")
         knowns="$known $noext"
-        codfishout="$noext.codfish"
-        if $SKIP_EXISTS && [ -f $codfishout ]; then
+        nucfishout="$noext.nucfish"
+        if $SKIP_EXISTS && [ -f $nucfishout ]; then
             echo "Skipped: $noext"
             continue
         fi
-        python3 ${SCRIPTDIR}/sam2codfish.py $filename $codfishout | tee -a $noext.log
+        python3 ${SCRIPTDIR}/sam2nucfish.py $filename $nucfishout | tee -a $noext.log
     done
     shift
 done

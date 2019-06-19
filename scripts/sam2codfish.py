@@ -18,9 +18,9 @@ GENE_AA_RANGE = (
 )
 
 # see https://en.wikipedia.org/wiki/Phred_quality_score
-OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 30))
-LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 100))
-SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 30))
+OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 25))
+LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 50))
+SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 25))
 
 NUM_PROCESSES = int(os.environ.get('NTHREADS', 2))
 INPUT_QUEUE = Queue(NUM_PROCESSES)

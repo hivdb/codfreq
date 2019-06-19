@@ -1,0 +1,17 @@
+#! /bin/bash
+
+set -e
+
+USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] <DIRECTORY>"
+
+dir="${@: -1}"
+ABSDIR="$(realpath $dir)"
+
+arglen=$(($#-1))
+PARAMS=${@:1:$arglen}
+
+docker run \
+    -it --rm \
+    --mount type=bind,source="$ABSDIR",target=/bamfiles \
+    hivdb/codfish:latest \
+    /app/sam2nucfish-all $PARAMS /bamfiles
