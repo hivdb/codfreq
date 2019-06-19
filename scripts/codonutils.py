@@ -108,9 +108,9 @@ def expand_ambiguous_na(na):
 
 
 def translate_codon(nas):
+    nas = nas.replace('-', 'N')[:3]
     if nas in CODON_TABLE:
         return CODON_TABLE[nas]
-    nas = nas.replace('-', 'N')[:3]
     aas = set()
     for na0 in AMBIGUOUS_NAS.get(nas[0], nas[0]):
         for na1 in AMBIGUOUS_NAS.get(nas[1], nas[1]):
