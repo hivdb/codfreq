@@ -2,7 +2,7 @@
 
 set -e
 
-USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] <DIRECTORY>"
+USAGE="command usage: $(basename $0) [-s] [-n NTHREADS] <DIRECTORY>"
 
 dir="${@: -1}"
 ABSDIR="$(realpath $dir)"
