@@ -12,9 +12,9 @@ from collections import defaultdict, Counter
 REF_CODON_OFFSET = 0
 
 # see https://en.wikipedia.org/wiki/Phred_quality_score
-OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 25))
+OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 35))
 LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 50))
-SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 25))
+SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 35))
 
 NUM_PROCESSES = int(os.environ.get('NTHREADS', 2))
 INPUT_QUEUE = Queue(NUM_PROCESSES)
@@ -40,13 +40,41 @@ def get_na_counts(seq, qua, aligned_pairs, header):
     if err:
         return None, err
 
-    nas = []
-    for seqpos, refpos in aligned_pairs:
-        n, q = seq[seqpos], qua[seqpos]
-        if q < SITE_QUALITY_CUTOFF:
+    nas = defaultdict(list)
+    prev_refpos = 0
+    prev_seqpos0 = 0
+    for seqpos0, refpos0 in aligned_pairs:
+
+        if refpos0 is None:
+            # insertion
+            refpos = prev_refpos
+        else:
+            refpos = refpos0 + 1
+            prev_refpos = refpos
+
+        if seqpos0 is None:
+            # deletion
+            n, q = '-', qua[prev_seqpos0]
+        else:
+            n, q = seq[seqpos0], qua[seqpos0]
+            prev_seqpos0 = seqpos0
+
+        if refpos == 0:
             continue
-        nas.append((refpos, n))
-    return nas, err
+
+        nas[refpos].append((n, q))
+
+    result_nas = []
+    for pos, nqs in sorted(nas.items()):
+        qs = [q for _, q in nqs]
+        meanq = sum(qs) / len(qs)
+        if meanq < SITE_QUALITY_CUTOFF:
+            continue
+        result_nas.append((pos, ''.join(n for n, _ in nqs)))
+    lastpos, lastna = result_nas[-1]
+    # remove insertion at the end of sequence read
+    result_nas[-1] = (lastpos, lastna[0])
+    return result_nas, err
 
 
 def reads_consumer():
@@ -69,7 +97,7 @@ def reads_producer(filename, offset):
                 break
             seq, qua, aligned_pairs = (read.query_sequence,
                                        read.query_qualities,
-                                       read.get_aligned_pairs(True))
+                                       read.get_aligned_pairs(False))
             if len(chunk) == CHUNKSIZE:
                 INPUT_QUEUE.put(chunk)
                 chunk = []

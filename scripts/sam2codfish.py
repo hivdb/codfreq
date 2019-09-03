@@ -104,7 +104,7 @@ def reads_producer(filename, offset):
                 break
             seq, qua, aligned_pairs = (read.query_sequence,
                                        read.query_qualities,
-                                       read.get_aligned_pairs(True))
+                                       read.get_aligned_pairs(False))
             if len(chunk) == CHUNKSIZE:
                 INPUT_QUEUE.put(chunk)
                 chunk = []

@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 from __future__ import division
+import re
 import sys
 import csv
 
@@ -10,8 +11,10 @@ from collections import defaultdict
 
 GENE_OFFSET = {
     'PR': -1,
+    'PROTEASE': -1,
     'RT': 99 - 1,
-    'IN': 99 + 560 - 1
+    'IN': 99 + 560 - 1,
+    'INT': 99 + 560 - 1
 }
 
 REVERSED_AMBIGUOUS_NAS = {
@@ -45,10 +48,15 @@ def main():
             with open(fname, 'r') as fp:
                 all_codons = defaultdict(set)
                 reader = csv.reader(fp, delimiter='\t')
-                for gene, cdpos, total, codon, read in reader:
-                    cdpos = int(cdpos)
+                for gene, cdpos, total, codon, read, *_ in reader:
+                    try:
+                        cdpos = int(cdpos)
+                    except ValueError:
+                        continue
                     read = int(read)
                     total = int(total)
+                    if total == 0:
+                        continue
                     freq = read / total
                     if total < MIN_READ_DEPTH:
                         continue
@@ -56,7 +64,7 @@ def main():
                         continue
                     if freq < pcnt_cutoff:
                         continue
-                    all_codons[cdpos + GENE_OFFSET[gene]].add(codon)
+                    all_codons[cdpos + GENE_OFFSET[gene.upper()]].add(codon)
                 prev_pos = 0
                 for pos, codons in sorted(all_codons.items()):
                     posgap = pos - prev_pos
@@ -67,6 +75,7 @@ def main():
                         nas = set(nas)
                         nas -= {None, '-'}
                         nas = ''.join(sorted(nas))
+                        nas = re.sub('[^ACGT]', '', nas)
                         if len(nas) > 1:
                             nas = REVERSED_AMBIGUOUS_NAS[nas]
                         cons.append(nas)
