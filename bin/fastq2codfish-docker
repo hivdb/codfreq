@@ -1,0 +1,17 @@
+#! /bin/bash
+
+set -e
+
+USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
+
+dir="${@: -1}"
+ABSDIR="$(realpath $dir)" || echo $USAGE || false
+
+arglen=$(($#-1))
+PARAMS=${@:1:$arglen}
+
+docker run \
+    -it --rm \
+    --mount type=bind,source="$ABSDIR",target=/fastqfiles \
+    hivdb/codfish:latest \
+    /app/align-all $PARAMS /fastqfiles

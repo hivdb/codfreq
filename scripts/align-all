@@ -6,14 +6,17 @@ set -e
 VERBOSE=false
 SKIP_EXISTS=false
 NPROCALL=`nproc --all`
-PATTERN='(.+)_[12]\.fastq\.gz$'
+# PATTERN='(.+)_[12]\.fastq\.gz$'
+PATTERN='(.+)_R[12]_001\.fastq\.gz$'
 REPLACEMENT='\1'
-FQ1SUFFIX='_1.fastq.gz'
-FQ2SUFFIX='_2.fastq.gz'
+# FQ1SUFFIX='_1.fastq.gz'
+# FQ2SUFFIX='_2.fastq.gz'
+FQ1SUFFIX='_R1_001.fastq.gz'
+FQ2SUFFIX='_R2_001.fastq.gz'
 NTHREADS=$(($NPROCALL * 19 / 20))
 USAGE="command usage: $(basename $0) [-sv] [-n NTHREADS] [-p PATTERN] [-r REPLACEMENT] [-1 FASTQ1_SUFFIX] [-2 FASTQ2_SUFFIX] <DIRECTORY>"
 SCRIPTDIR="$(realpath $(dirname $0))"
-BTIDX="$(realpath $(dirname $0)/..)/bt/hiv1b-pol"
+BTIDX="$(realpath $(realpath $(dirname $0)/..)/bt/hiv1b-pol)"
 
 
 while getopts ':svn:p:r:1:2:' OPT; do
@@ -65,7 +68,7 @@ NTHREADS=$(($NTHREADS > 0 ? $NTHREADS : 1))
 export NTHREADS=$(($NTHREADS < $NPROCALL ? $NTHREADS : $NPROCALL - 1))
 BOWTIE2_OPTIONS="--local --rdg 8,3 --rfg 8,3 --ma 1 --mp 2,2 -p${NTHREADS}"
 
-. ~/.virtualenvs/SRALoader/bin/activate
+# . ~/.virtualenvs/SRALoader/bin/activate
 knowns=""
 while [ -n "$1" ]; do
     directory=$(realpath $1)
@@ -87,7 +90,7 @@ while [ -n "$1" ]; do
             bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $samout 2> $noext.log
         fi
         # cat $noext.bt.log
-        python ${SCRIPTDIR}/sam2codfish.py $samout $codfishout >> $noext.log
+        python3 ${SCRIPTDIR}/sam2codfish.py $samout $codfishout >> $noext.log
         if $VERBOSE; then
             cat $noext.log >&2
         fi
