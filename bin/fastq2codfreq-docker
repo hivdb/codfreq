@@ -13,5 +13,5 @@ PARAMS=${@:1:$arglen}
 docker run \
     -it --rm \
     --mount type=bind,source="$ABSDIR",target=/fastqfiles \
-    hivdb/codfish:latest \
+    hivdb/codfreq:latest \
     /app/align-all $PARAMS /fastqfiles

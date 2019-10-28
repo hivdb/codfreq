@@ -79,8 +79,8 @@ while [ -n "$1" ]; do
         fi
         knowns="$known $noext"
         samout="$noext.sam"
-        codfishout="$noext.codfish"
-        if $SKIP_EXISTS && [ -f $codfishout ]; then
+        codfreqout="$noext.codfreq"
+        if $SKIP_EXISTS && [ -f $codfreqout ]; then
             echo "Skipped: $noext"
             continue
         fi
@@ -90,7 +90,7 @@ while [ -n "$1" ]; do
             bowtie2 $BOWTIE2_OPTIONS -x $BTIDX -U ${noext}${FQ1SUFFIX} -S $samout 2> $noext.log
         fi
         # cat $noext.bt.log
-        python3 ${SCRIPTDIR}/sam2codfish.py $samout $codfishout >> $noext.log
+        python3 ${SCRIPTDIR}/sam2codfreq.py $samout $codfreqout >> $noext.log
         if $VERBOSE; then
             cat $noext.log >&2
         fi

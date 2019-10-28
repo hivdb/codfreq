@@ -13,5 +13,5 @@ PARAMS=${@:1:$arglen}
 docker run \
     -it --rm \
     --mount type=bind,source="$ABSDIR",target=/bamfiles \
-    hivdb/codfish:latest \
-    /app/sam2codfish-all $PARAMS /bamfiles
+    hivdb/codfreq:latest \
+    /app/sam2nucfreq-all $PARAMS /bamfiles
