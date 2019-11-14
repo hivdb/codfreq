@@ -1,0 +1,19 @@
+#! /bin/bash
+
+set -e
+
+USAGE="command usage: $(basename $0) <PCNT_CUTOFF> <INPUT_DIRECTORY>"
+
+dir="${@: -1}"
+ABSDIR="$(realpath $dir)"
+
+arglen=$(($#-1))
+PARAMS=${@:1:$arglen}
+
+docker run \
+    -it --rm \
+    --env MIN_READ_DEPTH=100 \
+    --env MIN_ALLELE_COUNT=5 \
+    --mount type=bind,source="$ABSDIR",target=/nucfreqfiles \
+    hivdb/codfreq:latest \
+    python3 /app/nucfreq2fasta.py $PARAMS /nucfreqfiles/sequences.fas /nucfreqfiles

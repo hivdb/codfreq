@@ -54,7 +54,7 @@ def get_na_counts(seq, qua, aligned_pairs, header):
 
         if seqpos0 is None:
             # deletion
-            n, q = '-', qua[prev_seqpos0]
+            n, q = 'd', qua[prev_seqpos0]
         else:
             n, q = seq[seqpos0], qua[seqpos0]
             prev_seqpos0 = seqpos0
@@ -126,6 +126,7 @@ def main():
         consumer.start()
 
     nafreqs = defaultdict(Counter)
+    insdetail = defaultdict(Counter)
     num_finished = 0
     num_tooshort = 0
     num_lowqual = 0
@@ -139,16 +140,26 @@ def main():
                 num_lowqual += 1
             else:
                 for refpos, na in results:
+                    if len(na) > 1:
+                        insdetail[refpos][na] += 1
+                        na = 'i'
                     nafreqs[refpos][na] += 1
 
     with open(sys.argv[2], 'w') as out:
         writer = csv.writer(out, delimiter='\t')
-        writer.writerow(['Position', 'Total', 'NA', 'ReadCount'])
+        writer.writerow(['Position', 'Total', 'NA', 'ReadCount', 'InsDetail'])
         for refpos, counter in sorted(nafreqs.items()):
             total = sum(counter.values())
-            for na, read in sorted(counter.items(),
-                                   key=lambda it: (-it[1], it[0])):
-                writer.writerow([refpos, total, na, read])
+            for na in 'ACGTid':
+                read = counter[na]
+                ins = ''
+                if na == 'i':
+                    ins = ', '.join(
+                        '{} ({})'.format(insna, insread)
+                        for insna, insread in
+                        insdetail[refpos].most_common()
+                    )
+                writer.writerow([refpos, total, na, read, ins])
     print('{} reads processed. Of them:'.format(num_finished))
     print('  Length of {} were too short'.format(num_tooshort))
     print('  Quality of {} were too low'.format(num_lowqual))

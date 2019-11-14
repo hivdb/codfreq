@@ -12,6 +12,8 @@ PARAMS=${@:1:$arglen}
 
 docker run \
     -it --rm \
+    --env OVERALL_QUALITY_CUTOFF=30 \
+    --env SITE_QUALITY_CUTOFF=25 \
     --mount type=bind,source="$ABSDIR",target=/bamfiles \
     hivdb/codfreq:latest \
     /app/sam2nucfreq-all $PARAMS /bamfiles
