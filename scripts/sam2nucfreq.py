@@ -4,6 +4,7 @@ from __future__ import print_function
 import os
 import sys
 import csv
+import json
 import pysam
 from statistics import mean
 from multiprocessing import Process, Queue
@@ -27,6 +28,17 @@ CHUNKSIZE = 500
 ERR_OK = 0b00
 ERR_TOO_SHORT = 0b01
 ERR_LOW_QUAL = 0b10
+
+
+def read_popprev():
+    loc = os.path.join(
+        os.path.dirname(__file__),
+        '5prime-napcnts.json'
+    )
+    with open(loc) as fp:
+        popprev = json.load(fp)
+    return {(i['Position'], i['NA'].replace('U', 'T')): i
+            for i in popprev}
 
 
 def get_na_counts(seq, qua, aligned_pairs, header):
@@ -145,9 +157,14 @@ def main():
                         na = 'i'
                     nafreqs[refpos][na] += 1
 
+    all_popprev = read_popprev()
     with open(sys.argv[2], 'w') as out:
         writer = csv.writer(out, delimiter='\t')
-        writer.writerow(['Position', 'Total', 'NA', 'ReadCount', 'InsDetail'])
+        writer.writerow([
+            'Position', 'Total', 'NA', 'ReadCount', 'InsDetail',
+            'ReadPcnt', 'PopConsensus', 'PopTotal', 'PopCount',
+            'PopPcnt'
+        ])
         for refpos, counter in sorted(nafreqs.items()):
             total = sum(counter.values())
             for na in 'ACGTid':
@@ -159,7 +176,20 @@ def main():
                         for insna, insread in
                         insdetail[refpos].most_common()
                     )
-                writer.writerow([refpos, total, na, read, ins])
+                popprev = all_popprev.get((refpos, na))
+                poprows = ['NA', 'NA', 'NA']
+                if popprev:
+                    poprows = [
+                        popprev['Consensus'],
+                        popprev['Total'],
+                        popprev['Count'],
+                        '{}%'.format(popprev['Percent'] * 100)
+                    ]
+                writer.writerow([
+                    refpos, total, na, read, ins,
+                    '{}%'.format(read / total * 100),
+                    *poprows
+                ])
     print('{} reads processed. Of them:'.format(num_finished))
     print('  Length of {} were too short'.format(num_tooshort))
     print('  Quality of {} were too low'.format(num_lowqual))

@@ -16,5 +16,5 @@ docker run \
     --env LENGTH_CUTOFF=50 \
     --env SITE_QUALITY_CUTOFF=25 \
     --mount type=bind,source="$ABSDIR",target=/bamfiles \
-    hivdb/codfreq:latest \
+    hivdb/codfreq:latest-5prime \
     /app/sam2nucfreq-all $PARAMS /bamfiles
