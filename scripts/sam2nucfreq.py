@@ -83,9 +83,10 @@ def get_na_counts(seq, qua, aligned_pairs, header):
         if meanq < SITE_QUALITY_CUTOFF:
             continue
         result_nas.append((pos, ''.join(n for n, _ in nqs)))
-    lastpos, lastna = result_nas[-1]
-    # remove insertion at the end of sequence read
-    result_nas[-1] = (lastpos, lastna[0])
+    if result_nas:
+        lastpos, lastna = result_nas[-1]
+        # remove insertion at the end of sequence read
+        result_nas[-1] = (lastpos, lastna[0])
     return result_nas, err
 
 
@@ -124,7 +125,8 @@ def main():
               file=sys.stderr)
         exit(1)
     with pysam.AlignmentFile(sys.argv[1], 'rb') as samfile:
-        totalreads = samfile.count(until_eof=True)
+        # set until_eof=False to exclude unmapped reads
+        totalreads = samfile.count(until_eof=False)
     offset = 0
     while offset < totalreads:
         producer = Process(target=reads_producer, args=(sys.argv[1], offset))
@@ -180,13 +182,16 @@ def main():
                 poprows = ['NA', 'NA', 'NA']
                 if popprev:
                     poprows = [
-                        popprev['Consensus'],
+                        popprev['Consensus']
+                        .replace('i', 'ins').replace('d', 'del'),
                         popprev['Total'],
                         popprev['Count'],
                         '{}%'.format(popprev['Percent'] * 100)
                     ]
                 writer.writerow([
-                    refpos, total, na, read, ins,
+                    refpos, total,
+                    na.replace('i', 'ins').replace('d', 'del'),
+                    read, ins,
                     '{}%'.format(read / total * 100),
                     *poprows
                 ])
