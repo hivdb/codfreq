@@ -6,6 +6,7 @@ import sys
 import csv
 import json
 import pysam
+import fastareader
 from statistics import mean
 from multiprocessing import Process, Queue
 from collections import defaultdict, Counter
@@ -41,7 +42,7 @@ def read_popprev():
             for i in popprev}
 
 
-def get_na_counts(seq, qua, aligned_pairs, header):
+def get_na_counts(seq, qua, aligned_pairs, header, profile):
 
     # pre-filter
     err = ERR_OK
@@ -55,12 +56,17 @@ def get_na_counts(seq, qua, aligned_pairs, header):
     nas = defaultdict(list)
     prev_refpos = 0
     prev_seqpos0 = 0
+    profile_char = ':'
+    insoffset = 0
     for seqpos0, refpos0 in aligned_pairs:
+        if profile and refpos0 is not None:
+            profile_char, insoffset = profile[refpos0]
 
-        if refpos0 is None:
+        if refpos0 is None or profile_char == '+':
             # insertion
             refpos = prev_refpos
         else:
+            refpos0 -= insoffset
             refpos = refpos0 + 1
             prev_refpos = refpos
 
@@ -90,12 +96,12 @@ def get_na_counts(seq, qua, aligned_pairs, header):
     return result_nas, err
 
 
-def reads_consumer():
+def reads_consumer(profile):
     while True:
         chunk = INPUT_QUEUE.get()
         out_chunk = []
         for args in chunk:
-            out_chunk.append(get_na_counts(*args))
+            out_chunk.append(get_na_counts(*args, profile))
         OUTPUT_QUEUE.put(out_chunk)
 
 
@@ -124,9 +130,25 @@ def main():
         print("Usage: {} <SAMFILE> <OUTPUT>".format(sys.argv[0]),
               file=sys.stderr)
         exit(1)
-    with pysam.AlignmentFile(sys.argv[1], 'rb') as samfile:
+    samfile_path = sys.argv[1]
+    with pysam.AlignmentFile(samfile_path, 'rb') as samfile:
         # set until_eof=False to exclude unmapped reads
         totalreads = samfile.count(until_eof=False)
+    reffilepath = samfile_path[:-4] + '.lastref.fas'
+    profile = []
+    if os.path.isfile(reffilepath):
+        with open(reffilepath, 'r') as reffile:
+            profile_tmp = [
+                s['sequence']
+                for s in fastareader.load(reffile)
+                if s['header'].endswith('-consensus.profile')
+            ]
+            if profile_tmp:
+                totalins = 0
+                for c in profile_tmp[0]:
+                    if c == '+':
+                        totalins += 1
+                    profile.append([c, totalins])
     offset = 0
     while offset < totalreads:
         producer = Process(target=reads_producer, args=(sys.argv[1], offset))
@@ -135,7 +157,7 @@ def main():
         offset += PRODUCER_CAPACITY
 
     for _ in range(NUM_PROCESSES):
-        consumer = Process(target=reads_consumer)
+        consumer = Process(target=reads_consumer, args=(profile,))
         consumer.daemon = True
         consumer.start()
 
