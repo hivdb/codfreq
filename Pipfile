@@ -12,6 +12,7 @@ ssw = "*"
 tqdm = "*"
 ray = "*"
 more-itertools = "*"
+awscli = "*"
 
 [requires]
 python_version = "3.7"

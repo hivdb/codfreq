@@ -1,0 +1,97 @@
+#! /bin/bash
+
+set -e
+
+cd $(dirname $0)/..
+S3_BUCKET="s3://sars2-sra"
+
+
+lss3() {
+    aws s3 ls ${S3_BUCKET}/${1} |
+    awk '{print $4}'
+}
+
+
+downloads3() {
+    aws s3 cp ${S3_BUCKET}/$1 $2
+}
+
+syncs3() {
+    aws s3 sync $1 ${S3_BUCKET}/
+}
+
+get_accessions() {
+    lss3 |
+    awk -F '_' '{print $1}' |
+    awk -F '.' '{print $1}' |
+    sort |
+    uniq
+}
+
+
+has_codfreq() {
+    echo $@ | \grep "\.${GENE}\.codfreq" >/dev/null
+    return $?
+}
+
+INCREMENT=false
+USAGE="command usage: $(basename $0) [-i] -r <REFERENCE> -g <GENE>"
+
+while getopts ':ir:g:' OPT; do
+    case "$OPT" in
+        i)
+            INCREMENT=true
+            ;;
+        r)
+            REFERENCE=$OPTARG
+            ;;
+        g)
+            GENE=$OPTARG
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :) echo "Missing option argument for -$OPTARG\n$USAGE" >&2; exit 1;;
+        *) echo "Unimplemented option: -$OPTARG\n$USAGE" >&2; exit 1;;
+    esac
+done
+
+if [ -z $REFERENCE ]; then
+    echo "Missing required option argument -r <REFERENCE>" >&2
+    exit 1
+fi
+
+if [ ! -f $REFERENCE ]; then
+    echo "Value of -r <REFERENCE> is not a valid file" >&2
+    exit 1
+fi
+
+if [ -z $GENE ]; then
+    echo "Missing required option argument -g <GENE>" >&2
+    exit 1
+fi
+
+
+tmpdir=$(mktemp -d)
+# trap "rm $tmpdir" EXIT
+for accs in `get_accessions`; do
+    files=$(lss3 $accs)
+    if $INCREMENT && has_codfreq $files; then
+        continue
+    fi
+    echo "Aligning $accs..."
+    for file in $files; do
+        if [[ $file == *.fastq.gz ]]; then
+            downloads3 $file $tmpdir
+        fi
+    done
+    pipenv run python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE
+    samtools sort -O bam $tmpdir/$accs*.sam > $tmpdir/$accs.bam
+    samtools index $tmpdir/$accs.bam
+    rm $tmpdir/$accs*.sam
+    echo "Uploading $accs..."
+    syncs3 $tmpdir
+    rm $tmpdir/*.*
+    echo ""
+done

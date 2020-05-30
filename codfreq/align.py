@@ -7,7 +7,10 @@ import csv
 import click
 from itertools import combinations
 from collections import defaultdict
+from more_itertools import chunked
 
+from . import fastareader
+from .codonutils import translate_codon
 from .sam2codfreq import sam2codfreq
 from .cmdwrappers import (
     get_programs, get_refinit, get_align
@@ -157,6 +160,16 @@ def replace_ext(filename, toext, fromext=None, name_only=False):
         return os.path.splitext(filename)[0] + toext
 
 
+def get_refaas(reference):
+    refaas = {}
+    with open(reference) as fp:
+        refseq, = fastareader.load(fp)
+        refseq = refseq['sequence']
+        for pos0, codon in enumerate(chunked(refseq, 3)):
+            refaas[pos0 + 1] = translate_codon(''.join(codon))
+    return refaas
+
+
 @click.command()
 @click.argument(
     'workdir',
@@ -179,19 +192,20 @@ def replace_ext(filename, toext, fromext=None, name_only=False):
 def align(workdir, gene, program, reference):
     refinit = get_refinit(program)
     align = get_align(program)
+    refaas = get_refaas(reference)
     for fnpair, pattern in find_paired_fastqs(workdir):
         samfile = name_samfile(fnpair, pattern, gene)
-        refseq = reference
-        refinit(refseq)
-        align(refseq, *fnpair, samfile)
+        refinit(reference)
+        align(reference, *fnpair, samfile)
         codfreqfile = replace_ext(samfile, '.codfreq')
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, ['gene', 'position',
                                          'total', 'codon', 'count',
-                                         'aa'])
+                                         'refaa', 'aa', 'percent'])
             writer.writeheader()
             for row in sam2codfreq(samfile):
                 row['gene'] = gene
+                row['refaa'] = refaas[row['position']]
                 writer.writerow(row)
 
 

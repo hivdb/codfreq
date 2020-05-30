@@ -29,5 +29,6 @@ def sam2codfreq(sampath):
                 'total': total,
                 'codon': codon,
                 'aa': aa,
-                'count': count
+                'count': count,
+                'percent': count / total
             }
