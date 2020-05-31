@@ -8,9 +8,9 @@ from more_itertools import chunked
 from collections import defaultdict, Counter
 
 # see https://en.wikipedia.org/wiki/Phred_quality_score
-OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 30))
+OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 15))
 LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 50))
-SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 25))
+SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 20))
 
 ERR_OK = 0b00
 ERR_TOO_SHORT = 0b01
@@ -21,12 +21,14 @@ def extract_codons(seq, qua, aligned_pairs):
 
     # pre-filter
     err = ERR_OK
-    if not seq or len(seq) < LENGTH_CUTOFF:
+    len_seq = len(seq) if seq else -1
+    mean_qua = mean(qua) if qua else 0
+    if len_seq < LENGTH_CUTOFF:
         err |= ERR_TOO_SHORT
-    if not seq or mean(qua) < OVERALL_QUALITY_CUTOFF:
+    if mean_qua < OVERALL_QUALITY_CUTOFF:
         err |= ERR_LOW_QUAL
     if err:
-        return None, err
+        return None, err, len_seq, mean_qua
 
     codons = {}
     codonqs = defaultdict(list)
@@ -86,12 +88,31 @@ def extract_codons(seq, qua, aligned_pairs):
         lastpos, codon, q = results[-1]
         # remove insertion at the end of sequence read
         results[-1] = (lastpos, codon[0:3], q)
-    return results, err
+    return results, err, len_seq, mean_qua
 
 
 @ray.remote
 def batch_extract_codons(input_data):
     return [extract_codons(*args) for args in input_data]
+
+
+def _iter_from_futures(all_headers, futures, site_quality_cutoff):
+    for headers, all_results in zip(all_headers, ray.get(futures)):
+        for header, (results, err, len_seq, mean_qua) in \
+                zip(headers, all_results):
+            poscodons = defaultdict(Counter)
+            if err & ERR_TOO_SHORT or err & ERR_LOW_QUAL:
+                continue
+            for refpos, codon, q in results:
+                if q < site_quality_cutoff:
+                    continue
+                poscodons[refpos][codon] = q
+            if poscodons:
+                yield header, [
+                    # pos, codon, qual
+                    (pos, *counter.most_common(1)[0])
+                    for pos, counter in sorted(poscodons.items())
+                ]
 
 
 def iter_poscodons(all_paired_reads,
@@ -101,6 +122,7 @@ def iter_poscodons(all_paired_reads,
     all_headers = []
     all_paired_reads = list(all_paired_reads)
     pbar = tqdm(total=len(all_paired_reads))
+    max_concurrency = 10
     for partial in chunked(all_paired_reads, 20000):
         pbar.update(1)
         headers = []
@@ -116,19 +138,12 @@ def iter_poscodons(all_paired_reads,
                 ))
         all_headers.append(headers)
         futures.append(batch_extract_codons.remote(input_data))
+        if len(futures) == max_concurrency:
+            yield from _iter_from_futures(
+                all_headers, futures, site_quality_cutoff)
+            futures = []
+            all_headers = []
     pbar.close()
-    for headers, all_results in zip(all_headers, ray.get(futures)):
-        for header, (results, err) in zip(headers, all_results):
-            poscodons = defaultdict(Counter)
-            if err & ERR_TOO_SHORT or err & ERR_LOW_QUAL:
-                continue
-            for refpos, codon, q in results:
-                if q < site_quality_cutoff:
-                    continue
-                poscodons[refpos][codon] = q
-            if poscodons:
-                yield header, [
-                    # pos, codon, qual
-                    (pos, *counter.most_common(1)[0])
-                    for pos, counter in sorted(poscodons.items())
-                ]
+    if futures:
+        yield from _iter_from_futures(
+            all_headers, futures, site_quality_cutoff)

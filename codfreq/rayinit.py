@@ -1,2 +1,2 @@
 import ray
-ray.init()
+ray.init(address='auto', redis_password='2g^jEK6O!')

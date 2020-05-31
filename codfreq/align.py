@@ -201,7 +201,8 @@ def align(workdir, gene, program, reference):
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, ['gene', 'position',
                                          'total', 'codon', 'count',
-                                         'refaa', 'aa', 'percent'])
+                                         'refaa', 'aa', 'percent',
+                                         'mean_quality_score'])
             writer.writeheader()
             for row in sam2codfreq(samfile):
                 row['gene'] = gene

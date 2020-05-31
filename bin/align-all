@@ -21,7 +21,7 @@ syncs3() {
 }
 
 get_accessions() {
-    lss3 |
+    echo $@ | sed 's/ /\n/g' |
     awk -F '_' '{print $1}' |
     awk -F '.' '{print $1}' |
     sort |
@@ -75,9 +75,11 @@ fi
 
 tmpdir=$(mktemp -d)
 # trap "rm $tmpdir" EXIT
-for accs in `get_accessions`; do
-    files=$(lss3 $accs)
+all_files="$(lss3)"
+for accs in `get_accessions $all_files`; do
+    files=$(echo $all_files | sed 's/ /\n/g' | \grep $accs)
     if $INCREMENT && has_codfreq $files; then
+        echo "Skipped $accs" >&2
         continue
     fi
     echo "Aligning $accs..."
@@ -87,9 +89,10 @@ for accs in `get_accessions`; do
         fi
     done
     pipenv run python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE
-    samtools sort -O bam $tmpdir/$accs*.sam > $tmpdir/$accs.bam
-    samtools index $tmpdir/$accs.bam
+    samtools sort -O bam $tmpdir/$accs*.sam > $tmpdir/$accs.$GENE.bam
+    samtools index $tmpdir/$accs.$GENE.bam
     rm $tmpdir/$accs*.sam
+    mv $tmpdir/$accs*.log $tmpdir/$accs.$GENE.log
     echo "Uploading $accs..."
     syncs3 $tmpdir
     rm $tmpdir/*.*
