@@ -92,7 +92,9 @@ for accs in `get_accessions $all_files`; do
     samtools sort -O bam $tmpdir/$accs*.sam > $tmpdir/$accs.$GENE.bam
     samtools index $tmpdir/$accs.$GENE.bam
     rm $tmpdir/$accs*.sam
-    mv $tmpdir/$accs*.log $tmpdir/$accs.$GENE.log
+    if [ ! -f $tmpdir/$accs.$GENE.log ]; then
+        mv $tmpdir/$accs*.log $tmpdir/$accs.$GENE.log
+    fi
     echo "Uploading $accs..."
     syncs3 $tmpdir
     rm $tmpdir/*.*

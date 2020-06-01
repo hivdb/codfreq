@@ -122,7 +122,7 @@ def iter_poscodons(all_paired_reads,
     all_headers = []
     all_paired_reads = list(all_paired_reads)
     pbar = tqdm(total=len(all_paired_reads))
-    max_concurrency = 10
+    max_concurrency = 5
     for partial in chunked(all_paired_reads, 20000):
         pbar.update(1)
         headers = []
