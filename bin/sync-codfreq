@@ -1,0 +1,76 @@
+#! /bin/bash
+
+set -e
+
+S3_BUCKET="s3://sars2-sra"
+OS=$(uname -s)
+DATE_CMD=$(which date)
+STAT_CMD=$(which stat)
+TOUCH_CMD=$(which touch)
+
+if [[ $OS == 'Darwin' ]]; then
+    DATE_CMD=$(which gdate)
+    STAT_CMD=$(which gstat)
+    TOUCH_CMD=$(which gtouch)
+fi
+
+lss3() {
+    pipenv run aws s3 ls ${S3_BUCKET}/${1}
+}
+
+
+downloads3() {
+    pipenv run aws s3 cp ${S3_BUCKET}/$1 $2
+}
+
+VERBOSE=false
+USAGE="command usage: $(basename $0) [-v] -d <DIRECTORY>"
+
+while getopts ':vd:' OPT; do
+    case "$OPT" in
+        v)
+            VERBOSE=true
+            ;;
+        d)
+            DIRECTORY=$(realpath $OPTARG)
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :) echo "Missing option argument for -$OPTARG\n$USAGE" >&2; exit 1;;
+        *) echo "Unimplemented option: -$OPTARG\n$USAGE" >&2; exit 1;;
+    esac
+done
+
+if [ -z $DIRECTORY ]; then
+    echo "Missing required option argument -d <DIRECTORY>" >&2
+    exit 1
+fi
+
+mkdir -p $DIRECTORY
+cd $(dirname $0)/..
+
+
+lss3 | while read -r date time size file; do
+    if [[ "$file" != *.codfreq ]]; then
+        continue
+    fi
+    if [[ "$file" == "*_2.*.codfreq" ]]; then
+        continue
+    fi
+    subdir=$(echo "$file" | awk -F '.' '{print $(NF-1)}')
+    locfile="$DIRECTORY/$subdir/$file.txt"
+    if [ -f "$locfile" ]; then
+        # file exist, check datetime and size
+        if [[ $($STAT_CMD -c %s "$locfile") == ${size} ]]; then
+            if [[ $remote_ts == $local_ts ]]; then
+                if $VERBOSE; then
+                    echo "$file unchanged" 1>&2
+                fi
+                continue
+            fi
+        fi
+    fi
+    downloads3 "$file" "$locfile"
+done
