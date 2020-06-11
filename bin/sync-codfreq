@@ -56,7 +56,7 @@ lss3 | while read -r date time size file; do
     if [[ "$file" != *.codfreq ]]; then
         continue
     fi
-    if [[ "$file" == "*_2.*.codfreq" ]]; then
+    if [[ "$file" == *_2.*.codfreq ]]; then
         continue
     fi
     subdir=$(echo "$file" | awk -F '.' '{print $(NF-1)}')
