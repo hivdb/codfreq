@@ -2,6 +2,12 @@
 
 set -e
 
+PIPENV="/usr/local/bin/pipenv"
+
+if [ ! -f $PIPENV ]; then
+    PIPENV=$(which pipenv)
+fi
+
 S3_BUCKET="s3://sars2-sra"
 OS=$(uname -s)
 DATE_CMD=$(which date)
@@ -15,12 +21,12 @@ if [[ $OS == 'Darwin' ]]; then
 fi
 
 lss3() {
-    pipenv run aws s3 ls ${S3_BUCKET}/${1}
+    $PIPENV run aws s3 ls ${S3_BUCKET}/${1}
 }
 
 
 downloads3() {
-    pipenv run aws s3 cp ${S3_BUCKET}/$1 $2
+    $PIPENV run aws s3 cp ${S3_BUCKET}/$1 $2
 }
 
 VERBOSE=false

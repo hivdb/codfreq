@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from . import rayinit  # noqa
+# from . import rayinit  # noqa
 import os
 import re
 import csv

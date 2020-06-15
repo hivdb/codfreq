@@ -7,7 +7,7 @@ release: build
 restart-ray: stop-ray start-ray
 
 start-ray:
-	@pipenv run ray start --head --redis-password 2g^jEK6O!
+	@RAY_MEMORY_MONITOR_ERROR_THRESHOLD=1.5 pipenv run ray start --head --redis-password 2g^jEK6O!
 
 stop-ray:
 	@pipenv run ray stop

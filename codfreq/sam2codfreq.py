@@ -9,17 +9,17 @@ CODON_PATTERN = re.compile(r'^[ACGTYRWSKMBDHVN]{3}$')
 
 def sam2codfreq(sampath):
     codonfreqs = defaultdict(Counter)
-    qualities = defaultdict(lambda: defaultdict(list))
+    qualities = defaultdict(Counter)
     all_paired_reads = iter_paired_reads(sampath)
     for _, poscodons in iter_poscodons(all_paired_reads):
         for refpos, codon, qua in poscodons:
             codonfreqs[refpos][codon] += 1
-            qualities[refpos][codon].append(qua)
+            qualities[refpos][codon] += qua
+        del poscodons
     for refpos, codons in sorted(codonfreqs.items()):
         total = sum(codons.values())
         for codon, count in codons.items():
-            qua = qualities[refpos][codon]
-            qua = sum(qua) / len(qua)
+            qua = qualities[refpos][codon] / count
             if CODON_PATTERN.match(codon):
                 aa = translate_codon(codon)
             elif not codon or codon == '---':

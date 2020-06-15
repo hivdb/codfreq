@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 import os
-import ray
+# import ray
 from tqdm import tqdm
 from statistics import mean
 from more_itertools import chunked
@@ -91,13 +91,51 @@ def extract_codons(seq, qua, aligned_pairs):
     return results, err, len_seq, mean_qua
 
 
-@ray.remote
+# @ray.remote
 def batch_extract_codons(input_data):
     return [extract_codons(*args) for args in input_data]
+# 
+# 
+# def _iter_from_futures(all_headers, futures, site_quality_cutoff):
+#     for headers, all_results in zip(all_headers, ray.get(futures)):
+#         for header, (results, err, len_seq, mean_qua) in \
+#                 zip(headers, all_results):
+#             poscodons = defaultdict(Counter)
+#             if err & ERR_TOO_SHORT or err & ERR_LOW_QUAL:
+#                 continue
+#             for refpos, codon, q in results:
+#                 if q < site_quality_cutoff:
+#                     continue
+#                 poscodons[refpos][codon] = q
+#             if poscodons:
+#                 yield header, [
+#                     # pos, codon, qual
+#                     (pos, *counter.most_common(1)[0])
+#                     for pos, counter in sorted(poscodons.items())
+#                 ]
 
 
-def _iter_from_futures(all_headers, futures, site_quality_cutoff):
-    for headers, all_results in zip(all_headers, ray.get(futures)):
+def iter_poscodons(all_paired_reads,
+                   site_quality_cutoff=SITE_QUALITY_CUTOFF):
+
+    # futures = []
+    # all_headers = []
+    all_paired_reads = list(all_paired_reads)
+    pbar = tqdm(total=len(all_paired_reads))
+    # max_concurrency = 5
+    for partial in chunked(all_paired_reads, 1000):
+        headers = []
+        input_data = []
+        for header, pair in partial:
+            pbar.update(1)
+            for read in pair:
+                headers.append(header)
+                input_data.append((
+                    read.query_sequence,
+                    read.query_qualities,
+                    read.get_aligned_pairs(False)
+                ))
+        all_results = batch_extract_codons(input_data)
         for header, (results, err, len_seq, mean_qua) in \
                 zip(headers, all_results):
             poscodons = defaultdict(Counter)
@@ -113,37 +151,14 @@ def _iter_from_futures(all_headers, futures, site_quality_cutoff):
                     (pos, *counter.most_common(1)[0])
                     for pos, counter in sorted(poscodons.items())
                 ]
-
-
-def iter_poscodons(all_paired_reads,
-                   site_quality_cutoff=SITE_QUALITY_CUTOFF):
-
-    futures = []
-    all_headers = []
-    all_paired_reads = list(all_paired_reads)
-    pbar = tqdm(total=len(all_paired_reads))
-    max_concurrency = 5
-    for partial in chunked(all_paired_reads, 20000):
-        pbar.update(1)
-        headers = []
-        input_data = []
-        for header, pair in partial:
-            pbar.update(1)
-            for read in pair:
-                headers.append(header)
-                input_data.append((
-                    read.query_sequence,
-                    read.query_qualities,
-                    read.get_aligned_pairs(False)
-                ))
-        all_headers.append(headers)
-        futures.append(batch_extract_codons.remote(input_data))
-        if len(futures) == max_concurrency:
-            yield from _iter_from_futures(
-                all_headers, futures, site_quality_cutoff)
-            futures = []
-            all_headers = []
+        # all_headers.append(headers)
+        # futures.append(batch_extract_codons.remote(input_data))
+        # if len(futures) == max_concurrency:
+        #     yield from _iter_from_futures(
+        #         all_headers, futures, site_quality_cutoff)
+        #     futures = []
+        #     all_headers = []
     pbar.close()
-    if futures:
-        yield from _iter_from_futures(
-            all_headers, futures, site_quality_cutoff)
+    # if futures:
+    #     yield from _iter_from_futures(
+    #         all_headers, futures, site_quality_cutoff)
