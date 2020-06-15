@@ -1,16 +1,16 @@
-build:
-	@docker build . -t hivdb/codfreq:latest-5prime
+build: requirements.txt
+	@docker build . -t hivdb/codfreq-runner:latest
+
+requirements.txt: Pipfile Pipfile.lock
+	@pipenv lock --requirements > requirements.txt
 
 release: build
-	@docker push hivdb/codfreq:latest-5prime
+	@docker push hivdb/codfreq-runner:latest
 
-restart-ray: stop-ray start-ray
-
-start-ray:
-	@RAY_MEMORY_MONITOR_ERROR_THRESHOLD=1.5 pipenv run ray start --head --redis-password 2g^jEK6O!
-
-stop-ray:
-	@pipenv run ray stop
+syncrefs:
+	@pipenv run aws s3 sync refs s3://codfreq-assets.hivdb.org/refs
 
 debug:
-	@docker run -it --rm hivdb/codfreq:latest-5prime bash
+	@docker run -it --rm \
+		--volume ~/.aws:/root/.aws:ro \
+		hivdb/codfreq-runner:latest bash

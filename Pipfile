@@ -10,7 +10,6 @@ pysam = "*"
 click = "*"
 ssw = "*"
 tqdm = "*"
-ray = "*"
 more-itertools = "*"
 awscli = "*"
 

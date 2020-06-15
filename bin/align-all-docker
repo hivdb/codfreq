@@ -1,0 +1,96 @@
+#! /bin/bash
+
+set -e
+
+cd $(dirname $0)/..
+S3_BUCKET="s3://codfreq-assets.hivdb.org"
+
+
+lss3() {
+    aws s3 ls ${S3_BUCKET}/${1} |
+    awk '{print $4}'
+}
+
+
+downloads3() {
+    aws s3 cp ${S3_BUCKET}/$1 $2
+}
+
+fetch_reference() {
+    aws s3 cp ${S3_BUCKET}/refs/$1 $2
+}
+
+syncs3() {
+    aws s3 sync $1 ${S3_BUCKET}/$2
+}
+
+has_codfreq() {
+    echo $@ | sed 's/ /\n/g' |
+    \grep "\.${GENE}\.codfreq" |
+    \grep -v "_2\.${GENE}\.codfreq" >/dev/null
+    return $?
+}
+
+USAGE="command usage: $(basename $0) -r <REFERENCE> -g <GENE> -p <PATH_PREFIX>"
+
+while getopts ':vr:g:p:' OPT; do
+    case "$OPT" in
+        r)
+            REFERENCE=$OPTARG
+            ;;
+        g)
+            GENE=$OPTARG
+            ;;
+        p)
+            PATH_PREFIX=$OPTARG
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :) echo "Missing option argument for -$OPTARG\n$USAGE" >&2; exit 1;;
+        *) echo "Unimplemented option: -$OPTARG\n$USAGE" >&2; exit 1;;
+    esac
+done
+
+if [ -z $REFERENCE ]; then
+    echo "Missing required option argument -r <REFERENCE>" >&2
+    exit 1
+fi
+
+if [ -z $GENE ]; then
+    echo "Missing required option argument -g <GENE>" >&2
+    exit 1
+fi
+
+if [ -z $PATH_PREFIX ]; then
+    echo "Missing required option argument -p <PATH_PREFIX>" >&2
+    exit 1
+fi
+
+
+tmpdir=$(mktemp -d)
+trap "rm -rf $tmpdir" EXIT
+mkdir -p /tmp/refs
+
+fetch_reference $REFERENCE /tmp/refs/$REFERENCE
+REFERENCE=/tmp/refs/$REFERENCE
+if [ ! -f $REFERENCE ]; then
+    echo "Value of -r <REFERENCE> is not a valid file" >&2
+    exit 1
+fi
+
+for file in $(lss3 $PATH_PREFIX); do
+    if [[ $file == *.fastq.gz ]]; then
+        downloads3 $PATH_PREFIX$file $tmpdir
+    fi
+done
+
+python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE
+
+find $tmpdir -name "*.sam" | while read file; do
+    samtools sort -O bam $file > ${file%.sam}.bam
+    samtools index ${file%.sam}.bam
+    rm $file
+done
+syncs3 $tmpdir $PATH_PREFIX
