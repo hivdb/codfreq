@@ -1,0 +1,78 @@
+#! /bin/bash
+
+set -e
+
+ECS_REGION=us-west-2
+ECS_CLUSTER=codfreq-runner
+ECS_TASK_DEFINITION=codfreq-runner
+ECS_NETWORK_CONFIG="awsvpcConfiguration={subnets=[subnet-02f7aeefbe32139e6,subnet-0d99ba6fe930466bc],securityGroups=[sg-0ab407848018a5604],assignPublicIp=ENABLED}"
+
+USAGE="command usage: $(basename $0) -r <REFERENCE> -g <GENE> -p <PATH_PREFIX>"
+
+while getopts ':vr:g:p:' OPT; do
+    case "$OPT" in
+        r)
+            REFERENCE=$OPTARG
+            ;;
+        g)
+            GENE=$OPTARG
+            ;;
+        p)
+            PATH_PREFIX=$OPTARG
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :) echo "Missing option argument for -$OPTARG\n$USAGE" >&2; exit 1;;
+        *) echo "Unimplemented option: -$OPTARG\n$USAGE" >&2; exit 1;;
+    esac
+done
+
+if [ -z $REFERENCE ]; then
+    echo "Missing required option argument -r <REFERENCE>" >&2
+    exit 1
+fi
+
+if [ -z $GENE ]; then
+    echo "Missing required option argument -g <GENE>" >&2
+    exit 1
+fi
+
+if [ -z $PATH_PREFIX ]; then
+    echo "Missing required option argument -p <PATH_PREFIX>" >&2
+    exit 1
+fi
+
+overrides=$(
+echo | awk -v ref="$REFERENCE" -v gene="$GENE" -v prefix="$PATH_PREFIX" '
+{
+    sub("\"", "\\\"", ref);
+    sub("\"", "\\\"", gene);
+    sub("\"", "\\\"", prefix);
+    print "{\"containerOverrides\": [{";
+    print "\"name\": \"codfreq-runner\",";
+    print "\"command\": [";
+    print "\"bin/align-all-docker\"";
+    print ", \"-r\", \"" ref "\",";
+    print "\"-g\", \"" gene "\",";
+    print "\"-p\", \"" prefix "\"";
+    print "]}]}"
+}' | jq -rc)
+
+task_id=$(
+aws ecs run-task \
+    --output json \
+    --platform-version 1.4.0 \
+    --cluster $ECS_CLUSTER \
+    --launch-type FARGATE \
+    --count 1 \
+    --output json \
+    --task-definition $ECS_TASK_DEFINITION \
+	--network-configuration $ECS_NETWORK_CONFIG \
+    --region $ECS_REGION \
+    --overrides "$overrides" | jq -r ".tasks[0].taskArn" | awk -F ':task/' '{print $2}'
+)
+echo "{\"op\": \"start-task\", \"task_id\": \"${task_id}\"}"
+aws ecs wait tasks-running --tasks $task_id --region $ECS_REGION --cluster $ECS_CLUSTER
+ecs-cli logs --task-id $task_id --region $ECS_REGION --cluster $ECS_CLUSTER --follow

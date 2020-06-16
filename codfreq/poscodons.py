@@ -7,6 +7,8 @@ from statistics import mean
 from more_itertools import chunked
 from collections import defaultdict, Counter
 
+from .json_progress import JsonProgress
+
 # see https://en.wikipedia.org/wiki/Phred_quality_score
 OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 15))
 LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 50))
@@ -91,37 +93,24 @@ def extract_codons(seq, qua, aligned_pairs):
     return results, err, len_seq, mean_qua
 
 
-# @ray.remote
 def batch_extract_codons(input_data):
     return [extract_codons(*args) for args in input_data]
-# 
-# 
-# def _iter_from_futures(all_headers, futures, site_quality_cutoff):
-#     for headers, all_results in zip(all_headers, ray.get(futures)):
-#         for header, (results, err, len_seq, mean_qua) in \
-#                 zip(headers, all_results):
-#             poscodons = defaultdict(Counter)
-#             if err & ERR_TOO_SHORT or err & ERR_LOW_QUAL:
-#                 continue
-#             for refpos, codon, q in results:
-#                 if q < site_quality_cutoff:
-#                     continue
-#                 poscodons[refpos][codon] = q
-#             if poscodons:
-#                 yield header, [
-#                     # pos, codon, qual
-#                     (pos, *counter.most_common(1)[0])
-#                     for pos, counter in sorted(poscodons.items())
-#                 ]
 
 
 def iter_poscodons(all_paired_reads,
-                   site_quality_cutoff=SITE_QUALITY_CUTOFF):
+                   description,
+                   site_quality_cutoff=SITE_QUALITY_CUTOFF,
+                   log_format='text'):
 
     # futures = []
     # all_headers = []
     all_paired_reads = list(all_paired_reads)
-    pbar = tqdm(total=len(all_paired_reads))
+    total = len(all_paired_reads)
+    if log_format == 'json':
+        pbar = JsonProgress(total=total, description=description)
+    else:
+        pbar = tqdm(total=total)
+        pbar.set_description('Processing {}'.format(description))
     # max_concurrency = 5
     for partial in chunked(all_paired_reads, 1000):
         headers = []
@@ -151,14 +140,4 @@ def iter_poscodons(all_paired_reads,
                     (pos, *counter.most_common(1)[0])
                     for pos, counter in sorted(poscodons.items())
                 ]
-        # all_headers.append(headers)
-        # futures.append(batch_extract_codons.remote(input_data))
-        # if len(futures) == max_concurrency:
-        #     yield from _iter_from_futures(
-        #         all_headers, futures, site_quality_cutoff)
-        #     futures = []
-        #     all_headers = []
     pbar.close()
-    # if futures:
-    #     yield from _iter_from_futures(
-    #         all_headers, futures, site_quality_cutoff)

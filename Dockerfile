@@ -15,7 +15,7 @@ RUN wget -O /tmp/samtools.tar.bz2 "https://github.com/samtools/samtools/releases
 FROM python:3.7-alpine
 ENV LANG="C.UTF-8" \
     HTSLIB_CONFIGURE_OPTIONS="--enable-plugins"
-RUN apk add --no-cache bash libc6-compat libcurl
+RUN apk add --no-cache bash libc6-compat libcurl jq
 COPY --from=builder /*.whl /wheels/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.7/site-packages/_manylinux.py && \
     pip install --no-cache-dir /wheels/*.whl

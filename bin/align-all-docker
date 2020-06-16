@@ -13,15 +13,29 @@ lss3() {
 
 
 downloads3() {
-    aws s3 cp ${S3_BUCKET}/$1 $2
+    aws s3 cp ${S3_BUCKET}/$1 $2 | sed 's/\r/\n/g' |
+    \grep '^download: ' |
+    awk '{
+        sub("\"", "\\\"", $2);
+        sub("\"", "\\\"", $4);
+        print "{\"op\": \"download\", \"from\": \"" $2 "\", \"to\": \"" $4 "\"}";
+    }'
 }
 
 fetch_reference() {
-    aws s3 cp ${S3_BUCKET}/refs/$1 $2
+    downloads3 refs/$1 $2
 }
 
 syncs3() {
-    aws s3 sync $1 ${S3_BUCKET}/$2
+    aws s3 sync $1 ${S3_BUCKET}/$2 | sed 's/\r/\n/g' |
+    \grep '^upload: ' | while read line; do
+        echo $line |
+        awk '{
+            sub("\"", "\\\"", $2);
+            sub("\"", "\\\"", $4);
+            print "{\"op\": \"upload\", \"from\": \"" $2 "\", \"to\": \"" $4 "\"}";
+        }'
+    done
 }
 
 has_codfreq() {
@@ -86,11 +100,16 @@ for file in $(lss3 $PATH_PREFIX); do
     fi
 done
 
-python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE
+python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE --log-format json
 
 find $tmpdir -name "*.sam" | while read file; do
-    samtools sort -O bam $file > ${file%.sam}.bam
-    samtools index ${file%.sam}.bam
-    rm $file
+    samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null
+    samtools index ${file%.sam}.bam 2> /devnull
+    rm $file 2> /dev/null
+    echo ${file%.sam}.bam |
+    awk '{
+        sub("\"", "\\\"", $1);
+        print "{\"op\": \"create-bam\", \"filename\": \"" $1 "\"}";
+    }'
 done
 syncs3 $tmpdir $PATH_PREFIX

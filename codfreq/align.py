@@ -189,7 +189,11 @@ def get_refaas(reference):
     required=True,
     type=click.Path(exists=True, file_okay=True,
                     dir_okay=False, resolve_path=True))
-def align(workdir, gene, program, reference):
+@click.option(
+    '--log-format',
+    type=click.Choice(['text', 'json']),
+    default='text', show_default=True)
+def align(workdir, gene, program, reference, log_format):
     refinit = get_refinit(program)
     align = get_align(program)
     refaas = get_refaas(reference)
@@ -204,7 +208,7 @@ def align(workdir, gene, program, reference):
                                          'refaa', 'aa', 'percent',
                                          'mean_quality_score'])
             writer.writeheader()
-            for row in sam2codfreq(samfile):
+            for row in sam2codfreq(samfile, log_format):
                 row['gene'] = gene
                 row['refaa'] = refaas[row['position']]
                 writer.writerow(row)
