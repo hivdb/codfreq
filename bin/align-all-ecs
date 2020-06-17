@@ -75,4 +75,6 @@ aws ecs run-task \
 )
 echo "{\"op\": \"start-task\", \"task_id\": \"${task_id}\"}"
 aws ecs wait tasks-running --tasks $task_id --region $ECS_REGION --cluster $ECS_CLUSTER
-ecs-cli logs --task-id $task_id --region $ECS_REGION --cluster $ECS_CLUSTER --follow
+ecs-cli logs --task-id $task_id --region $ECS_REGION --cluster $ECS_CLUSTER --follow & logpid=$!
+trap "kill $logpid" EXIT
+aws ecs wait tasks-stopped --tasks $task_id --region $ECS_REGION --cluster $ECS_CLUSTER
