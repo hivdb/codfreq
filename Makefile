@@ -4,7 +4,7 @@ requirements.txt: Pipfile Pipfile.lock
 build-runner: requirements.txt
 	@docker build . -t hivdb/codfreq-runner:latest
 
-release-runner: build
+release-runner: build-runner
 	@docker push hivdb/codfreq-runner:latest
 
 build-controller:
@@ -15,7 +15,7 @@ build-controller:
 init-controller: build-controller
 	@lambda-controller/init_lambda.sh fileb://$(realpath build/codfreq-controller.zip)
 
-release-controller: build-controller
+deploy-controller: build-controller
 	@lambda-controller/update_lambda.sh fileb://$(realpath build/codfreq-controller.zip)
 
 syncrefs:

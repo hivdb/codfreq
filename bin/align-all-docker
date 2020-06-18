@@ -113,3 +113,4 @@ find $tmpdir -name "*.sam" | while read file; do
     }'
 done
 syncs3 $tmpdir $PATH_PREFIX
+echo '{"op": "done"}'

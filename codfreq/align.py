@@ -208,7 +208,7 @@ def align(workdir, gene, program, reference, log_format):
                                          'refaa', 'aa', 'percent',
                                          'mean_quality_score'])
             writer.writeheader()
-            for row in sam2codfreq(samfile, log_format):
+            for row in sam2codfreq(samfile, fnpair, log_format):
                 row['gene'] = gene
                 row['refaa'] = refaas[row['position']]
                 writer.writerow(row)

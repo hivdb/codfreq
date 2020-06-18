@@ -99,6 +99,7 @@ def batch_extract_codons(input_data):
 
 def iter_poscodons(all_paired_reads,
                    description,
+                   fnpair,
                    site_quality_cutoff=SITE_QUALITY_CUTOFF,
                    log_format='text'):
 
@@ -107,7 +108,8 @@ def iter_poscodons(all_paired_reads,
     all_paired_reads = list(all_paired_reads)
     total = len(all_paired_reads)
     if log_format == 'json':
-        pbar = JsonProgress(total=total, description=description)
+        pbar = JsonProgress(
+            total=total, description=description, fastqs=fnpair)
     else:
         pbar = tqdm(total=total)
         pbar.set_description('Processing {}'.format(description))

@@ -6,12 +6,13 @@ import click
 
 class JsonProgress:
 
-    def __init__(self, description, total, ts_interval=1000):
+    def __init__(self, description, total, ts_interval=1000, **extras):
         self.description = description
         self.total = total
         self.count = 0
         self.ts_interval = ts_interval
         self.prev_ts = int(time.time() * 1000)
+        self.extras = extras
 
     def update(self, count):
         self.count += count
@@ -24,7 +25,8 @@ class JsonProgress:
                 'description': self.description,
                 'count': self.count,
                 'total': self.total,
-                'ts': now
+                'ts': now,
+                **self.extras
             }))
             sys.stdout.flush()
 
@@ -36,5 +38,6 @@ class JsonProgress:
             'description': self.description,
             'count': self.count,
             'total': self.total,
-            'ts': now
+            'ts': now,
+            **self.extras
         }))

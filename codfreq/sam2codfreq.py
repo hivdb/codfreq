@@ -7,11 +7,12 @@ from .codonutils import translate_codon
 CODON_PATTERN = re.compile(r'^[ACGTYRWSKMBDHVN]{3}$')
 
 
-def sam2codfreq(sampath, log_format='text'):
+def sam2codfreq(sampath, fnpair, log_format='text'):
     codonfreqs = defaultdict(Counter)
     qualities = defaultdict(Counter)
     all_paired_reads = iter_paired_reads(sampath)
     for _, poscodons in iter_poscodons(all_paired_reads,
+                                       fnpair=fnpair,
                                        description=sampath,
                                        log_format=log_format):
         for refpos, codon, qua in poscodons:
