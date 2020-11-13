@@ -2,19 +2,20 @@
 
 # from . import rayinit  # noqa
 import os
-import re
 import csv
 import click
 from itertools import combinations
 from collections import defaultdict
-from more_itertools import chunked
 
-from . import fastareader
-from .codonutils import translate_codon
-from .sam2codfreq import sam2codfreq
+from .sam2codfreq import sam2codfreq, CODFREQ_HEADER
 from .cmdwrappers import (
     get_programs, get_refinit, get_align
 )
+from .filename_helper import (
+    name_samfile,
+    replace_ext
+)
+from .reference_helper import get_refaas
 
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
@@ -115,7 +116,7 @@ def find_paired_fastq_patterns(filenames):
             yield pattern, pairs
     if len(filenames) > len(covered):
         remains = sorted(set(filenames) - covered)
-        yield (None, -1, -1, -1), [(l, None) for l in remains]
+        yield (None, -1, -1, -1), [(left, None) for left in remains]
 
 
 def find_paired_fastqs(workdir):
@@ -131,43 +132,6 @@ def find_paired_fastqs(workdir):
             for pattern, fnpairs in find_paired_fastq_patterns(filenames)
             for fnpair in fnpairs
         )
-
-
-def name_samfile(fnpair, pattern, gene):
-    filename, _ = fnpair
-    delimiter, offset, _, reverse = pattern
-    dirpath, filename = os.path.split(filename)
-    samfile = re.split(r'(?i)\.fastq(?:.gz)?$', filename)[0]
-    if reverse == -1:
-        return os.path.join(
-            dirpath, samfile + '.{}.sam'.format(gene))
-    samfile = samfile.split(delimiter)
-    if reverse:
-        samfile.reverse()
-    samfile = samfile[:offset] + samfile[offset + 1:]
-    if reverse:
-        samfile.reverse()
-    return os.path.join(
-        dirpath, delimiter.join(samfile) + '.{}.sam'.format(gene))
-
-
-def replace_ext(filename, toext, fromext=None, name_only=False):
-    if name_only:
-        filename = os.path.split(filename)[-1]
-    if fromext:
-        return filename[-len(fromext):] + toext
-    else:
-        return os.path.splitext(filename)[0] + toext
-
-
-def get_refaas(reference):
-    refaas = {}
-    with open(reference) as fp:
-        refseq, = fastareader.load(fp)
-        refseq = refseq['sequence']
-        for pos0, codon in enumerate(chunked(refseq, 3)):
-            refaas[pos0 + 1] = translate_codon(''.join(codon))
-    return refaas
 
 
 @click.command()
@@ -195,23 +159,24 @@ def get_refaas(reference):
     default='text', show_default=True)
 def align(workdir, gene, program, reference, log_format):
     refinit = get_refinit(program)
-    align = get_align(program)
+    alignfunc = get_align(program)
     refaas = get_refaas(reference)
     for fnpair, pattern in find_paired_fastqs(workdir):
         samfile = name_samfile(fnpair, pattern, gene)
         refinit(reference)
-        align(reference, *fnpair, samfile)
+        alignfunc(reference, *fnpair, samfile)
         codfreqfile = replace_ext(samfile, '.codfreq')
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
-            writer = csv.DictWriter(fp, ['gene', 'position',
-                                         'total', 'codon', 'count',
-                                         'refaa', 'aa', 'percent',
-                                         'mean_quality_score'])
+            writer = csv.DictWriter(fp, CODFREQ_HEADER)
             writer.writeheader()
-            for row in sam2codfreq(samfile, fnpair, log_format):
-                row['gene'] = gene
-                row['refaa'] = refaas[row['position']]
-                writer.writerow(row)
+            writer.writerows(sam2codfreq(
+                samfile,
+                gene=gene,
+                refaas=refaas,
+                reference_start=1,
+                fnpair=fnpair,
+                log_format=log_format
+            ))
 
 
 if __name__ == '__main__':

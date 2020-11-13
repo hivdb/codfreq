@@ -19,7 +19,7 @@ ERR_TOO_SHORT = 0b01
 ERR_LOW_QUAL = 0b10
 
 
-def extract_codons(seq, qua, aligned_pairs):
+def extract_codons(seq, qua, aligned_pairs, ref_offset):
 
     # pre-filter
     err = ERR_OK
@@ -39,6 +39,8 @@ def extract_codons(seq, qua, aligned_pairs):
     min_cdpos = 0xffffffff
     max_cdpos = 0
     for seqpos, refpos in aligned_pairs:
+        if refpos:
+            refpos -= ref_offset
         if refpos is None:
             # insertion
             refpos = prev_refpos - 1
@@ -93,13 +95,17 @@ def extract_codons(seq, qua, aligned_pairs):
     return results, err, len_seq, mean_qua
 
 
-def batch_extract_codons(input_data):
-    return [extract_codons(*args) for args in input_data]
+def batch_extract_codons(input_data, ref_offset=0):
+    return [
+        extract_codons(*args, ref_offset=ref_offset)
+        for args in input_data
+    ]
 
 
 def iter_poscodons(all_paired_reads,
                    description,
-                   fnpair,
+                   reference_start=1,
+                   fnpair=None,
                    site_quality_cutoff=SITE_QUALITY_CUTOFF,
                    log_format='text'):
 
@@ -108,8 +114,11 @@ def iter_poscodons(all_paired_reads,
     all_paired_reads = list(all_paired_reads)
     total = len(all_paired_reads)
     if log_format == 'json':
+        extras = {}
+        if fnpair is not None:
+            extras['fastqs'] = fnpair
         pbar = JsonProgress(
-            total=total, description=description, fastqs=fnpair)
+            total=total, description=description, **extras)
     else:
         pbar = tqdm(total=total)
         pbar.set_description('Processing {}'.format(description))
@@ -126,7 +135,8 @@ def iter_poscodons(all_paired_reads,
                     read.query_qualities,
                     read.get_aligned_pairs(False)
                 ))
-        all_results = batch_extract_codons(input_data)
+        all_results = batch_extract_codons(
+            input_data, ref_offset=reference_start - 1)
         for header, (results, err, len_seq, mean_qua) in \
                 zip(headers, all_results):
             poscodons = defaultdict(Counter)
