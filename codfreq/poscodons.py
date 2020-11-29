@@ -12,14 +12,13 @@ from .json_progress import JsonProgress
 # see https://en.wikipedia.org/wiki/Phred_quality_score
 OVERALL_QUALITY_CUTOFF = int(os.environ.get('OVERALL_QUALITY_CUTOFF', 15))
 LENGTH_CUTOFF = int(os.environ.get('LENGTH_CUTOFF', 50))
-SITE_QUALITY_CUTOFF = int(os.environ.get('SITE_QUALITY_CUTOFF', 20))
 
 ERR_OK = 0b00
 ERR_TOO_SHORT = 0b01
 ERR_LOW_QUAL = 0b10
 
 
-def extract_codons(seq, qua, aligned_pairs, ref_offset):
+def extract_codons(seq, qua, aligned_pairs, ref_offset, site_quality_cutoff):
 
     # pre-filter
     err = ERR_OK
@@ -55,7 +54,7 @@ def extract_codons(seq, qua, aligned_pairs, ref_offset):
             nas = []
             for n, q in zip(seq[prev_seqpos:seqpos + 1],
                             qua[prev_seqpos:seqpos + 1]):
-                if q < SITE_QUALITY_CUTOFF:
+                if q < site_quality_cutoff:
                     n = '*'
                 nas.append(n)
                 codonqs[codonpos].append(q)
@@ -95,9 +94,11 @@ def extract_codons(seq, qua, aligned_pairs, ref_offset):
     return results, err, len_seq, mean_qua
 
 
-def batch_extract_codons(input_data, ref_offset=0):
+def batch_extract_codons(input_data, ref_offset=0, site_quality_cutoff=0):
     return [
-        extract_codons(*args, ref_offset=ref_offset)
+        extract_codons(*args,
+                       ref_offset=ref_offset,
+                       site_quality_cutoff=site_quality_cutoff)
         for args in input_data
     ]
 
@@ -106,7 +107,7 @@ def iter_poscodons(all_paired_reads,
                    description,
                    reference_start=1,
                    fnpair=None,
-                   site_quality_cutoff=SITE_QUALITY_CUTOFF,
+                   site_quality_cutoff=0,
                    log_format='text'):
 
     # futures = []
@@ -136,7 +137,10 @@ def iter_poscodons(all_paired_reads,
                     read.get_aligned_pairs(False)
                 ))
         all_results = batch_extract_codons(
-            input_data, ref_offset=reference_start - 1)
+            input_data,
+            ref_offset=reference_start - 1,
+            site_quality_cutoff=site_quality_cutoff,
+        )
         for header, (results, err, len_seq, mean_qua) in \
                 zip(headers, all_results):
             poscodons = defaultdict(Counter)

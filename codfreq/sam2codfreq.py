@@ -16,7 +16,7 @@ CODFREQ_HEADER = [
     'gene', 'position',
     'total', 'codon', 'count',
     'refaa', 'aa', 'percent',
-    'mean_quality_score'
+    'total_quality_score'
 ]
 
 
@@ -26,6 +26,7 @@ def sam2codfreq(
     refaas,
     reference_start=1,
     fnpair=None,
+    site_quality_cutoff=0,
     log_format='text'
 ):
     codonfreqs = defaultdict(Counter)
@@ -35,6 +36,7 @@ def sam2codfreq(
                                        reference_start=reference_start,
                                        fnpair=fnpair,
                                        description=sampath,
+                                       site_quality_cutoff=site_quality_cutoff,
                                        log_format=log_format):
         for refpos, codon, qua in poscodons:
             codonfreqs[refpos][codon] += 1
@@ -43,7 +45,7 @@ def sam2codfreq(
     for refpos, codons in sorted(codonfreqs.items()):
         total = sum(codons.values())
         for codon, count in codons.items():
-            qua = qualities[refpos][codon] / count
+            qua = qualities[refpos][codon]
             if CODON_PATTERN.match(codon):
                 aa = translate_codon(codon)
             elif not codon or codon == '---':
@@ -61,7 +63,7 @@ def sam2codfreq(
                 'aa': aa,
                 'count': count,
                 'percent': count / total,
-                'mean_quality_score': qua
+                'total_quality_score': qua
             }
 
 
@@ -86,7 +88,13 @@ def sam2codfreq(
     default=1,
     show_default=True,
     help='Reference NA start (will be substract from the result)')
-def main(workdir, gene, reference, reference_start):
+@click.option(
+    '--site-quality-cutoff',
+    type=int,
+    default=0,
+    show_default=True,
+    help='Phred score cutoff for individual site')
+def main(workdir, gene, reference, reference_start, site_quality_cutoff):
     refaas = get_refaas(reference, reference_start)
     for dirpath, _, filenames in os.walk(workdir, followlinks=True):
         for fn in filenames:
@@ -101,6 +109,7 @@ def main(workdir, gene, reference, reference_start):
                     sampath,
                     gene=gene,
                     refaas=refaas,
+                    site_quality_cutoff=site_quality_cutoff,
                     reference_start=reference_start))
 
 
