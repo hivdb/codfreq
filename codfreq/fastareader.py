@@ -7,7 +7,7 @@ def load(fp):
             if header and curseq:
                 sequences.append({
                     'header': header,
-                    'sequence': curseq
+                    'sequence': curseq.upper()
                 })
             header = line[1:].strip()
             curseq = ''
@@ -18,6 +18,6 @@ def load(fp):
     if header and curseq:
         sequences.append({
             'header': header,
-            'sequence': curseq
+            'sequence': curseq.upper()
         })
     return sequences
