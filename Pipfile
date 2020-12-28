@@ -12,6 +12,7 @@ ssw = "*"
 tqdm = "*"
 more-itertools = "*"
 awscli = "*"
+post-align = {git = "ssh://git@github.com/hivdb/post-align.git"}
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"
