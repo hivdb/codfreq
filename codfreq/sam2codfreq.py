@@ -27,25 +27,30 @@ def sam2codfreq(
     reference_start=1,
     fnpair=None,
     site_quality_cutoff=0,
-    log_format='text'
+    log_format='text',
+    only_boundary_partial_codons=False
 ):
     codonfreqs = defaultdict(Counter)
     qualities = defaultdict(Counter)
     all_paired_reads = iter_paired_reads(sampath)
-    for _, poscodons in iter_poscodons(all_paired_reads,
-                                       reference_start=reference_start,
-                                       fnpair=fnpair,
-                                       description=sampath,
-                                       site_quality_cutoff=site_quality_cutoff,
-                                       log_format=log_format):
-        for refpos, codon, qua in poscodons:
-            codonfreqs[refpos][codon] += 1
-            qualities[refpos][codon] += qua
+    for _, poscodons in iter_poscodons(
+        all_paired_reads,
+        reference_start=reference_start,
+        fnpair=fnpair,
+        description=sampath,
+        site_quality_cutoff=site_quality_cutoff,
+        log_format=log_format,
+        include_boundary_partial_codons=only_boundary_partial_codons
+    ):
+        for refpos, codon, qua, is_boundary in poscodons:
+            codonfreqs[refpos][(codon, is_boundary)] += 1
+            qualities[refpos][(codon, is_boundary)] += qua
         del poscodons
     for refpos, codons in sorted(codonfreqs.items()):
         total = sum(codons.values())
         for codon, count in codons.items():
             qua = qualities[refpos][codon]
+            codon, is_boundary = codon
             if CODON_PATTERN.match(codon):
                 aa = translate_codon(codon)
             elif not codon or codon == '---':
@@ -54,17 +59,18 @@ def sam2codfreq(
                 aa = 'ins'
             else:
                 aa = 'X'
-            yield {
-                'gene': gene,
-                'position': refpos,
-                'total': total,
-                'codon': codon,
-                'refaa': refaas[refpos],
-                'aa': aa,
-                'count': count,
-                'percent': count / total,
-                'total_quality_score': qua
-            }
+            if is_boundary or not only_boundary_partial_codons:
+                yield {
+                    'gene': gene,
+                    'position': refpos,
+                    'total': total,
+                    'codon': codon,
+                    'refaa': refaas[refpos],
+                    'aa': aa,
+                    'count': count,
+                    'percent': count / total,
+                    'total_quality_score': qua
+                }
 
 
 @click.command()
@@ -94,7 +100,13 @@ def sam2codfreq(
     default=0,
     show_default=True,
     help='Phred score cutoff for individual site')
-def main(workdir, gene, reference, reference_start, site_quality_cutoff):
+@click.option(
+    '--only-boundary-partial-codons',
+    is_flag=True,
+    help=('Only output incomplete codons at reads\' both boundaries. '
+          'This function should only be used for debugging.'))
+def main(workdir, gene, reference, reference_start,
+         site_quality_cutoff, only_boundary_partial_codons):
     refaas = get_refaas(reference, reference_start)
     for dirpath, _, filenames in os.walk(workdir, followlinks=True):
         for fn in filenames:
@@ -110,7 +122,9 @@ def main(workdir, gene, reference, reference_start, site_quality_cutoff):
                     gene=gene,
                     refaas=refaas,
                     site_quality_cutoff=site_quality_cutoff,
-                    reference_start=reference_start))
+                    reference_start=reference_start,
+                    only_boundary_partial_codons=only_boundary_partial_codons
+                ))
 
 
 if __name__ == '__main__':
