@@ -163,7 +163,7 @@ def fetch_codfreqs(request):
             refaa = row['refaa']
             aa = row['aa']
             percent = float(row['percent'])
-            mean_quality_score = float(row['mean_quality_score'])
+            total_quality_score = float(row['total_quality_score'])
             if (gene, pos) not in gpmap:
                 gpmap[(gene, pos)] = {
                     'gene': gene,
@@ -177,7 +177,7 @@ def fetch_codfreqs(request):
                 'reads': count,
                 'aminoAcid': aa,
                 'percent': percent,
-                'meanQualityScore': mean_quality_score
+                'totalQualityScore': total_quality_score
             })
         codfreqs.setdefault(name, []).extend(gpmap.values())
     codfreqs = [{
@@ -229,8 +229,7 @@ def fetch_runner_logs(request):
         events = []
         kw = dict(
             logGroupName='/ecs/{}'.format(ECS_TASK_DEFINITION),
-            logStreamName='ecs/{}/{}'.format(ECS_TASK_DEFINITION,
-                                             task_id),
+            logStreamName='ecs/{}'.format(task_id),
             startTime=stime, limit=limit)
         done = False
         while True:

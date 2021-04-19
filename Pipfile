@@ -4,6 +4,7 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+boto3 = "*"
 
 [packages]
 pysam = "*"
@@ -12,7 +13,10 @@ ssw = "*"
 tqdm = "*"
 more-itertools = "*"
 awscli = "*"
-post-align = {git = "ssh://git@github.com/hivdb/post-align.git"}
+urllib3 = ">=1.26.4"
+Pygments = ">=2.7.4"
+PyYAML = ">=5.4"
+# post-align = {git = "ssh://git@github.com/hivdb/post-align.git"}
 
 [requires]
 python_version = "3.8"
