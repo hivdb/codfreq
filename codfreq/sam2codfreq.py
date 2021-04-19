@@ -55,7 +55,7 @@ def sam2codfreq(
                 aa = translate_codon(codon)
             elif not codon or codon == '---':
                 aa = 'del'
-            elif len(codon) > 3:
+            elif len(codon) >= 6:
                 aa = 'ins'
             else:
                 aa = 'X'
@@ -69,7 +69,7 @@ def sam2codfreq(
                     'aa': aa,
                     'count': count,
                     'percent': count / total,
-                    'total_quality_score': qua
+                    'total_quality_score': round(qua, 2)
                 }
 
 

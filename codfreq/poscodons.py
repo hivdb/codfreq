@@ -66,7 +66,6 @@ def _extract_codons(
 
         if refpos_end > -1:
             codonpos = refpos_end // 3 + 1
-            codonbp = refpos_end % 3
             min_cdpos = min(min_cdpos, codonpos)
             nas = []
             for n, q in zip(seq[seqpos_start:seqpos_end + 1],
@@ -76,9 +75,11 @@ def _extract_codons(
                 nas.append(n)
                 codonqs[codonpos].append(q)
             if codonpos not in codons:
-                codons[codonpos] = ['-'] * 3
-            if nas:
-                codons[codonpos][codonbp] = ''.join(nas)
+                codons[codonpos] = []
+            if not nas:
+                # deletion
+                nas = ['-' * (refpos_end - refpos_start + 1)]
+            codons[codonpos].append(''.join(nas))
             max_cdpos = max(max_cdpos, codonpos)
         seqpos_start = seqpos_end + 1
         refpos_start = refpos_end + 1
@@ -116,8 +117,12 @@ def find_boundary_partial_codons(
         else:
             meanq = 0
         if (
-            (cdpos == min_cdpos and codon[:1] in ('-', '*')) or
-            (cdpos == max_cdpos and codon[-1:] in ('-', '*'))
+            (cdpos == min_cdpos and (
+                len(codon) < 3 or codon[:1] in ('-', '*')
+            )) or
+            (cdpos == max_cdpos and (
+                len(codon) < 3 or codon[-1:] in ('-', '*')
+            ))
         ):
             # the left-most/right-most codon is a partial codon, e.g. --A/A--
             codon = codon.replace('*', 'N')
@@ -165,12 +170,16 @@ def extract_codons(
         if len(codon_wofs) < 3 and not keep_outframe:
             # drop out-frame deletions
             continue
-        if cdpos == min_cdpos and codon[:1] in ('-', '*'):
+        if cdpos == min_cdpos and (
+            len(codon) < 3 or codon[:1] in ('-', '*')
+        ):
             # the left-most codon is a partial codon, e.g. --A
             is_boundary_partial_codon = True
             if not include_boundary_partial_codons:
                 continue
-        elif cdpos == max_cdpos and codon[-1:] in ('-', '*'):
+        elif cdpos == max_cdpos and (
+            len(codon) < 3 or codon[-1:] in ('-', '*')
+        ):
             # the right-most codon is a partial codon, e.g. A--
             is_boundary_partial_codon = True
             if not include_boundary_partial_codons:
