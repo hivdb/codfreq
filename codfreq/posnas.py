@@ -12,6 +12,8 @@ def iter_single_read_posnas(seq, qua, aligned_pairs):
     prev_refpos = 0
     prev_seqpos0 = 0
     idx = 0
+    prev_ins_buffer = []
+
     for seqpos0, refpos0 in aligned_pairs:
 
         if refpos0 is None:
@@ -33,7 +35,14 @@ def iter_single_read_posnas(seq, qua, aligned_pairs):
         if refpos == 0:
             continue
 
-        yield (refpos, idx), n, q
+        posna = (refpos, idx), n, q
+        if idx > 0:
+            prev_ins_buffer.append(posna)
+        else:
+            if prev_ins_buffer:
+                yield from prev_ins_buffer
+                prev_ins_buffer = []
+            yield posna
 
 
 def iter_posnas(all_paired_reads,

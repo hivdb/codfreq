@@ -131,6 +131,7 @@ def sam2codfreq_single_ref(
         del poscodons
 
     codonfreq = iter_codonfreq(codonstat, qualities)
+    # yield from codonfreq
     yield from codonalign_consensus(codonfreq, ref, genes)
 
 

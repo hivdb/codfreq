@@ -91,6 +91,9 @@ def codonalign_consensus(codonfreq, ref, genes):
              refstart=first_aa * 3 - 2,
              refend=last_aa * 3
         )
+        # if gene == 'S':
+        #     print(str(gene_refseq_obj.seqtext))
+        #     print(str(gene_queryseq_obj.seqtext))
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(
                 gene_refseq_obj.seqtext,
@@ -101,8 +104,8 @@ def codonalign_consensus(codonfreq, ref, genes):
             geneposcdf = geneposcdf_lookup.get((gene, aapos))
             if not geneposcdf:
                 continue
-            if gene == 'S' and aapos in (68, 69, 70):
-                print(gene, aapos, querycodon)
+            # if gene == 'S' and aapos in (68, 69, 70):
+            #     print(gene, aapos, querycodon)
             geneposcdf[0]['codon'] = str(
                 PositionalSeqStr.join(querycodon)
             )
