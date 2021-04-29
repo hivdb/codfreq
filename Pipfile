@@ -7,7 +7,7 @@ verify_ssl = true
 boto3 = "*"
 
 [packages]
-pysam = "*"
+pysam = "==0.15.4"
 click = "*"
 ssw = "*"
 tqdm = "*"
@@ -16,7 +16,10 @@ awscli = "*"
 urllib3 = ">=1.26.4"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
-# post-align = {git = "ssh://git@github.com/hivdb/post-align.git"}
+# post-align = {git = "ssh://git@github.com/hivdb/post-align.git", ref = "6c9bde4fda6d0e7240c4c1171627c9446e1c5c5e"}
+cython = "*"
+post-align = {editable = true, path = "./../post-align"}
+intervaltree = "*"
 
 [requires]
 python_version = "3.8"

@@ -3,19 +3,24 @@
 # from . import rayinit  # noqa
 import os
 import csv
+import json
 import click
+import tempfile
 from itertools import combinations
 from collections import defaultdict
 
-from .sam2codfreq import sam2codfreq, CODFREQ_HEADER
+from .sam2codfreq_new import (
+    sam2codfreq_new,
+    CODFREQ_HEADER
+)
 from .cmdwrappers import (
     get_programs, get_refinit, get_align
 )
 from .filename_helper import (
     name_samfile,
-    replace_ext
+    name_codfreq
 )
-from .reference_helper import get_refaas
+# from .reference_helper import get_refaas
 
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
@@ -134,49 +139,94 @@ def find_paired_fastqs(workdir):
         )
 
 
+def align_with_profile(paired_fastqs, program, profile):
+    with tempfile.TemporaryDirectory('codfreq') as tmpdir:
+        refpath = os.path.join(tmpdir, 'ref.fas')
+        refinit = get_refinit(program)
+        alignfunc = get_align(program)
+        for config in profile['fragmentConfig']:
+            if 'refSequence' not in config:
+                continue
+            refname = config['fragmentName']
+            refseq = config['refSequence']
+            with open(refpath, 'w') as fp:
+                fp.write('>{}\n{}\n\n'.format(refname, refseq))
+        # refaas = get_refaas(reference)
+            for fnpair, pattern in paired_fastqs:
+                samfile = name_samfile(fnpair, pattern, refname)
+                refinit(refpath)
+                alignfunc(refpath, *fnpair, samfile)
+
+
+def align_inner(workdir, program, profile, log_format):
+    profile = json.load(profile)
+    paired_fastqs = list(find_paired_fastqs(workdir))
+    align_with_profile(paired_fastqs, program, profile)
+
+    for fnpair, pattern in paired_fastqs:
+        codfreqfile = name_codfreq(fnpair, pattern)
+        with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
+            writer = csv.DictWriter(fp, CODFREQ_HEADER)
+            writer.writeheader()
+            writer.writerows(sam2codfreq_new(
+                fnpair=fnpair,
+                pattern=pattern,
+                profile=profile,
+                log_format=log_format
+            ))
+
+
 @click.command()
 @click.argument(
     'workdir',
     type=click.Path(exists=True, file_okay=False,
                     dir_okay=True, resolve_path=True))
 @click.option(
-    '-g', '--gene',
-    required=True,
-    type=str,
-    help='Gene name')
-@click.option(
     '-p', '--program',
     required=True,
     type=click.Choice(get_programs()))
 @click.option(
-    '-r', '--reference',
+    '-r', '--profile',
     required=True,
-    type=click.Path(exists=True, file_okay=True,
-                    dir_okay=False, resolve_path=True))
+    type=click.File('r', encoding='UTF-8'))
 @click.option(
     '--log-format',
     type=click.Choice(['text', 'json']),
     default='text', show_default=True)
-def align(workdir, gene, program, reference, log_format):
-    refinit = get_refinit(program)
-    alignfunc = get_align(program)
-    refaas = get_refaas(reference)
-    for fnpair, pattern in find_paired_fastqs(workdir):
-        samfile = name_samfile(fnpair, pattern, gene)
-        refinit(reference)
-        alignfunc(reference, *fnpair, samfile)
-        codfreqfile = replace_ext(samfile, '.codfreq')
-        with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
-            writer = csv.DictWriter(fp, CODFREQ_HEADER)
-            writer.writeheader()
-            writer.writerows(sam2codfreq(
-                samfile,
-                gene=gene,
-                refaas=refaas,
-                reference_start=1,
-                fnpair=fnpair,
-                log_format=log_format
-            ))
+@click.option(
+    '--enable-profiling/--disable-profiling',
+    default=False,
+    help='Enable cProfile')
+def align(workdir, program, profile, log_format, enable_profiling):
+    if enable_profiling:
+        import cProfile
+        import pstats
+        profile_obj = None
+        try:
+            with cProfile.Profile() as profile_obj:
+                align_inner(workdir, program, profile, log_format)
+        finally:
+            if profile_obj is not None:
+                ps = pstats.Stats(profile_obj)
+                ps.print_stats()
+    else:
+        align_inner(workdir, program, profile, log_format)
+
+    """
+
+    for config in profile['fragmentConfig']:
+        if 'geneName' not in config:
+            continue
+        gene = config['geneName']
+        refname = config['fragmentName']
+        if 'fromFragment' in config:
+            refname = config['fromFragment']
+        refconfig = ref_lookup[refname]
+        refstart = config.get('refStart')
+        refend = config.get('refEnd')
+        refaas = get_refaas(refconfig, refstart, refend)
+
+    """
 
 
 if __name__ == '__main__':

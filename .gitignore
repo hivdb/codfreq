@@ -3,5 +3,12 @@
 local
 build
 .DS_Store
+*.so
+*.c
+*.o
+*.egg
+*.egg-info
+.*cache*/
+*venv*/
 
 __pycache__
