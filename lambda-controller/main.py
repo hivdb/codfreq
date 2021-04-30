@@ -91,12 +91,12 @@ def load_taskmeta(uniqkey):
     return data
 
 
-def verify_refs(refs):
-    for ref in refs:
+def verify_profiles(profiles):
+    for profile in profiles:
         try:
             S3.head_object(
                 Bucket=S3_BUCKET,
-                Key='refs/{}'.format(ref)
+                Key='profiles/{}'.format(profile)
             )
         except S3.exceptions.NoSuchKey:
             return False
@@ -160,23 +160,17 @@ def fetch_codfreqs(request):
             if len(codon) < 3:
                 continue
             count = int(row['count'])
-            refaa = row['refaa']
-            aa = row['aa']
-            percent = float(row['percent'])
             total_quality_score = float(row['total_quality_score'])
             if (gene, pos) not in gpmap:
                 gpmap[(gene, pos)] = {
                     'gene': gene,
                     'position': pos,
                     'totalReads': total,
-                    'refAminoAcid': refaa,
                     'allCodonReads': []
                 }
             gpmap[(gene, pos)]['allCodonReads'].append({
                 'codon': codon,
                 'reads': count,
-                'aminoAcid': aa,
-                'percent': percent,
                 'totalQualityScore': total_quality_score
             })
         codfreqs.setdefault(name, []).extend(gpmap.values())
@@ -313,27 +307,21 @@ def trigger_runner(request):
     if not isinstance(runners, list):
         return {'error': "invalid format of 'runners'"}, 400
 
-    all_refs = set()
+    all_profiles = set()
     for runner in runners:
         if not isinstance(runner, dict):
             return {'error': "invalid format of 'runners'"}, 400
-        ref = runner.get('reference')
-        all_refs.add(ref)
-        gene = runner.get('gene')
-        if not gene:
-            return {
-                'error': "invalid format of 'runners': 'gene' not provided"
-            }, 400
+        profile = runner.get('profile')
+        all_profiles.add(profile)
 
-    if not verify_refs(all_refs):
+    if not verify_profiles(all_profiles):
         return {
-            'error': "invalid format of 'runners': unsupport 'reference'"
+            'error': "invalid format of 'runners': unsupport 'profile'"
         }
 
     task_ids = []
     for runner in runners:
-        ref = runner['reference']
-        gene = runner['gene']
+        profile = runner['profile']
         result = ECS.run_task(
             platformVersion='1.4.0',
             cluster=ECS_CLUSTER,
@@ -346,8 +334,7 @@ def trigger_runner(request):
                     'name': 'codfreq-runner',
                     'command': [
                         'bin/align-all-docker',
-                        '-r', ref,
-                        '-g', gene,
+                        '-r', profile,
                         '-p', path_prefix
                     ]
                 }]

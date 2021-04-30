@@ -4,7 +4,9 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+# post-align = {editable = true, path = "./../post-align"}
 boto3 = "*"
+cython = "*"
 
 [packages]
 pysam = "==0.15.4"
@@ -17,9 +19,7 @@ urllib3 = ">=1.26.4"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
 # post-align = {git = "ssh://git@github.com/hivdb/post-align.git", ref = "6c9bde4fda6d0e7240c4c1171627c9446e1c5c5e"}
-cython = "*"
-post-align = {editable = true, path = "./../post-align"}
-intervaltree = "*"
+post-align = {file = "https://github.com/hivdb/post-align/archive/6c9bde4fda6d0e7240c4c1171627c9446e1c5c5e.zip"}
 
 [requires]
 python_version = "3.8"

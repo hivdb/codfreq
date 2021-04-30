@@ -1,5 +1,3 @@
-# cython: profile=True
-
 from tqdm import tqdm
 
 ENCODING = 'UTF-8'

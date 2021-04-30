@@ -1,131 +1,129 @@
-import os
-import re
-import csv
-import click
+from more_itertools import flatten
 from collections import defaultdict, Counter
 
 from .paired_reads import iter_paired_reads
 from .poscodons import iter_poscodons
-from .codonutils import translate_codon
-from .filename_helper import replace_ext
-from .reference_helper import get_refaas
-
-CODON_PATTERN = re.compile(r'^[ACGTYRWSKMBDHVN]{3}$')
+from .codonalign_consensus import codonalign_consensus
+from .filename_helper import (
+    name_samfile
+)
 
 CODFREQ_HEADER = [
     'gene', 'position',
     'total', 'codon', 'count',
-    'refaa', 'aa', 'percent',
     'total_quality_score'
 ]
 
+ENCODING = 'UTF-8'
+
+
+def iter_ref_fragments(profile):
+    ref_fragments = {}
+    for config in profile['fragmentConfig']:
+        if 'refSequence' not in config:
+            continue
+        refname = config['fragmentName']
+        ref_fragments[refname] = {
+            'ref': config,
+            'genes': []
+        }
+    for config in profile['fragmentConfig']:
+        if 'geneName' not in config:
+            continue
+        refname = config['fragmentName']
+        if 'fromFragment' in config:
+            refname = config['fromFragment']
+        ref_fragments[refname]['genes'].append(config)
+    for refname, pair in ref_fragments.items():
+        yield refname, pair['ref'], pair['genes']
+
+
+def iter_codonfreq(codonstat, qualities):
+    for (gene, refpos), codons in codonstat.items():
+        total = sum(codons.values())
+        for codon, count in sorted(codons.most_common()):
+            qua = qualities[(gene, refpos, codon)]
+            yield {
+                'gene': gene,
+                'position': refpos,
+                'total': total,
+                'codon': bytes(flatten(codon)).decode(ENCODING),
+                'count': count,
+                'total_quality_score': round(qua, 2)
+            }
+
 
 def sam2codfreq(
-    sampath,
-    gene,
-    refaas,
-    reference_start=1,
-    fnpair=None,
+    samfile,
+    ref,
+    genes,
     site_quality_cutoff=0,
     log_format='text',
-    only_boundary_partial_codons=False
+    include_partial_codons=False,
+    **extras
 ):
-    codonfreqs = defaultdict(Counter)
-    qualities = defaultdict(Counter)
-    all_paired_reads = iter_paired_reads(sampath)
+    """Iterate CodFreq rows from a SAM/BAM file
+
+    :param samfile: str of the SAM/BAM file path
+    :param ref: dict of the reference configuration
+    :param genes: list of dict of the gene configurations
+    :param site_quality_cutoff: phred-score quality cutoff of each codon
+                                position
+    :param log_format: 'json' or 'text', default to 'text'
+    :param include_partial_codons: if true output partial codons also; only for
+                                   debug purpose
+    :param **extras: any other variables to pass to the log method
+    :return: CodFreq rows
+    """
+
+    codonstat = defaultdict(Counter)
+    qualities = Counter()
+    all_paired_reads = iter_paired_reads(samfile)
+
+    # Iterate through the whole SAM/BAM and stat each individual gene position
+    # and codon
     for _, poscodons in iter_poscodons(
         all_paired_reads,
-        reference_start=reference_start,
-        fnpair=fnpair,
-        description=sampath,
+        ref,
+        genes,
+        description=samfile,
         site_quality_cutoff=site_quality_cutoff,
         log_format=log_format,
-        include_boundary_partial_codons=only_boundary_partial_codons
+        include_partial_codons=include_partial_codons,
+        **extras
     ):
-        for refpos, codon, qua, is_boundary in poscodons:
-            codonfreqs[refpos][(codon, is_boundary)] += 1
-            qualities[refpos][(codon, is_boundary)] += qua
+        for gene, refpos, codon, qua in poscodons:
+            codonstat[(gene, refpos)][codon] += 1
+            qualities[(gene, refpos, codon)] += qua
         del poscodons
-    for refpos, codons in sorted(codonfreqs.items()):
-        total = sum(codons.values())
-        for codon, count in codons.items():
-            qua = qualities[refpos][codon]
-            codon, is_boundary = codon
-            if CODON_PATTERN.match(codon):
-                aa = translate_codon(codon)
-            elif not codon or codon == '---':
-                aa = 'del'
-            elif len(codon) >= 6:
-                aa = 'ins'
-            else:
-                aa = 'X'
-            if is_boundary or not only_boundary_partial_codons:
-                yield {
-                    'gene': gene,
-                    'position': refpos,
-                    'total': total,
-                    'codon': codon,
-                    'refaa': refaas[refpos],
-                    'aa': aa,
-                    'count': count,
-                    'percent': count / total,
-                    'total_quality_score': round(qua, 2)
-                }
+
+    codonfreq = iter_codonfreq(codonstat, qualities)
+
+    # Apply codon-alignment to consensus codons. This step is an imperfect
+    # approach to address the out-frame deletions/insertions. However, it is
+    # faster than codon-align each single read, since the process is right
+    # now very slow and time-consuming.
+    # This approach may need to be changed in the future when optimization was
+    # done for the post-align codon-alignment program.
+    yield from codonalign_consensus(codonfreq, ref, genes)
 
 
-@click.command()
-@click.argument(
-    'workdir',
-    type=click.Path(exists=True, file_okay=False,
-                    dir_okay=True, resolve_path=True))
-@click.option(
-    '-g', '--gene',
-    required=True,
-    type=str,
-    help='Gene name')
-@click.option(
-    '-r', '--reference',
-    required=True,
-    type=click.Path(exists=True, file_okay=True,
-                    dir_okay=False, resolve_path=True))
-@click.option(
-    '--reference-start',
-    type=int,
-    default=1,
-    show_default=True,
-    help='Reference NA start (will be substract from the result)')
-@click.option(
-    '--site-quality-cutoff',
-    type=int,
-    default=0,
-    show_default=True,
-    help='Phred score cutoff for individual site')
-@click.option(
-    '--only-boundary-partial-codons',
-    is_flag=True,
-    help=('Only output incomplete codons at reads\' both boundaries. '
-          'This function should only be used for debugging.'))
-def main(workdir, gene, reference, reference_start,
-         site_quality_cutoff, only_boundary_partial_codons):
-    refaas = get_refaas(reference, reference_start)
-    for dirpath, _, filenames in os.walk(workdir, followlinks=True):
-        for fn in filenames:
-            if fn[-4:].lower() not in ('.sam', '.bam'):
-                continue
-            sampath = os.path.join(dirpath, fn)
-            codfreqfile = replace_ext(sampath, '.codfreq')
-            with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
-                writer = csv.DictWriter(fp, CODFREQ_HEADER)
-                writer.writeheader()
-                writer.writerows(sam2codfreq(
-                    sampath,
-                    gene=gene,
-                    refaas=refaas,
-                    site_quality_cutoff=site_quality_cutoff,
-                    reference_start=reference_start,
-                    only_boundary_partial_codons=only_boundary_partial_codons
-                ))
-
-
-if __name__ == '__main__':
-    main()
+def sam2codfreq_all(
+    fnpair,
+    pattern,
+    profile,
+    site_quality_cutoff=0,
+    log_format='text',
+    include_partial_codons=False
+):
+    for refname, ref, genes in iter_ref_fragments(profile):
+        samfile = name_samfile(fnpair, pattern, refname)
+        yield from sam2codfreq(
+            samfile,
+            ref,
+            genes,
+            site_quality_cutoff=site_quality_cutoff,
+            log_format=log_format,
+            include_partial_codons=include_partial_codons,
+            fastqs=fnpair
+        )

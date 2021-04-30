@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-# from . import rayinit  # noqa
 import os
 import csv
 import json
@@ -9,8 +8,8 @@ import tempfile
 from itertools import combinations
 from collections import defaultdict
 
-from .sam2codfreq_new import (
-    sam2codfreq_new,
+from .sam2codfreq import (
+    sam2codfreq_all,
     CODFREQ_HEADER
 )
 from .cmdwrappers import (
@@ -158,7 +157,7 @@ def align_with_profile(paired_fastqs, program, profile):
                 alignfunc(refpath, *fnpair, samfile)
 
 
-def align_inner(workdir, program, profile, log_format):
+def align(workdir, program, profile, log_format):
     profile = json.load(profile)
     paired_fastqs = list(find_paired_fastqs(workdir))
     align_with_profile(paired_fastqs, program, profile)
@@ -168,7 +167,7 @@ def align_inner(workdir, program, profile, log_format):
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
             writer.writeheader()
-            writer.writerows(sam2codfreq_new(
+            writer.writerows(sam2codfreq_all(
                 fnpair=fnpair,
                 pattern=pattern,
                 profile=profile,
@@ -197,37 +196,21 @@ def align_inner(workdir, program, profile, log_format):
     '--enable-profiling/--disable-profiling',
     default=False,
     help='Enable cProfile')
-def align(workdir, program, profile, log_format, enable_profiling):
+def align_cmd(workdir, program, profile, log_format, enable_profiling):
     if enable_profiling:
         import cProfile
         import pstats
         profile_obj = None
         try:
             with cProfile.Profile() as profile_obj:
-                align_inner(workdir, program, profile, log_format)
+                align(workdir, program, profile, log_format)
         finally:
             if profile_obj is not None:
                 ps = pstats.Stats(profile_obj)
                 ps.print_stats()
     else:
-        align_inner(workdir, program, profile, log_format)
-
-    """
-
-    for config in profile['fragmentConfig']:
-        if 'geneName' not in config:
-            continue
-        gene = config['geneName']
-        refname = config['fragmentName']
-        if 'fromFragment' in config:
-            refname = config['fromFragment']
-        refconfig = ref_lookup[refname]
-        refstart = config.get('refStart')
-        refend = config.get('refEnd')
-        refaas = get_refaas(refconfig, refstart, refend)
-
-    """
+        align(workdir, program, profile, log_format)
 
 
 if __name__ == '__main__':
-    align()
+    align_cmd()

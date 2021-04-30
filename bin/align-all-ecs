@@ -7,15 +7,12 @@ ECS_CLUSTER=codfreq-runner
 ECS_TASK_DEFINITION=codfreq-runner
 ECS_NETWORK_CONFIG="awsvpcConfiguration={subnets=[subnet-02f7aeefbe32139e6,subnet-0d99ba6fe930466bc],securityGroups=[sg-0ab407848018a5604],assignPublicIp=ENABLED}"
 
-USAGE="command usage: $(basename $0) -r <REFERENCE> -g <GENE> -p <PATH_PREFIX>"
+USAGE="command usage: $(basename $0) -r <PROFILE> -p <PATH_PREFIX>"
 
-while getopts ':vr:g:p:' OPT; do
+while getopts ':vr:p:' OPT; do
     case "$OPT" in
         r)
-            REFERENCE=$OPTARG
-            ;;
-        g)
-            GENE=$OPTARG
+            PROFILE=$OPTARG
             ;;
         p)
             PATH_PREFIX=$OPTARG
@@ -29,13 +26,8 @@ while getopts ':vr:g:p:' OPT; do
     esac
 done
 
-if [ -z $REFERENCE ]; then
+if [ -z $PROFILE ]; then
     echo "Missing required option argument -r <REFERENCE>" >&2
-    exit 1
-fi
-
-if [ -z $GENE ]; then
-    echo "Missing required option argument -g <GENE>" >&2
     exit 1
 fi
 
@@ -45,7 +37,7 @@ if [ -z $PATH_PREFIX ]; then
 fi
 
 overrides=$(
-echo | awk -v ref="$REFERENCE" -v gene="$GENE" -v prefix="$PATH_PREFIX" '
+echo | awk -v profile="$PROFILE" -v prefix="$PATH_PREFIX" '
 {
     sub("\"", "\\\"", ref);
     sub("\"", "\\\"", gene);
@@ -54,8 +46,7 @@ echo | awk -v ref="$REFERENCE" -v gene="$GENE" -v prefix="$PATH_PREFIX" '
     print "\"name\": \"codfreq-runner\",";
     print "\"command\": [";
     print "\"bin/align-all-docker\"";
-    print ", \"-r\", \"" ref "\",";
-    print "\"-g\", \"" gene "\",";
+    print ", \"-r\", \"" profile "\",";
     print "\"-p\", \"" prefix "\"";
     print "]}]}"
 }' | jq -rc)

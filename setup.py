@@ -21,25 +21,41 @@ extensions = [
         sources=['codfreq/posnas.py']
     ),
     Extension(
-        name='codfreq.poscodons_new',
-        sources=['codfreq/poscodons_new.py']
+        name='codfreq.poscodons',
+        sources=['codfreq/poscodons.py']
     ),
     Extension(
-        name='codfreq.pairwise_consensus',
-        sources=['codfreq/pairwise_consensus.py']
+        name='codfreq.sam2codfreq',
+        sources=['codfreq/sam2codfreq.py']
+    ),
+    Extension(
+        name='codfreq.codonalign_consensus',
+        sources=['codfreq/codonalign_consensus.py']
     )
 ]
 
 
 def strip_comments(line):
+    return line.split('#', 1)[0].strip()
+
+
+def pep508(line):
     if line.startswith('-i '):
         return ''
-    return line.split('#', 1)[0].strip()
+    if not line:
+        return line
+    if '://' in line:
+        url, package_name = line.split('#egg=', 1)
+        return '{} @ {}'.format(package_name.strip(), url.strip())
+    return line
 
 
 def req(filename):
     with open(os.path.join(os.getcwd(), filename)) as fp:
-        requires = set([strip_comments(ln) for ln in fp.readlines()])
+        requires = set(
+            strip_comments(pep508(ln))
+            for ln in fp.readlines()
+        )
         requires -= set([''])
     return list(requires)
 
@@ -53,16 +69,19 @@ setup_params = dict(
     packages=[
         'codfreq', 'codfreq/cmdwrappers'
     ],
-    # install_requires=req('requirements.txt'),
+    install_requires=req('requirements.txt'),
     ext_modules=cythonize(
         extensions,
-        compiler_directives={'language_level': "3"}
+        compiler_directives={
+            'language_level': '3',
+            'profile': False
+        }
     ),
     # tests_require=reqs('test-requirements.txt'),
     # include_package_data=True,
-    # entry_points={'console_scripts': [
-    #     'align = codfreq.align:main',
-    # ]},
+    entry_points={'console_scripts': [
+        'fastq2codfreq = codfreq.align:align_cmd',
+    ]},
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',

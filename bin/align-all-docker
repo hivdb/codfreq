@@ -22,8 +22,8 @@ downloads3() {
     }'
 }
 
-fetch_reference() {
-    downloads3 refs/$1 $2
+fetch_profile() {
+    downloads3 profiles/$1 $2
 }
 
 syncs3() {
@@ -38,22 +38,12 @@ syncs3() {
     done
 }
 
-has_codfreq() {
-    echo $@ | sed 's/ /\n/g' |
-    \grep "\.${GENE}\.codfreq" |
-    \grep -v "_2\.${GENE}\.codfreq" >/dev/null
-    return $?
-}
+USAGE="command usage: $(basename $0) -r <PROFILE> -p <PATH_PREFIX>"
 
-USAGE="command usage: $(basename $0) -r <REFERENCE> -g <GENE> -p <PATH_PREFIX>"
-
-while getopts ':vr:g:p:' OPT; do
+while getopts ':vr:p:' OPT; do
     case "$OPT" in
         r)
-            REFERENCE=$OPTARG
-            ;;
-        g)
-            GENE=$OPTARG
+            PROFILE=$OPTARG
             ;;
         p)
             PATH_PREFIX=$OPTARG
@@ -67,13 +57,8 @@ while getopts ':vr:g:p:' OPT; do
     esac
 done
 
-if [ -z $REFERENCE ]; then
-    echo "Missing required option argument -r <REFERENCE>" >&2
-    exit 1
-fi
-
-if [ -z $GENE ]; then
-    echo "Missing required option argument -g <GENE>" >&2
+if [ -z $PROFILE ]; then
+    echo "Missing required option argument -r <PROFILE>" >&2
     exit 1
 fi
 
@@ -85,22 +70,22 @@ fi
 
 tmpdir=$(mktemp -d)
 trap "rm -rf $tmpdir" EXIT
-mkdir -p /tmp/refs
+mkdir -p /tmp/profiles
 
-fetch_reference $REFERENCE /tmp/refs/$REFERENCE
-REFERENCE=/tmp/refs/$REFERENCE
-if [ ! -f $REFERENCE ]; then
-    echo "Value of -r <REFERENCE> is not a valid file" >&2
+fetch_profile $PROFILE /tmp/profiles/$PROFILE
+PROFILE=/tmp/profiles/$PROFILE
+if [ ! -f $PROFILE ]; then
+    echo "Value of -r <PROFILE> is not a valid file" >&2
     exit 1
 fi
 
 for file in $(lss3 $PATH_PREFIX); do
-    if [[ $file == *.fastq.gz ]]; then
+    if [[ $file == *.fastq.gz || $file == *.fastq ]]; then
         downloads3 $PATH_PREFIX$file $tmpdir
     fi
 done
 
-python -m codfreq.align $tmpdir -p minimap2 -r $REFERENCE -g $GENE --log-format json
+fastq2codfreq $tmpdir -p minimap2 -r $PROFILE --log-format json
 
 find $tmpdir -name "*.sam" | while read file; do
     samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null

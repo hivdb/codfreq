@@ -1,4 +1,12 @@
 scripts/__pycache__
 local
+build
+*.egg
+*.egg-info
 codfreq/__pycache__
 codfreq-js
+**/*.swp
+**/*.swo
+**/*.c
+**/*.so
+**/.DS_Store

@@ -1,5 +1,3 @@
-# cython: profile=True
-
 from postalign.utils.group_by_codons import group_by_codons
 from postalign.processors.codon_alignment import codon_align
 from postalign.models.sequence import Sequence, PositionalSeqStr
@@ -64,12 +62,17 @@ def assemble_alignment(geneposcdf_lookup, refseq, genedef):
             last_aa)
 
 
+genepos_getter = itemgetter('gene', 'position')
+codon_getter = itemgetter('codon')
+count_getter = itemgetter('count')
+
+
 def codonalign_consensus(codonfreq, ref, genes):
     refseq = bytearray(ref['refSequence'], ENCODING)
     geneposcdf_lookup = {
-        genepos: sorted(genecdf, key=lambda cdf: -cdf['count'])
+        genepos: sorted(genecdf, key=count_getter, reverse=True)
         for genepos, genecdf in
-        groupby(codonfreq, key=itemgetter('gene', 'position'))
+        groupby(codonfreq, key=genepos_getter)
     }
     for genedef in genes:
         gene = genedef['geneName']
@@ -91,9 +94,6 @@ def codonalign_consensus(codonfreq, ref, genes):
              refstart=first_aa * 3 - 2,
              refend=last_aa * 3
         )
-        # if gene == 'S':
-        #     print(str(gene_refseq_obj.seqtext))
-        #     print(str(gene_queryseq_obj.seqtext))
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(
                 gene_refseq_obj.seqtext,
@@ -104,9 +104,24 @@ def codonalign_consensus(codonfreq, ref, genes):
             geneposcdf = geneposcdf_lookup.get((gene, aapos))
             if not geneposcdf:
                 continue
-            # if gene == 'S' and aapos in (68, 69, 70):
-            #     print(gene, aapos, querycodon)
             geneposcdf[0]['codon'] = str(
                 PositionalSeqStr.join(querycodon)
             )
-            yield from geneposcdf
+
+            # merge same codons
+            merged_geneposcdf = []
+            for codon, cdfs in groupby(
+                sorted(geneposcdf, key=codon_getter),
+                codon_getter
+            ):
+                cdfs = list(cdfs)
+                cdfs[0]['count'] = sum(cdf['count'] for cdf in cdfs)
+                cdfs[0]['total_quality_score'] = sum(
+                    cdf['total_quality_score'] for cdf in cdfs
+                )
+                merged_geneposcdf.append(cdfs[0])
+            yield from sorted(
+                merged_geneposcdf,
+                key=count_getter,
+                reverse=True
+            )
