@@ -179,12 +179,28 @@ def fetch_codfreqs(request):
         'allReads': all_reads
     } for name, all_reads in codfreqs.items()]
 
+    S3.put_object(
+        Bucket=S3_BUCKET,
+        Key='tasks/{}/response.json'.format(uniqkey),
+        ContentType='application/json',
+        Body=json.dumps({
+            'taskKey': uniqkey,
+            'lastUpdatedAt': taskmeta['lastUpdatedAt'].isoformat(),
+            'status': taskmeta['status'],
+            'codfreqs': codfreqs
+        }).encode('U8')
+    )
+    location = S3.generate_presigned_url(
+        'get_object',
+        Params={
+            'Bucket': S3_BUCKET,
+            'Key': 'tasks/{}/response.json'.format(uniqkey)
+        },
+        ExpiresIn=300)
+
     return {
-        'taskKey': uniqkey,
-        'lastUpdatedAt': taskmeta['lastUpdatedAt'].isoformat(),
-        'status': taskmeta['status'],
-        'codfreqs': codfreqs
-    }, 200
+        'location': location
+    }, 302
 
 
 def fetch_runner_logs(request):
@@ -433,11 +449,22 @@ def dispatch(event, context):
         method = method_not_found
     response_body, status = method(request)
 
-    return {
-        'statusCode': status,
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'application/json',
-        },
-        'body': json.dumps(response_body)
+    common_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
     }
+
+    if status in (301, 302):
+        return {
+            'statusCode': status,
+            'headers': {
+                **common_headers,
+                **response_body
+            }
+        }
+    else:
+        return {
+            'statusCode': status,
+            'headers': common_headers,
+            'body': json.dumps(response_body)
+        }
