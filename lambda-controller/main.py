@@ -81,6 +81,62 @@ def save_taskmeta(uniqkey, status, payload=None):
     return now
 
 
+def save_pairinfo(uniqkey, pairinfo):
+    S3.put_object(
+        Bucket=S3_BUCKET,
+        Key='tasks/{}/pairinfo.json'.format(uniqkey),
+        ContentType='application/json',
+        Body=json.dumps(pairinfo).encode('U8')
+    )
+
+
+def verify_pairinfo(pairinfo, fastq_files):
+    known_names = set([])
+    for idx, one in enumerate(pairinfo):
+        if 'name' not in one:
+            return False, "item {} misses property 'name'".format(idx)
+        if 'pair' not in one:
+            return False, "item {} misses property 'pair'".format(idx)
+        if 'n' not in one:
+            return False, "item {} misses property 'n'".format(idx)
+        if one['name'] in known_names:
+            return False, "item {} has duplicate name".format(idx)
+        if len(one['pair']) > 2:
+            return (
+                False,
+                "item {}'s property 'pair' has too many files".format(idx)
+            )
+        if len(one['pair']) < 2:
+            return (
+                False,
+                "item {}'s property 'pair' has too few file".format(idx)
+            )
+        if one['n'] == 2 and any(f is None for f in one['pair']):
+            return (
+                False,
+                "item {}'s property 'pair' doesn't match n=2".format(idx)
+            )
+        if (
+            one['n'] == 1 and
+            (one['pair'][0] is None or
+             one['pair'][1] is not None)
+        ):
+            return (
+                False,
+                "item {}'s property 'pair' doesn't match n=1".format(idx)
+            )
+        files = {f for f in one['pair'] if f is not None}
+        missing_files = files - fastq_files
+        if missing_files:
+            return (
+                False,
+                "item {}'s property 'pair' lists following files "
+                "which are not uploaded: {}"
+                .format(idx, ', '.join(missing_files))
+            )
+    return True
+
+
 def load_taskmeta(uniqkey):
     obj = S3.get_object(
         Bucket=S3_BUCKET,
@@ -292,6 +348,7 @@ def trigger_runner(request):
     """Step 3: trigger codfreq-runner"""
     uniqkey = request.get('taskKey')
     runners = request.get('runners')
+    pairinfo = request.get('pairInfo')
     if not uniqkey:
         return {"error": "'taskKey' not provided"}, 400
     try:
@@ -334,6 +391,13 @@ def trigger_runner(request):
         return {
             'error': "invalid format of 'runners': unsupport 'profile'"
         }
+
+    if pairinfo:
+        if not verify_pairinfo(pairinfo, fastq_files):
+            return {
+                'error': "invalid format of 'pairInfo'"
+            }
+        save_pairinfo(uniqkey, pairinfo)
 
     task_ids = []
     for runner in runners:

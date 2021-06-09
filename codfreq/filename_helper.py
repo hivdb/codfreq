@@ -2,14 +2,14 @@ import os
 import re
 
 
-def name_file(fnpair, pattern, suffix):
+def suggest_pair_name(fnpair, pattern):
     filename, _ = fnpair
     delimiter, offset, _, reverse = pattern
     dirpath, filename = os.path.split(filename)
     samfile = re.split(r'(?i)\.fastq(?:.gz)?$', filename)[0]
     if reverse == -1:
         return os.path.join(
-            dirpath, samfile + suffix)
+            dirpath, samfile)
     samfile = samfile.split(delimiter)
     if reverse:
         samfile.reverse()
@@ -17,15 +17,19 @@ def name_file(fnpair, pattern, suffix):
     if reverse:
         samfile.reverse()
     return os.path.join(
-        dirpath, delimiter.join(samfile) + suffix)
+        dirpath, delimiter.join(samfile))
 
 
-def name_samfile(fnpair, pattern, gene):
-    return name_file(fnpair, pattern, '.{}.sam'.format(gene))
+def name_file(fnpair, pattern, suffix):
+    return suggest_pair_name(fnpair, pattern) + suffix
 
 
-def name_codfreq(fnpair, pattern):
-    return name_file(fnpair, pattern, '.codfreq')
+def name_samfile(name, gene):
+    return '{}.{}.sam'.format(name, gene)
+
+
+def name_codfreq(name):
+    return '{}.codfreq'.format(name)
 
 
 def replace_ext(filename, toext, fromext=None, name_only=False):

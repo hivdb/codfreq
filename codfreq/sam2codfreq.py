@@ -109,15 +109,15 @@ def sam2codfreq(
 
 
 def sam2codfreq_all(
+    name,
     fnpair,
-    pattern,
     profile,
     site_quality_cutoff=0,
     log_format='text',
     include_partial_codons=False
 ):
     for refname, ref, genes in iter_ref_fragments(profile):
-        samfile = name_samfile(fnpair, pattern, refname)
+        samfile = name_samfile(name, refname)
         yield from sam2codfreq(
             samfile,
             ref,

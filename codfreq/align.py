@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import os
+import re
 import csv
 import json
 import click
@@ -16,6 +17,7 @@ from .cmdwrappers import (
     get_programs, get_refinit, get_align
 )
 from .filename_helper import (
+    suggest_pair_name,
     name_samfile,
     name_codfreq
 )
@@ -23,11 +25,18 @@ from .filename_helper import (
 
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
+INVALID_PAIRED_FASTQ_MARKER = re.compile(r'01|02|10|20')
 
 
 def find_paired_marker(text1, text2):
     diffcount = 0
     diffpos = -1
+    if (
+        INVALID_PAIRED_FASTQ_MARKER.search(text1) or
+        INVALID_PAIRED_FASTQ_MARKER.search(text2)
+    ):
+        return -1
+
     for pos, (a, b) in enumerate(zip(text1, text2)):
         if diffcount > 1:
             return -1
@@ -117,25 +126,54 @@ def find_paired_fastq_patterns(filenames):
 
         if not invalid:
             covered |= known
-            yield pattern, pairs
+            for pair in pairs:
+                yield {
+                    'name': suggest_pair_name(pair, pattern),
+                    'pair': pair,
+                    'n': 2
+                }
     if len(filenames) > len(covered):
         remains = sorted(set(filenames) - covered)
-        yield (None, -1, -1, -1), [(left, None) for left in remains]
+        pattern = (None, -1, -1, -1)
+        for left in remains:
+            yield {
+                'name': suggest_pair_name((left, None), pattern),
+                'pair': (left, None),
+                'n': 1
+            }
+
+
+def complete_paired_fastqs(paired_fastqs, dirpath):
+    yield from (
+        {'name': os.path.join(dirpath, pairobj['name']),
+         'pair': tuple(
+             os.path.join(dirpath, fn) if fn else None
+             for fn in pairobj['pair']
+         ),
+         'n': pairobj['n']}
+        for pairobj in paired_fastqs
+    )
 
 
 def find_paired_fastqs(workdir):
-    for dirpath, _, filenames in os.walk(workdir, followlinks=True):
-        filenames = [
-            fn for fn in filenames
-            if fn[-6:].lower() == '.fastq'
-            or fn[-9:].lower() == '.fastq.gz'
-        ]
-        yield from (
-            (tuple(os.path.join(dirpath, fn) if fn else None
-                   for fn in fnpair), pattern)
-            for pattern, fnpairs in find_paired_fastq_patterns(filenames)
-            for fnpair in fnpairs
-        )
+    pairinfo = os.path.join(workdir, 'pairinfo.json')
+    if os.path.isfile(pairinfo):
+        with open(pairinfo) as fp:
+            yield from complete_paired_fastqs(
+                json.load(fp),
+                workdir
+            )
+    else:
+        for dirpath, _, filenames in os.walk(workdir, followlinks=True):
+            filenames = [
+                fn for fn in filenames
+                if fn[-6:].lower() == '.fastq'
+                or fn[-9:].lower() == '.fastq.gz'
+            ]
+            yield from complete_paired_fastqs(
+                find_paired_fastq_patterns(filenames),
+                dirpath
+            )
 
 
 def align_with_profile(paired_fastqs, program, profile):
@@ -151,10 +189,10 @@ def align_with_profile(paired_fastqs, program, profile):
             with open(refpath, 'w') as fp:
                 fp.write('>{}\n{}\n\n'.format(refname, refseq))
         # refaas = get_refaas(reference)
-            for fnpair, pattern in paired_fastqs:
-                samfile = name_samfile(fnpair, pattern, refname)
+            for pairobj in paired_fastqs:
+                samfile = name_samfile(pairobj['name'], refname)
                 refinit(refpath)
-                alignfunc(refpath, *fnpair, samfile)
+                alignfunc(refpath, *pairobj['pair'], samfile)
 
 
 def align(workdir, program, profile, log_format):
@@ -162,14 +200,14 @@ def align(workdir, program, profile, log_format):
     paired_fastqs = list(find_paired_fastqs(workdir))
     align_with_profile(paired_fastqs, program, profile)
 
-    for fnpair, pattern in paired_fastqs:
-        codfreqfile = name_codfreq(fnpair, pattern)
+    for pairobj in paired_fastqs:
+        codfreqfile = name_codfreq(pairobj['name'])
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
             writer.writeheader()
             writer.writerows(sam2codfreq_all(
-                fnpair=fnpair,
-                pattern=pattern,
+                name=pairobj['name'],
+                fnpair=pairobj['pair'],
                 profile=profile,
                 log_format=log_format
             ))

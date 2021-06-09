@@ -28,8 +28,9 @@ deploy-controller: build-controller
 syncrefs:
 	@pipenv run aws s3 sync refs s3://codfreq-assets.hivdb.org/refs
 
-debug-docker:
+debug-runner:
 	@docker run -it --rm \
+		--volume $(PWD)/local:/local:rw \
 		--volume ~/.aws:/root/.aws:ro \
 		hivdb/codfreq-runner:latest bash
 
