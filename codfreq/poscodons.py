@@ -110,6 +110,8 @@ def iter_poscodons(
     for header, pair in all_paired_reads:
         pbar.update(1)
         for read in pair:
+            if not read.query_sequence:
+                continue
 
             posnas = iter_single_read_posnas(
                 read.query_sequence,

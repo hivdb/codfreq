@@ -44,11 +44,16 @@ def iter_single_read_posnas(seq, qua, aligned_pairs):
 
 
 def iter_posnas(all_paired_reads,
-                site_quality_cutoff=0):
+                site_quality_cutoff=0,
+                progress=True):
 
     all_paired_reads = list(all_paired_reads)
-    for header, pair in tqdm(all_paired_reads):
+    if progress:
+        all_paired_reads = tqdm(all_paired_reads)
+    for header, pair in all_paired_reads:
         for read in pair:
+            if not read.query_sequence:
+                continue
             results = iter_single_read_posnas(
                 read.query_sequence,
                 read.query_qualities,

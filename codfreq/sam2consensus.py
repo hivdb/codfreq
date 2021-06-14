@@ -14,7 +14,7 @@ ENCODING = 'UTF-8'
 def sam2consensus(sampath, regions):
     nafreqs = defaultdict(Counter)
     all_paired_reads = iter_paired_reads(sampath)
-    for _, posnas in iter_posnas(all_paired_reads):
+    for _, posnas in iter_posnas(all_paired_reads, progress=False):
         for (refpos, i), na, _ in posnas:
             nafreqs[(refpos, i)][na] += 1
     nacons_lookup = {

@@ -177,7 +177,7 @@ def find_paired_fastqs(workdir):
             )
 
 
-def align_with_profile(paired_fastqs, program, profile):
+def align_with_profile(paired_fastqs, program, profile, log_format):
     with tempfile.TemporaryDirectory('codfreq') as tmpdir:
         refpath = os.path.join(tmpdir, 'ref.fas')
         refinit = get_refinit(program)
@@ -193,13 +193,34 @@ def align_with_profile(paired_fastqs, program, profile):
             for pairobj in paired_fastqs:
                 samfile = name_samfile(pairobj['name'], refname)
                 refinit(refpath)
+                if log_format == 'text':
+                    click.echo(
+                        'Aligning {} with {}...'
+                        .format(pairobj['name'], refname)
+                    )
+                else:
+                    click.echo(json.dumps({
+                        'op': 'alignment',
+                        'status': 'working',
+                        'query': pairobj['name'],
+                        'target': refname
+                    }))
                 alignfunc(refpath, *pairobj['pair'], samfile)
+                if log_format == 'text':
+                    click.echo('Done')
+                else:
+                    click.echo(json.dumps({
+                        'op': 'alignment',
+                        'status': 'done',
+                        'query': pairobj['name'],
+                        'target': refname
+                    }))
 
 
 def align(workdir, program, profile, log_format):
     profile = json.load(profile)
     paired_fastqs = list(find_paired_fastqs(workdir))
-    align_with_profile(paired_fastqs, program, profile)
+    align_with_profile(paired_fastqs, program, profile, log_format)
 
     for pairobj in paired_fastqs:
         codfreqfile = name_codfreq(pairobj['name'])
