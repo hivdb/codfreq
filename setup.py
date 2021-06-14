@@ -31,6 +31,10 @@ extensions = [
     Extension(
         name='codfreq.codonalign_consensus',
         sources=['codfreq/codonalign_consensus.py']
+    ),
+    Extension(
+        name='codfreq.sam2consensus',
+        sources=['codfreq/sam2consensus.py']
     )
 ]
 

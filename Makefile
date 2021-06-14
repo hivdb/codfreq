@@ -34,4 +34,5 @@ debug-runner:
 		--volume ~/.aws:/root/.aws:ro \
 		hivdb/codfreq-runner:latest bash
 
-
+deploy-profiles:
+	@aws s3 sync profiles s3://codfreq-assets.hivdb.org/profiles --delete

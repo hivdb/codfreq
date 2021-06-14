@@ -13,6 +13,7 @@ from .sam2codfreq import (
     sam2codfreq_all,
     CODFREQ_HEADER
 )
+from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
     get_programs, get_refinit, get_align
 )
@@ -211,6 +212,7 @@ def align(workdir, program, profile, log_format):
                 profile=profile,
                 log_format=log_format
             ))
+        create_untrans_region_consensus(pairobj['name'], profile)
 
 
 @click.command()
