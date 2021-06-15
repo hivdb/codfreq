@@ -41,6 +41,8 @@ def sam2consensus(sampath, regions):
                 idx += 1
         results.append({
             'name': name,
+            'refStart': refpos_start,
+            'refEnd': refpos_end,
             'consensus': consarr.decode(ENCODING)
         })
     return results
