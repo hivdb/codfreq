@@ -244,7 +244,7 @@
     },
     {
       "geneName": "nsp12",
-      "trimLeft": 1
+      "trim": [1]
     },
     {
       "geneName": "nsp13"
@@ -314,7 +314,7 @@
     },
     {
       "geneName": "ORF7b",
-      "trimLeft": 1
+      "trim": [1]
     },
     {
       "name": "ORF7b-ORF8",
