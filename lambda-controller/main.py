@@ -187,6 +187,32 @@ def yield_codfreqs(path_prefix):
         kw['ContinuationToken'] = next_token
 
 
+def yield_untrans(path_prefix):
+    kw = dict(
+        Bucket=S3_BUCKET,
+        Prefix=path_prefix
+    )
+    suffix = '.untrans.json'
+    while True:
+        result = S3.list_objects_v2(**kw)
+        for obj in result['Contents']:
+            if not obj['Key'].endswith(suffix):
+                continue
+            name = obj['Key'].rsplit(suffix, 2)[0]
+            name = name.rsplit('/', 1)[-1]
+            yield (
+                name,
+                json.loads(
+                    S3.get_object(Bucket=S3_BUCKET, Key=obj['Key'])['Body']
+                    .read().decode('utf-8-sig')
+                )
+            )
+        next_token = result.get('NextContinuationToken')
+        if not next_token:
+            break
+        kw['ContinuationToken'] = next_token
+
+
 def fetch_codfreqs(request):
     """Step 5: fetch codfreq files"""
     uniqkey = request.get('taskKey')
@@ -230,8 +256,12 @@ def fetch_codfreqs(request):
                 'totalQualityScore': total_quality_score
             })
         codfreqs.setdefault(name, []).extend(gpmap.values())
+    untrans_lookup = dict(yield_untrans(path_prefix))
     codfreqs = [{
         'name': name,
+        'untranslatedRegions': untrans_lookup.get(
+            name.split('.codfreq', 2)[0]
+        ),
         'allReads': all_reads
     } for name, all_reads in codfreqs.items()]
 
