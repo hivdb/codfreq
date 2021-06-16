@@ -28,28 +28,30 @@ def group_posnas(posnas, gene_intervals):
         groupby(posnas, key=lambda posna: posna[0][0])
     ]
     curidx = -1
+    size = len(grouped_posnas)
     for gene_refstart, gene_refend, gene in gene_intervals:
         pos = 0
         # seek back if pos at curidx is after gene_refstart
-        while curidx > -1 and grouped_posnas[curidx + 1][0] > gene_refstart:
+        while (
+            curidx > -1 and
+            curidx + 1 < size and
+            grouped_posnas[curidx + 1][0] > gene_refstart
+        ):
             curidx -= grouped_posnas[curidx + 1][0] - gene_refstart
-        while pos < gene_refend:
-            try:
-                curidx += 1
-                pos, na_and_ins = grouped_posnas[curidx]
-                if pos < gene_refstart:
-                    continue
-                aapos = (pos - gene_refstart) // 3 + 1
-                # if gene == 'nsp1' and aapos == 90:
-                #     print(gene, aapos, na_and_ins_tuple)
+        while curidx + 1 < size and pos < gene_refend:
+            curidx += 1
+            pos, na_and_ins = grouped_posnas[curidx]
+            if pos < gene_refstart:
+                continue
+            aapos = (pos - gene_refstart) // 3 + 1
+            # if gene == 'nsp1' and aapos == 90:
+            #     print(gene, aapos, na_and_ins_tuple)
 
-                yield (
-                    gene,
-                    aapos,
-                    na_and_ins
-                )
-            except IndexError:
-                break
+            yield (
+                gene,
+                aapos,
+                na_and_ins
+            )
 
 
 def find_overlapped_genes(gene_intervals, read_refstart, read_refend):
