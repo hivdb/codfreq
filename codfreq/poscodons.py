@@ -22,25 +22,33 @@ def build_gene_intervals(genes):
 
 def group_posnas(posnas, gene_intervals):
     """Group posnas by position and add gene AA position"""
-    grouped_posnas = groupby(posnas, key=lambda posna: posna[0][0])
+    grouped_posnas = [
+        (pos, tuple(na_and_ins))
+        for pos, na_and_ins in
+        groupby(posnas, key=lambda posna: posna[0][0])
+    ]
+    curidx = -1
     for gene_refstart, gene_refend, gene in gene_intervals:
         pos = 0
+        # seek back if pos at curidx is after gene_refstart
+        while curidx > -1 and grouped_posnas[curidx + 1][0] > gene_refstart:
+            curidx -= grouped_posnas[curidx + 1][0] - gene_refstart
         while pos < gene_refend:
             try:
-                pos, na_and_ins = next(grouped_posnas)
+                curidx += 1
+                pos, na_and_ins = grouped_posnas[curidx]
                 if pos < gene_refstart:
                     continue
                 aapos = (pos - gene_refstart) // 3 + 1
-                na_and_ins_tuple = tuple(na_and_ins)
                 # if gene == 'nsp1' and aapos == 90:
                 #     print(gene, aapos, na_and_ins_tuple)
 
                 yield (
                     gene,
                     aapos,
-                    na_and_ins_tuple
+                    na_and_ins
                 )
-            except StopIteration:
+            except IndexError:
                 break
 
 
