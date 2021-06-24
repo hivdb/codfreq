@@ -198,7 +198,7 @@ def yield_untrans(path_prefix):
         for obj in result['Contents']:
             if not obj['Key'].endswith(suffix):
                 continue
-            name = obj['Key'].rsplit(suffix, 2)[0]
+            name = obj['Key'].rsplit(suffix, 1)[0]
             name = name.rsplit('/', 1)[-1]
             yield (
                 name,
@@ -229,7 +229,7 @@ def fetch_codfreqs(request):
     path_prefix = 'tasks/{}/'.format(uniqkey)
     codfreqs = {}
     for key, obj in yield_codfreqs(path_prefix):
-        name = key.rsplit('.', 2)[0]
+        name = key.rsplit('.', 1)[0]
         name = name.rsplit('/', 1)[-1]
         name = '{}.codfreq'.format(name)
         gpmap = {}
@@ -260,7 +260,7 @@ def fetch_codfreqs(request):
     codfreqs = [{
         'name': name,
         'untranslatedRegions': untrans_lookup.get(
-            name.split('.codfreq', 2)[0]
+            name.rsplit('.codfreq', 1)[0]
         ),
         'allReads': all_reads
     } for name, all_reads in codfreqs.items()]
