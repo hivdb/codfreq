@@ -2,9 +2,8 @@
 
 set -e
 
-cd $(dirname $0)/..
-
 USAGE="command usage: $(basename $0) -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
+
 
 while getopts ':r:d:' OPT; do
     case "$OPT" in
@@ -33,21 +32,17 @@ if [ -z $WORKDIR ]; then
     exit 1
 fi
 
-
 if [ ! -f $PROFILE ]; then
     echo "Value of -r <PROFILE> is not a valid file" >&2
     exit 1
 fi
 
-fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE
+PROFILE="$(realpath $PROFILE)" || echo $USAGE || false
+WORKDIR="$(realpath $WORKDIR)" || echo $USAGE || false
 
-find $tmpdir -name "*.sam" | while read file; do
-    samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null
-    samtools index ${file%.sam}.bam 2> /devnull
-    rm $file 2> /dev/null
-    echo ${file%.sam}.bam |
-    awk '{
-        sub("\"", "\\\"", $1);
-        print "Creating BAM file: " $1;
-    }'
-done
+docker run \
+    -it --rm \
+    --mount type=bind,source="$PROFILE",target=/tmp/profile.json \
+    --mount type=bind,source="$WORKDIR",target=/fastqfiles \
+    hivdb/codfreq-runner:latest \
+    bin/align-all-local -r /tmp/profile.json -d /fastqfiles

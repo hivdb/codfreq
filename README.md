@@ -21,7 +21,7 @@ one or more CodFreq files, you can submit it/them to [HIVDB Interpretation Progr
 - [SRX3881674]($$CMS_PREFIX$$downloads/codfreq-examples/SRX3881674.codfreq.txt)
 - [DRR030302]($$CMS_PREFIX$$downloads/codfreq-examples/DRR030302.codfreq.txt)
 
-
+<!--
 ## Create `.codfreq` file from `.sam`/`.bam` file
 
 The `.sam` or `.bam` files are the alignment output from many multiple sequence alignment tools such as Bowtie2, BWA, SNAP, etc.
@@ -42,23 +42,31 @@ The `.sam` or `.bam` files are the alignment output from many multiple sequence 
    ```
    The script will automatically find every file named with an extension of `.sam` or `.bam`, then extract the codon freqency
    table into `.codfreq` file.
+-->
 
-
-## Create `.codfreq` file from `.fastq` file
+## Create `.codfreq` file from `.fastq`/`.fastq.gz` file
 
 1. Install Docker CE (https://docs.docker.com/install/).
 
 2. Download script:
 
    ```bash
-   sudo curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/bin/fastq2codfreq-docker -o /usr/local/bin/fastq2codfreq
+   sudo curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/bin-wrapper/align-all-docker -o /usr/local/bin/fastq2codfreq
    sudo chmod +x /usr/local/bin/fastq2codfreq
    ```
 
-3. Use following command to process FASTQ files and generate CodFreq files.
+3. Download alignment profiles:
 
    ```bash
-   fastq2codfreq /path/to/folders/containing/fastq/files
+   mkdir profiles
+   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/profiles/HIV1.json -o profiles/HIV1.json
+   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/profiles/SARS2.json -o profiles/SARS2.json
+   ```
+
+4. Use following command to process FASTQ files and generate CodFreq files.
+
+   ```bash
+   fastq2codfreq -r profiles/HIV1.json -d path/to/fastq/folders
    ```
 
    The script will automatically find every file named with an extension of `.fastq`, align them to `.sam` file and then extract
@@ -72,6 +80,7 @@ Note: the `fastq2codfreq` script can only be executed in an Unix-like system. If
 you need to install the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10) to
 use this script.
 
+<!--
 ### Advanced usages
 #### Change naming convention
 You can specify your FASTQ file naming convention by passing `-p <PATTERN>`, `-r <REPLACE>`, `-1 <PAIR1_SUFFIX>` and 
@@ -97,3 +106,4 @@ for the Docker software. Please check these general answers from Stackoverflow:
 
 - Windows: https://stackoverflow.com/a/56583203/2644759
 - MacOS: https://stackoverflow.com/a/39720010/2644759
+-->
