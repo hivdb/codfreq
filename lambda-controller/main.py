@@ -443,7 +443,7 @@ def trigger_runner(request):
                 'containerOverrides': [{
                     'name': 'codfreq-runner',
                     'command': [
-                        'bin/align-all-docker',
+                        'bin/align-all-s3',
                         '-r', profile,
                         '-p', path_prefix
                     ]

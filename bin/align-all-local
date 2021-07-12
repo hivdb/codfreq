@@ -1,0 +1,53 @@
+#! /bin/bash
+
+set -e
+
+cd $(dirname $0)/..
+
+USAGE="command usage: $(basename $0) -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
+
+while getopts ':vr:d:' OPT; do
+    case "$OPT" in
+        r)
+            PROFILE=$OPTARG
+            ;;
+        d)
+            WORKDIR=$OPTARG
+            ;;
+        \?)
+            echo $USAGE >&2
+            exit 0
+            ;;
+        :) echo "Missing option argument for -$OPTARG\n$USAGE" >&2; exit 1;;
+        *) echo "Unimplemented option: -$OPTARG\n$USAGE" >&2; exit 1;;
+    esac
+done
+
+if [ -z $PROFILE ]; then
+    echo "Missing required option argument -r <PROFILE_PATH>" >&2
+    exit 1
+fi
+
+if [ -z $WORKDIR ]; then
+    echo "Missing required option argument -d <FASTQ_DIRECTORY>" >&2
+    exit 1
+fi
+
+
+if [ ! -f $PROFILE ]; then
+    echo "Value of -r <PROFILE> is not a valid file" >&2
+    exit 1
+fi
+
+fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE
+
+find $tmpdir -name "*.sam" | while read file; do
+    samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null
+    samtools index ${file%.sam}.bam 2> /devnull
+    rm $file 2> /dev/null
+    echo ${file%.sam}.bam |
+    awk '{
+        sub("\"", "\\\"", $1);
+        print "Creating BAM file: " $1;
+    }'
+done

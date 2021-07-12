@@ -40,4 +40,4 @@ COPY --from=minimap2_installer /usr/local/minimap2/ /usr/local/minimap2/
 RUN ln -s ../minimap2/minimap2 /usr/local/bin/minimap2 && \
     ln -s ../samtools/bin/samtools /usr/local/bin/samtools
 WORKDIR /app
-COPY bin/align-all-docker /app/bin/
+COPY bin/align-all-s3 bin/align-all-local /app/bin/
