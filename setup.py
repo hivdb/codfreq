@@ -85,6 +85,7 @@ setup_params = dict(
     # include_package_data=True,
     entry_points={'console_scripts': [
         'fastq2codfreq = codfreq.align:align_cmd',
+        'make-response = codfreq.make_response:make_response'
     ]},
     classifiers=[
         'Development Status :: 3 - Alpha',

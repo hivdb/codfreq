@@ -1,9 +1,7 @@
 import re
-import csv
 import json
 import uuid
 import boto3
-from io import StringIO
 from datetime import datetime, timezone, timedelta
 from botocore.client import Config
 
@@ -170,49 +168,6 @@ def create_task(request):
     }, 200
 
 
-def yield_codfreqs(path_prefix):
-    kw = dict(
-        Bucket=S3_BUCKET,
-        Prefix=path_prefix
-    )
-    while True:
-        result = S3.list_objects_v2(**kw)
-        for obj in result['Contents']:
-            if not obj['Key'].endswith('.codfreq'):
-                continue
-            yield obj['Key'], S3.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
-        next_token = result.get('NextContinuationToken')
-        if not next_token:
-            break
-        kw['ContinuationToken'] = next_token
-
-
-def yield_untrans(path_prefix):
-    kw = dict(
-        Bucket=S3_BUCKET,
-        Prefix=path_prefix
-    )
-    suffix = '.untrans.json'
-    while True:
-        result = S3.list_objects_v2(**kw)
-        for obj in result['Contents']:
-            if not obj['Key'].endswith(suffix):
-                continue
-            name = obj['Key'].rsplit(suffix, 1)[0]
-            name = name.rsplit('/', 1)[-1]
-            yield (
-                name,
-                json.loads(
-                    S3.get_object(Bucket=S3_BUCKET, Key=obj['Key'])['Body']
-                    .read().decode('utf-8-sig')
-                )
-            )
-        next_token = result.get('NextContinuationToken')
-        if not next_token:
-            break
-        kw['ContinuationToken'] = next_token
-
-
 def fetch_codfreqs(request):
     """Step 5: fetch codfreq files"""
     uniqkey = request.get('taskKey')
@@ -226,56 +181,6 @@ def fetch_codfreqs(request):
         return {"error": "this task is expired"}, 404
     if not is_success(taskmeta):
         return {"error": "this task is not finished yet"}, 400
-    path_prefix = 'tasks/{}/'.format(uniqkey)
-    codfreqs = {}
-    for key, obj in yield_codfreqs(path_prefix):
-        name = key.rsplit('.', 1)[0]
-        name = name.rsplit('/', 1)[-1]
-        name = '{}.codfreq'.format(name)
-        gpmap = {}
-        fp = StringIO(obj['Body'].read().decode('utf-8-sig'))
-        for row in csv.DictReader(fp):
-            gene = row['gene']
-            pos = int(row['position'])
-            total = int(row['total'])
-            codon = row['codon']
-            if len(codon) < 3:
-                continue
-            count = int(row['count'])
-            total_quality_score = float(row['total_quality_score'])
-            if (gene, pos) not in gpmap:
-                gpmap[(gene, pos)] = {
-                    'gene': gene,
-                    'position': pos,
-                    'totalReads': total,
-                    'allCodonReads': []
-                }
-            gpmap[(gene, pos)]['allCodonReads'].append({
-                'codon': codon,
-                'reads': count,
-                'totalQualityScore': total_quality_score
-            })
-        codfreqs.setdefault(name, []).extend(gpmap.values())
-    untrans_lookup = dict(yield_untrans(path_prefix))
-    codfreqs = [{
-        'name': name,
-        'untranslatedRegions': untrans_lookup.get(
-            name.rsplit('.codfreq', 1)[0]
-        ),
-        'allReads': all_reads
-    } for name, all_reads in codfreqs.items()]
-
-    S3.put_object(
-        Bucket=S3_BUCKET,
-        Key='tasks/{}/response.json'.format(uniqkey),
-        ContentType='application/json',
-        Body=json.dumps({
-            'taskKey': uniqkey,
-            'lastUpdatedAt': taskmeta['lastUpdatedAt'].isoformat(),
-            'status': taskmeta['status'],
-            'codfreqs': codfreqs
-        }).encode('U8')
-    )
     location = S3.generate_presigned_url(
         'get_object',
         Params={

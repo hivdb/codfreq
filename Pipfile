@@ -15,7 +15,7 @@ ssw = "*"
 tqdm = "*"
 more-itertools = "*"
 awscli = "*"
-urllib3 = ">=1.26.4"
+urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
 # post-align = {git = "ssh://git@github.com/hivdb/post-align.git", ref = "6c9bde4fda6d0e7240c4c1171627c9446e1c5c5e"}

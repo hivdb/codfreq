@@ -97,5 +97,6 @@ find $tmpdir -name "*.sam" | while read file; do
         print "{\"op\": \"create-bam\", \"filename\": \"" $1 "\"}";
     }'
 done
+make-response $tmpdir $PATH_PREFIX
 syncs3 $tmpdir $PATH_PREFIX
 echo '{"op": "done"}'
