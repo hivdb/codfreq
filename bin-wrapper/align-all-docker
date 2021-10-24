@@ -63,6 +63,7 @@ fi
 PROFILE="$(realpath $PROFILE)" || echo $USAGE || false
 WORKDIR="$(realpath $WORKDIR)" || echo $USAGE || false
 
+docker pull hivdb/codfreq-runner:latest
 docker run \
     -it --rm \
     --mount type=bind,source="$PROFILE",target=/tmp/profile.json \
