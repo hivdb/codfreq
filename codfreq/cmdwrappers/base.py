@@ -11,10 +11,14 @@ AUTOREMOVE_CONTAINERS = False
 def execute(command):
     proc = Popen(command, stdout=PIPE, stderr=PIPE, encoding='U8')
     out, err = proc.communicate()
+    raise_on_proc_error(proc, err)
+    return out, err
+
+
+def raise_on_proc_error(proc, err):
     if proc.returncode:
         click.echo(err, err=True)
         raise click.Abort()
-    return out, err
 
 
 def refinit_func(name):

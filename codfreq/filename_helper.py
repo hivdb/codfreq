@@ -24,8 +24,8 @@ def name_file(fnpair, pattern, suffix):
     return suggest_pair_name(fnpair, pattern) + suffix
 
 
-def name_samfile(name, gene):
-    return '{}.{}.sam'.format(name, gene)
+def name_bamfile(name, gene):
+    return '{}.{}.bam'.format(name, gene)
 
 
 def name_codfreq(name):

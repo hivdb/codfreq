@@ -1,7 +1,9 @@
 #! /usr/bin/env python
 
 import os
-from .base import execute, refinit_func, align_func
+from subprocess import Popen, PIPE
+
+from .base import execute, raise_on_proc_error, refinit_func, align_func
 
 MINIMAP2_ARGS = [
     '-A', '2',        # matching score [2]
@@ -21,15 +23,36 @@ def minimap2_refinit(refseq):
 
 
 @align_func('minimap2')
-def minimap2_align(refseq, fastq1, fastq2, sam):
+def minimap2_align(refseq, fastq1, fastq2, bam):
     command = [
         'minimap2',
         *MINIMAP2_ARGS,
-        '-a', '-o', sam, refseq, fastq1
+        '-a', refseq, fastq1
     ]
     if fastq2:
         command.append(fastq2)
-    _, logs = execute(command)
-    with open(os.path.splitext(sam)[0] + '.log', 'w') as fp:
-        fp.write(logs)
+    proc_minimap2 = Popen(
+        command,
+        stdout=PIPE,
+        stderr=PIPE,
+        encoding='U8')
+    proc_sam2bam = Popen(
+        ['samtools', 'sort', '-O', 'bam', '-o', bam],
+        stdin=proc_minimap2.stdout,
+        stdout=PIPE,
+        stderr=PIPE,
+        encoding='U8')
+    proc_minimap2.stdout.close()
+    err_minimap2 = proc_minimap2.stderr.read()
+    proc_minimap2.stderr.close()
+    raise_on_proc_error(proc_minimap2, err_minimap2)
+    out_sam2bam, err_sam2bam = proc_sam2bam.communicate()
+    raise_on_proc_error(proc_sam2bam, err_sam2bam)
+    out_samidx, err_samidx = execute(['samtools', 'index', bam])
+    with open(os.path.splitext(bam)[0] + '.log', 'w') as fp:
+        fp.write(err_minimap2)
+        fp.write(out_sam2bam)
+        fp.write(err_sam2bam)
+        fp.write(out_samidx)
+        fp.write(err_samidx)
     return {'overall_rate': -1.}

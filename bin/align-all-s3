@@ -87,16 +87,6 @@ done
 
 fastq2codfreq $tmpdir -p minimap2 -r $PROFILE --log-format json
 
-find $tmpdir -name "*.sam" | while read file; do
-    samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null
-    samtools index ${file%.sam}.bam 2> /devnull
-    rm $file 2> /dev/null
-    echo ${file%.sam}.bam |
-    awk '{
-        sub("\"", "\\\"", $1);
-        print "{\"op\": \"create-bam\", \"filename\": \"" $1 "\"}";
-    }'
-done
 make-response $tmpdir $PATH_PREFIX
 syncs3 $tmpdir $PATH_PREFIX
 echo '{"op": "done"}'

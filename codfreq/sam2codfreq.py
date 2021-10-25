@@ -4,9 +4,7 @@ from collections import defaultdict, Counter
 from .paired_reads import iter_paired_reads
 from .poscodons import iter_poscodons
 from .codonalign_consensus import codonalign_consensus
-from .filename_helper import (
-    name_samfile
-)
+from .filename_helper import name_bamfile
 
 CODFREQ_HEADER = [
     'gene', 'position',
@@ -117,7 +115,7 @@ def sam2codfreq_all(
     include_partial_codons=False
 ):
     for refname, ref, genes in iter_ref_fragments(profile):
-        samfile = name_samfile(name, refname)
+        samfile = name_bamfile(name, refname)
         yield from sam2codfreq(
             samfile,
             ref,

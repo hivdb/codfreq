@@ -4,7 +4,7 @@ from collections import defaultdict, Counter
 from .paired_reads import iter_paired_reads
 from .posnas import iter_posnas
 
-from .filename_helper import name_samfile
+from .filename_helper import name_bamfile
 
 
 GAP = ord(b'N')
@@ -54,7 +54,7 @@ def create_untrans_region_consensus(seqname, profile):
         if 'fromFragment' in fragment:
             continue
         refname = fragment['fragmentName']
-        samfile = name_samfile(seqname, refname)
+        samfile = name_bamfile(seqname, refname)
         regions = [
             region
             for region in profile['sequenceAssemblyConfig']

@@ -19,7 +19,7 @@ from .cmdwrappers import (
 )
 from .filename_helper import (
     suggest_pair_name,
-    name_samfile,
+    name_bamfile,
     name_codfreq
 )
 # from .reference_helper import get_refaas
@@ -191,7 +191,7 @@ def align_with_profile(paired_fastqs, program, profile, log_format):
                 fp.write('>{}\n{}\n\n'.format(refname, refseq))
         # refaas = get_refaas(reference)
             for pairobj in paired_fastqs:
-                samfile = name_samfile(pairobj['name'], refname)
+                samfile = name_bamfile(pairobj['name'], refname)
                 refinit(refpath)
                 if log_format == 'text':
                     click.echo(

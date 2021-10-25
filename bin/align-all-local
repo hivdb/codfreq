@@ -40,14 +40,3 @@ if [ ! -f $PROFILE ]; then
 fi
 
 fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE
-
-find $tmpdir -name "*.sam" | while read file; do
-    samtools sort -O bam $file > ${file%.sam}.bam 2> /dev/null
-    samtools index ${file%.sam}.bam 2> /devnull
-    rm $file 2> /dev/null
-    echo ${file%.sam}.bam |
-    awk '{
-        sub("\"", "\\\"", $1);
-        print "Creating BAM file: " $1;
-    }'
-done
