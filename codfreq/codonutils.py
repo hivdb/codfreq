@@ -1,6 +1,7 @@
 import re
+from typing import Dict, List
 
-CODON_TABLE = {
+CODON_TABLE: Dict[str, str] = {
     'TTT': 'F',
     'TTC': 'F',
     'TTA': 'L',
@@ -83,7 +84,7 @@ CODON_TABLE = {
     'TAG': '*',
 }
 
-REVERSE_CODON_TABLE = {}
+REVERSE_CODON_TABLE: Dict[str, List[str]] = {}
 for codon, aa in CODON_TABLE.items():
     REVERSE_CODON_TABLE.setdefault(aa, []).append(codon)
 

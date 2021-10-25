@@ -6,6 +6,7 @@ import csv
 import json
 import click
 import tempfile
+from typing import TextIO
 from itertools import combinations
 from collections import defaultdict
 
@@ -257,7 +258,13 @@ def align(workdir, program, profile, log_format):
     '--enable-profiling/--disable-profiling',
     default=False,
     help='Enable cProfile')
-def align_cmd(workdir, program, profile, log_format, enable_profiling):
+def align_cmd(
+    workdir: str,
+    program: str,
+    profile: TextIO,
+    log_format: str,
+    enable_profiling: bool
+):
     if enable_profiling:
         import cProfile
         import pstats

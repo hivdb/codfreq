@@ -1,6 +1,8 @@
 from more_itertools import flatten
 from collections import defaultdict, Counter
 
+from typing import Generator, DefaultDict, Tuple
+from .codfreq_types import Profile, RefFragment
 from .paired_reads import iter_paired_reads
 from .poscodons import iter_poscodons
 from .codonalign_consensus import codonalign_consensus
@@ -15,7 +17,8 @@ CODFREQ_HEADER = [
 ENCODING = 'UTF-8'
 
 
-def iter_ref_fragments(profile):
+def iter_ref_fragments(profile: Profile) -> Generator[RefFragment, None, None]:
+    refname: str
     ref_fragments = {}
     for config in profile['fragmentConfig']:
         if 'refSequence' not in config:
@@ -52,7 +55,7 @@ def iter_codonfreq(codonstat, qualities):
 
 
 def sam2codfreq(
-    samfile,
+    samfile: str,
     ref,
     genes,
     site_quality_cutoff=0,
@@ -74,8 +77,8 @@ def sam2codfreq(
     :return: CodFreq rows
     """
 
-    codonstat = defaultdict(Counter)
-    qualities = Counter()
+    codonstat: DefaultDict[Tuple[str, int], Counter] = defaultdict(Counter)
+    qualities: Counter = Counter()
     all_paired_reads = iter_paired_reads(samfile)
 
     # Iterate through the whole SAM/BAM and stat each individual gene position
@@ -107,15 +110,15 @@ def sam2codfreq(
 
 
 def sam2codfreq_all(
-    name,
+    name: str,
     fnpair,
-    profile,
-    site_quality_cutoff=0,
-    log_format='text',
-    include_partial_codons=False
+    profile: Profile,
+    site_quality_cutoff: int = 0,
+    log_format: str = 'text',
+    include_partial_codons: bool = False
 ):
     for refname, ref, genes in iter_ref_fragments(profile):
-        samfile = name_bamfile(name, refname)
+        samfile: str = name_bamfile(name, refname)
         yield from sam2codfreq(
             samfile,
             ref,
