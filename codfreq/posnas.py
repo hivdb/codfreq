@@ -1,54 +1,46 @@
+import pysam  # type: ignore
 from tqdm import tqdm  # type: ignore
 from array import array
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Optional, Generator, Union
+from typing import List, Tuple, Optional, Generator
 
 from .codfreq_types import NAPos, NAChar, SeqText, Header
-from .paired_reads import PairedReads
+from .posnas_types import PosNA
 
 ENCODING: str = 'UTF-8'
 GAP: int = ord(b'-')
-
-__all__ = ['PosNA', 'iter_single_read_posnas', 'iter_posnas']
-
-PosNA = Tuple[
-    Tuple[
-        NAPos,  # refpos
-        int   # insertion_index
-    ],
-    NAChar,  # na
-    int   # qua
-]
 
 
 def iter_single_read_posnas(
     seq: SeqText,
     qua: array,
     aligned_pairs: List[Tuple[Optional[NAPos], Optional[NAPos]]]
-) -> Generator[PosNA, None, None]:
+) -> List[PosNA]:
     seqpos0: Optional[NAPos]
     refpos0: Optional[NAPos]
-    refpos: NAPos
-    n: NAChar  # na
-    q: int  # qua
-    posna: PosNA
+    refpos: int
+    insidx: int = 0
+    n: NAChar
+    q: int
 
     seqchars: bytearray = bytearray(seq, ENCODING)
 
     prev_refpos: int = 0
     prev_seqpos0: int = 0
-    idx: int = 0
-    prev_ins_buffer: List[PosNA] = []
+
+    buffer_size: int = 0
+
+    posnas: List[PosNA] = []
 
     for seqpos0, refpos0 in aligned_pairs:
 
         if refpos0 is None:
             # insertion
             refpos = prev_refpos
-            idx += 1
+            insidx += 1
         else:
             refpos = refpos0 + 1
-            idx = 0
+            insidx = 0
             prev_refpos = refpos
 
         if seqpos0 is None:
@@ -59,39 +51,44 @@ def iter_single_read_posnas(
             prev_seqpos0 = seqpos0
 
         if refpos == 0:
+            # insertion before the first ref position
             continue
 
-        posna = (refpos, idx), n, q
-        if idx > 0:
-            prev_ins_buffer.append(posna)
+        posnas.append(((refpos, insidx), n, q))
+
+        if insidx > 0:
+            buffer_size += 1
         else:
-            if prev_ins_buffer:
-                yield from prev_ins_buffer
-                prev_ins_buffer = []
-            yield posna
+            buffer_size = 0
+
+    return posnas[:len(posnas) - buffer_size]
 
 
 def iter_posnas(
-    all_paired_reads: List[PairedReads],
+    samfile: str,
     site_quality_cutoff: int = 0,
     progress: bool = True
 ) -> Generator[
-    Tuple[str, Generator[PosNA, None, None]],
+    Tuple[str, List[PosNA]],
     None,
     None
 ]:
     header: Header
-    pair: List[PairedReads]
     read: AlignedSegment
-    results: Generator[PosNA, None, None]
-    _all_paired_reads: Union[List[PairedReads], tqdm]
+    results: List[PosNA]
+    pbar: Optional[tqdm] = None
 
     if progress:
-        _all_paired_reads = tqdm(all_paired_reads)
-    else:
-        _all_paired_reads = all_paired_reads
-    for header, pair in _all_paired_reads:
-        for read in pair:
+        total: int = int(
+            pysam.idxstats(samfile)
+            .splitlines()[0]
+            .split('\t')[2]
+        )
+        pbar = tqdm(total=total)
+    with pysam.AlignmentFile(samfile, 'rb') as samfp:
+        for read in samfp.fetch():
+            if pbar:
+                pbar.update(1)
             if not read.query_sequence:
                 continue
             results = iter_single_read_posnas(
@@ -100,9 +97,11 @@ def iter_posnas(
                 read.get_aligned_pairs(False)
             )
             if site_quality_cutoff > 0:
-                results = (
+                results = [
                     (posidx, na, q)
                     for posidx, na, q in results
                     if q >= site_quality_cutoff
-                )
-            yield header, results
+                ]
+            yield read.query_name, results
+        if pbar:
+            pbar.close()

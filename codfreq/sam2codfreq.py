@@ -1,14 +1,14 @@
+# cython: profile=True
+# cython: linetrace=True
 from more_itertools import flatten  # type: ignore
 from collections import defaultdict, Counter
 
 import typing
 from typing import (
     Generator,
-    DefaultDict,
     Tuple,
     List,
     Dict,
-    TypedDict,
     Optional,
     Any
 )
@@ -20,7 +20,11 @@ from .codfreq_types import (
     MainFragmentConfig,
     DerivedFragmentConfig,
 )
-from .paired_reads import iter_paired_reads, PairedReads
+from .sam2codfreq_types import (
+    TypedRefFragment,
+    CodonStat,
+    Qualities
+)
 from .poscodons import iter_poscodons, PosCodon
 from .codonalign_consensus import codonalign_consensus
 from .filename_helper import name_bamfile
@@ -32,21 +36,6 @@ CODFREQ_HEADER: List[str] = [
 ]
 
 ENCODING: str = 'UTF-8'
-
-
-class TypedRefFragment(TypedDict):
-    ref: MainFragmentConfig
-    genes: List[DerivedFragmentConfig]
-
-
-CodonStat = DefaultDict[
-    Tuple[str, int],
-    typing.Counter[Tuple[bytes, ...]]
-]
-
-Qualities = typing.Counter[
-    Tuple[str, int, Tuple[bytes, ...]]
-]
 
 
 def iter_ref_fragments(
@@ -142,19 +131,17 @@ def sam2codfreq(
     :return: CodFreq rows
     """
 
-    poscodons: Generator[PosCodon, None, None]
+    poscodons: List[PosCodon]
     gene: str
     refpos: int
     codon: Tuple[bytes, ...]
     qua: int
     codonstat: CodonStat = defaultdict(Counter)
     qualities: Qualities = Counter()
-    all_paired_reads: List[PairedReads] = iter_paired_reads(samfile)
-
-    # Iterate through the whole SAM/BAM and stat each individual gene position
-    # and codon
+    # Iterate through the whole SAM/BAM and stat each individual gene
+    # position and codon
     for _, poscodons in iter_poscodons(
-        all_paired_reads,
+        samfile,
         ref,
         genes,
         description=samfile,
@@ -173,11 +160,11 @@ def sam2codfreq(
     ] = iter_codonfreq(codonstat, qualities)
 
     # Apply codon-alignment to consensus codons. This step is an imperfect
-    # approach to address the out-frame deletions/insertions. However, it is
-    # faster than codon-align each single read, since the process is right
-    # now very slow and time-consuming.
-    # This approach may need to be changed in the future when optimization was
-    # done for the post-align codon-alignment program.
+    # approach to address the out-frame deletions/insertions. However, it
+    # is faster than codon-align each single read, since the process is
+    # right now very slow and time-consuming.  This approach may need to be
+    # changed in the future when optimization was done for the post-align
+    # codon-alignment program.
     yield from codonalign_consensus(codonfreq, ref, genes)
 
 

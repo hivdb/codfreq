@@ -4,9 +4,9 @@
 import os
 # import re
 # import ast
-import setuptools
-from setuptools.extension import Extension
-from Cython.Build import cythonize
+import setuptools  # type: ignore
+from setuptools.extension import Extension  # type: ignore
+from Cython.Build import cythonize  # type: ignore
 
 # _version_re = re.compile(r'VERSION\s+=\s+(.*)')
 #
@@ -20,6 +20,10 @@ extensions = [
     #     name='codfreq.codfreq_types',
     #     sources=['codfreq/codfreq_types.py']
     # ),
+    Extension(
+        name='codfreq.paired_reads',
+        sources=['codfreq/paired_reads.py']
+    ),
     Extension(
         name='codfreq.posnas',
         sources=['codfreq/posnas.py']
@@ -43,11 +47,11 @@ extensions = [
 ]
 
 
-def strip_comments(line):
+def strip_comments(line: str) -> str:
     return line.split('#', 1)[0].strip()
 
 
-def pep508(line):
+def pep508(line: str) -> str:
     if line.startswith('-i '):
         return ''
     if not line:
@@ -58,7 +62,7 @@ def pep508(line):
     return line
 
 
-def req(filename):
+def req(filename: str) -> list[str]:
     with open(os.path.join(os.getcwd(), filename)) as fp:
         requires = set(
             strip_comments(pep508(ln))
@@ -85,7 +89,8 @@ setup_params = dict(
         extensions,
         compiler_directives={
             'language_level': '3',
-            'profile': False
+            'profile': False,
+            'linetrace': False
         }
     ),
     # tests_require=reqs('test-requirements.txt'),

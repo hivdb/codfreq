@@ -1,7 +1,8 @@
 import json
 from collections import defaultdict, Counter
 
-from .paired_reads import iter_paired_reads
+from typing import DefaultDict, Counter as tCounter, Tuple
+from .codfreq_types import NAPos, NAChar
 from .posnas import iter_posnas
 
 from .filename_helper import name_bamfile
@@ -12,9 +13,11 @@ ENCODING = 'UTF-8'
 
 
 def sam2consensus(sampath, regions):
-    nafreqs = defaultdict(Counter)
-    all_paired_reads = iter_paired_reads(sampath)
-    for _, posnas in iter_posnas(all_paired_reads, progress=False):
+    nafreqs: DefaultDict[
+        Tuple[NAPos, int],
+        tCounter[NAChar]
+    ] = defaultdict(Counter)
+    for _, posnas in iter_posnas(sampath, progress=False):
         for (refpos, i), na, _ in posnas:
             nafreqs[(refpos, i)][na] += 1
     nacons_lookup = {
