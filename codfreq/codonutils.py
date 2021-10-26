@@ -1,156 +1,129 @@
-import re
-from typing import Dict, List
+from typing import Dict, List, Set
+from .codfreq_types import (
+    CodonText,
+    AAChar, MultiAAText,
+    NAChar, MultiNAText
+)
 
-CODON_TABLE: Dict[str, str] = {
-    'TTT': 'F',
-    'TTC': 'F',
-    'TTA': 'L',
-    'TTG': 'L',
 
-    'CTT': 'L',
-    'CTC': 'L',
-    'CTA': 'L',
-    'CTG': 'L',
+CODON_TABLE: Dict[CodonText, MultiAAText] = {
+    b'TTT': b'F',
+    b'TTC': b'F',
+    b'TTA': b'L',
+    b'TTG': b'L',
 
-    'ATT': 'I',
-    'ATC': 'I',
-    'ATA': 'I',
-    'ATG': 'M',
+    b'CTT': b'L',
+    b'CTC': b'L',
+    b'CTA': b'L',
+    b'CTG': b'L',
 
-    'GTT': 'V',
-    'GTC': 'V',
-    'GTA': 'V',
-    'GTG': 'V',
+    b'ATT': b'I',
+    b'ATC': b'I',
+    b'ATA': b'I',
+    b'ATG': b'M',
 
-    'TCT': 'S',
-    'TCC': 'S',
-    'TCA': 'S',
-    'TCG': 'S',
+    b'GTT': b'V',
+    b'GTC': b'V',
+    b'GTA': b'V',
+    b'GTG': b'V',
 
-    'CCT': 'P',
-    'CCC': 'P',
-    'CCA': 'P',
-    'CCG': 'P',
+    b'TCT': b'S',
+    b'TCC': b'S',
+    b'TCA': b'S',
+    b'TCG': b'S',
 
-    'ACT': 'T',
-    'ACC': 'T',
-    'ACA': 'T',
-    'ACG': 'T',
+    b'CCT': b'P',
+    b'CCC': b'P',
+    b'CCA': b'P',
+    b'CCG': b'P',
 
-    'GCT': 'A',
-    'GCC': 'A',
-    'GCA': 'A',
-    'GCG': 'A',
+    b'ACT': b'T',
+    b'ACC': b'T',
+    b'ACA': b'T',
+    b'ACG': b'T',
 
-    'TAT': 'Y',
-    'TAC': 'Y',
+    b'GCT': b'A',
+    b'GCC': b'A',
+    b'GCA': b'A',
+    b'GCG': b'A',
 
-    'CAT': 'H',
-    'CAC': 'H',
-    'CAA': 'Q',
-    'CAG': 'Q',
+    b'TAT': b'Y',
+    b'TAC': b'Y',
 
-    'AAT': 'N',
-    'AAC': 'N',
-    'AAA': 'K',
-    'AAG': 'K',
+    b'CAT': b'H',
+    b'CAC': b'H',
+    b'CAA': b'Q',
+    b'CAG': b'Q',
 
-    'GAT': 'D',
-    'GAC': 'D',
-    'GAA': 'E',
-    'GAG': 'E',
+    b'AAT': b'N',
+    b'AAC': b'N',
+    b'AAA': b'K',
+    b'AAG': b'K',
 
-    'TGT': 'C',
-    'TGC': 'C',
-    'TGG': 'W',
+    b'GAT': b'D',
+    b'GAC': b'D',
+    b'GAA': b'E',
+    b'GAG': b'E',
 
-    'CGT': 'R',
-    'CGC': 'R',
-    'CGA': 'R',
-    'CGG': 'R',
+    b'TGT': b'C',
+    b'TGC': b'C',
+    b'TGG': b'W',
 
-    'AGT': 'S',
-    'AGC': 'S',
-    'AGA': 'R',
-    'AGG': 'R',
+    b'CGT': b'R',
+    b'CGC': b'R',
+    b'CGA': b'R',
+    b'CGG': b'R',
 
-    'GGT': 'G',
-    'GGC': 'G',
-    'GGA': 'G',
-    'GGG': 'G',
+    b'AGT': b'S',
+    b'AGC': b'S',
+    b'AGA': b'R',
+    b'AGG': b'R',
 
-    'TAA': '*',
-    'TGA': '*',
-    'TAG': '*',
+    b'GGT': b'G',
+    b'GGC': b'G',
+    b'GGA': b'G',
+    b'GGG': b'G',
+
+    b'TAA': b'*',
+    b'TGA': b'*',
+    b'TAG': b'*',
 }
 
-REVERSE_CODON_TABLE: Dict[str, List[str]] = {}
+REVERSE_CODON_TABLE: Dict[AAChar, List[CodonText]] = {}
 for codon, aa in CODON_TABLE.items():
-    REVERSE_CODON_TABLE.setdefault(aa, []).append(codon)
+    REVERSE_CODON_TABLE.setdefault(aa[0], []).append(codon)
 
 
-AMBIGUOUS_NAS = {
-    'W': 'AT',
-    'S': 'CG',
-    'M': 'AC',
-    'K': 'GT',
-    'R': 'AG',
-    'Y': 'CT',
-    'B': 'CGT',
-    'D': 'AGT',
-    'H': 'ACT',
-    'V': 'ACG',
-    'N': 'ACGT'
+AMBIGUOUS_NAS: Dict[NAChar, MultiNAText] = {
+    ord(b'W'): b'AT',
+    ord(b'S'): b'CG',
+    ord(b'M'): b'AC',
+    ord(b'K'): b'GT',
+    ord(b'R'): b'AG',
+    ord(b'Y'): b'CT',
+    ord(b'B'): b'CGT',
+    ord(b'D'): b'AGT',
+    ord(b'H'): b'ACT',
+    ord(b'V'): b'ACG',
+    ord(b'N'): b'ACGT'
 }
 
 
-def expand_ambiguous_na(na):
-    return AMBIGUOUS_NAS.get(na, na)
+def expand_ambiguous_na(na: NAChar) -> MultiNAText:
+    return AMBIGUOUS_NAS.get(na, bytes([na]))
 
 
-def translate_codon(nas):
-    nas = nas.replace('-', 'N')[:3]
+def translate_codon(nas: MultiNAText) -> MultiAAText:
+    aas_text: bytes
+    nas = nas.replace(b'-', b'N')[:3]
     if nas in CODON_TABLE:
         return CODON_TABLE[nas]
-    aas = set()
-    for na0 in AMBIGUOUS_NAS.get(nas[0], nas[0]):
-        for na1 in AMBIGUOUS_NAS.get(nas[1], nas[1]):
-            for na2 in AMBIGUOUS_NAS.get(nas[2], nas[2]):
-                aas.add(CODON_TABLE[na0 + na1 + na2])
-    CODON_TABLE[nas] = aas = ''.join(sorted(aas))
-    return aas
-
-
-def translate_codons(nas, ambiguous_x=True):
-    all_aas = []
-    for i in range(0, len(nas) // 3):
-        codon = nas[i * 3:i * 3 + 3]
-        aas = translate_codon(codon)
-        if len(aas) > 1:
-            if ambiguous_x:
-                aas = 'X'
-            else:
-                aas = '[{}]'.format(aas)
-        all_aas.append(aas)
-    return ''.join(all_aas)
-
-
-def get_codons(aa):
-    return REVERSE_CODON_TABLE[aa]
-
-
-def compare_codon(base, target):
-    # we assume that "base" contains only unambiguous NAs
-    if re.search(r'[BDHVN]', target):
-        # false if highly ambiguous NA were found
-        return False
-    for sna, tna in zip(base, target):
-        if tna in 'ACGT':
-            if tna != sna:
-                break
-        else:
-            if sna not in AMBIGUOUS_NAS[tna]:
-                break
-    else:
-        return True
-    return False
+    aas: Set[int] = set()
+    for na0 in AMBIGUOUS_NAS.get(nas[0], nas[0:1]):
+        for na1 in AMBIGUOUS_NAS.get(nas[1], nas[1:2]):
+            for na2 in AMBIGUOUS_NAS.get(nas[2], nas[2:3]):
+                aas |= set(
+                    CODON_TABLE[bytes([na0, na1, na2])]
+                )
+    CODON_TABLE[nas] = aas_text = bytes((sorted(aas)))
+    return aas_text

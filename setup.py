@@ -16,6 +16,10 @@ from Cython.Build import cythonize
 
 
 extensions = [
+    # Extension(
+    #     name='codfreq.codfreq_types',
+    #     sources=['codfreq/codfreq_types.py']
+    # ),
     Extension(
         name='codfreq.posnas',
         sources=['codfreq/posnas.py']
@@ -73,6 +77,9 @@ setup_params = dict(
     packages=[
         'codfreq', 'codfreq/cmdwrappers'
     ],
+    package_data={
+        'codfreq': ['py.typed']
+    },
     install_requires=req('requirements.txt'),
     ext_modules=cythonize(
         extensions,

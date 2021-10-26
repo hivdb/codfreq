@@ -1,8 +1,22 @@
 import os
 import re
+from typing import Optional, Tuple
+
+from .codfreq_types import FASTQFileName, GeneText
+
+FnPair = Tuple[FASTQFileName, Optional[FASTQFileName]]
+Pattern = Tuple[
+    str,  # delimiter
+    int,  # diffoffset
+    int,  # pos_paired_marker
+    int,  # reverse
+]
 
 
-def suggest_pair_name(fnpair, pattern):
+def suggest_pair_name(
+    fnpair: FnPair,
+    pattern: Pattern
+) -> str:
     filename, _ = fnpair
     delimiter, offset, _, reverse = pattern
     dirpath, filename = os.path.split(filename)
@@ -20,19 +34,28 @@ def suggest_pair_name(fnpair, pattern):
         dirpath, delimiter.join(samfile))
 
 
-def name_file(fnpair, pattern, suffix):
+def name_file(
+    fnpair: FnPair,
+    pattern: Pattern,
+    suffix: str
+) -> str:
     return suggest_pair_name(fnpair, pattern) + suffix
 
 
-def name_bamfile(name, gene):
+def name_bamfile(name: str, gene: GeneText) -> str:
     return '{}.{}.bam'.format(name, gene)
 
 
-def name_codfreq(name):
+def name_codfreq(name: str) -> str:
     return '{}.codfreq'.format(name)
 
 
-def replace_ext(filename, toext, fromext=None, name_only=False):
+def replace_ext(
+        filename: str,
+        toext: str,
+        fromext: Optional[str] = None,
+        name_only: bool = False
+) -> str:
     if name_only:
         filename = os.path.split(filename)[-1]
     if fromext:

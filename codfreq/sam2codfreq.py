@@ -1,45 +1,110 @@
-from more_itertools import flatten
+from more_itertools import flatten  # type: ignore
 from collections import defaultdict, Counter
 
-from typing import Generator, DefaultDict, Tuple
-from .codfreq_types import Profile, RefFragment
-from .paired_reads import iter_paired_reads
-from .poscodons import iter_poscodons
+import typing
+from typing import (
+    Generator,
+    DefaultDict,
+    Tuple,
+    List,
+    Dict,
+    TypedDict,
+    Optional,
+    Any
+)
+from .codfreq_types import (
+    Profile,
+    CodFreqRow,
+    FASTQFileName,
+    FragmentConfig,
+    MainFragmentConfig,
+    DerivedFragmentConfig,
+)
+from .paired_reads import iter_paired_reads, PairedReads
+from .poscodons import iter_poscodons, PosCodon
 from .codonalign_consensus import codonalign_consensus
 from .filename_helper import name_bamfile
 
-CODFREQ_HEADER = [
+CODFREQ_HEADER: List[str] = [
     'gene', 'position',
     'total', 'codon', 'count',
     'total_quality_score'
 ]
 
-ENCODING = 'UTF-8'
+ENCODING: str = 'UTF-8'
 
 
-def iter_ref_fragments(profile: Profile) -> Generator[RefFragment, None, None]:
+class TypedRefFragment(TypedDict):
+    ref: MainFragmentConfig
+    genes: List[DerivedFragmentConfig]
+
+
+CodonStat = DefaultDict[
+    Tuple[str, int],
+    typing.Counter[Tuple[bytes, ...]]
+]
+
+Qualities = typing.Counter[
+    Tuple[str, int, Tuple[bytes, ...]]
+]
+
+
+def iter_ref_fragments(
+    profile: Profile
+) -> Generator[
+    Tuple[str, MainFragmentConfig, List[DerivedFragmentConfig]],
+    None,
+    None
+]:
     refname: str
-    ref_fragments = {}
+    refseq: Optional[str]
+    fromref: Optional[str]
+    refstart: Optional[int]
+    refend: Optional[int]
+    config: FragmentConfig
+    ref_fragments: Dict[str, TypedRefFragment] = {}
     for config in profile['fragmentConfig']:
-        if 'refSequence' not in config:
-            continue
         refname = config['fragmentName']
-        ref_fragments[refname] = {
-            'ref': config,
-            'genes': []
-        }
+        refseq = config.get('refSequence')
+        if refseq:
+            ref_fragments[refname] = {
+                'ref': {
+                    'fragmentName': refname,
+                    'refSequence': refseq
+                },
+                'genes': []
+            }
     for config in profile['fragmentConfig']:
-        if 'geneName' not in config:
-            continue
         refname = config['fragmentName']
-        if 'fromFragment' in config:
-            refname = config['fromFragment']
-        ref_fragments[refname]['genes'].append(config)
+        fromref = config.get('fromFragment')
+        gene = config.get('geneName')
+        refstart = config.get('refStart')
+        refend = config.get('refEnd')
+
+        if fromref and gene and refstart and refend:
+            ref_fragments[fromref]['genes'].append({
+                'fragmentName': refname,
+                'fromFragment': fromref,
+                'geneName': gene,
+                'refStart': refstart,
+                'refEnd': refend
+            })
+
     for refname, pair in ref_fragments.items():
         yield refname, pair['ref'], pair['genes']
 
 
-def iter_codonfreq(codonstat, qualities):
+def iter_codonfreq(
+    codonstat: CodonStat,
+    qualities: Qualities
+) -> Generator[CodFreqRow, None, None]:
+    gene: str
+    refpos: int
+    codons: typing.Counter[Tuple[bytes, ...]]
+    codon: Tuple[bytes, ...]
+    count: int
+    total: int
+    qua: int
     for (gene, refpos), codons in codonstat.items():
         total = sum(codons.values())
         for codon, count in sorted(codons.most_common()):
@@ -48,7 +113,7 @@ def iter_codonfreq(codonstat, qualities):
                 'gene': gene,
                 'position': refpos,
                 'total': total,
-                'codon': bytes(flatten(codon)).decode(ENCODING),
+                'codon': bytes(flatten(codon)),
                 'count': count,
                 'total_quality_score': round(qua, 2)
             }
@@ -56,13 +121,13 @@ def iter_codonfreq(codonstat, qualities):
 
 def sam2codfreq(
     samfile: str,
-    ref,
-    genes,
-    site_quality_cutoff=0,
-    log_format='text',
-    include_partial_codons=False,
-    **extras
-):
+    ref: MainFragmentConfig,
+    genes: List[DerivedFragmentConfig],
+    site_quality_cutoff: int = 0,
+    log_format: str = 'text',
+    include_partial_codons: bool = False,
+    **extras: Any
+) -> Generator[CodFreqRow, None, None]:
     """Iterate CodFreq rows from a SAM/BAM file
 
     :param samfile: str of the SAM/BAM file path
@@ -77,9 +142,14 @@ def sam2codfreq(
     :return: CodFreq rows
     """
 
-    codonstat: DefaultDict[Tuple[str, int], Counter] = defaultdict(Counter)
-    qualities: Counter = Counter()
-    all_paired_reads = iter_paired_reads(samfile)
+    poscodons: Generator[PosCodon, None, None]
+    gene: str
+    refpos: int
+    codon: Tuple[bytes, ...]
+    qua: int
+    codonstat: CodonStat = defaultdict(Counter)
+    qualities: Qualities = Counter()
+    all_paired_reads: List[PairedReads] = iter_paired_reads(samfile)
 
     # Iterate through the whole SAM/BAM and stat each individual gene position
     # and codon
@@ -98,7 +168,9 @@ def sam2codfreq(
             qualities[(gene, refpos, codon)] += qua
         del poscodons
 
-    codonfreq = iter_codonfreq(codonstat, qualities)
+    codonfreq: Generator[
+        CodFreqRow, None, None
+    ] = iter_codonfreq(codonstat, qualities)
 
     # Apply codon-alignment to consensus codons. This step is an imperfect
     # approach to address the out-frame deletions/insertions. However, it is
@@ -111,12 +183,15 @@ def sam2codfreq(
 
 def sam2codfreq_all(
     name: str,
-    fnpair,
+    fnpair: Tuple[Optional[FASTQFileName], ...],
     profile: Profile,
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
     include_partial_codons: bool = False
-):
+) -> Generator[CodFreqRow, None, None]:
+    refname: str
+    ref: MainFragmentConfig
+    genes: List[DerivedFragmentConfig]
     for refname, ref, genes in iter_ref_fragments(profile):
         samfile: str = name_bamfile(name, refname)
         yield from sam2codfreq(

@@ -1,16 +1,44 @@
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
+from array import array
+from pysam import AlignedSegment  # type: ignore
+from typing import List, Tuple, Optional, Generator, Union
 
-ENCODING = 'UTF-8'
-GAP = ord(b'-')
+from .codfreq_types import NAPos, NAChar, SeqText, Header
+from .paired_reads import PairedReads
+
+ENCODING: str = 'UTF-8'
+GAP: int = ord(b'-')
+
+__all__ = ['PosNA', 'iter_single_read_posnas', 'iter_posnas']
+
+PosNA = Tuple[
+    Tuple[
+        NAPos,  # refpos
+        int   # insertion_index
+    ],
+    NAChar,  # na
+    int   # qua
+]
 
 
-def iter_single_read_posnas(seq, qua, aligned_pairs):
-    seqchars = bytearray(seq, ENCODING)
+def iter_single_read_posnas(
+    seq: SeqText,
+    qua: array,
+    aligned_pairs: List[Tuple[Optional[NAPos], Optional[NAPos]]]
+) -> Generator[PosNA, None, None]:
+    seqpos0: Optional[NAPos]
+    refpos0: Optional[NAPos]
+    refpos: NAPos
+    n: NAChar  # na
+    q: int  # qua
+    posna: PosNA
 
-    prev_refpos = 0
-    prev_seqpos0 = 0
-    idx = 0
-    prev_ins_buffer = []
+    seqchars: bytearray = bytearray(seq, ENCODING)
+
+    prev_refpos: int = 0
+    prev_seqpos0: int = 0
+    idx: int = 0
+    prev_ins_buffer: List[PosNA] = []
 
     for seqpos0, refpos0 in aligned_pairs:
 
@@ -43,14 +71,26 @@ def iter_single_read_posnas(seq, qua, aligned_pairs):
             yield posna
 
 
-def iter_posnas(all_paired_reads,
-                site_quality_cutoff=0,
-                progress=True):
+def iter_posnas(
+    all_paired_reads: List[PairedReads],
+    site_quality_cutoff: int = 0,
+    progress: bool = True
+) -> Generator[
+    Tuple[str, Generator[PosNA, None, None]],
+    None,
+    None
+]:
+    header: Header
+    pair: List[PairedReads]
+    read: AlignedSegment
+    results: Generator[PosNA, None, None]
+    _all_paired_reads: Union[List[PairedReads], tqdm]
 
-    all_paired_reads = list(all_paired_reads)
     if progress:
-        all_paired_reads = tqdm(all_paired_reads)
-    for header, pair in all_paired_reads:
+        _all_paired_reads = tqdm(all_paired_reads)
+    else:
+        _all_paired_reads = all_paired_reads
+    for header, pair in _all_paired_reads:
         for read in pair:
             if not read.query_sequence:
                 continue

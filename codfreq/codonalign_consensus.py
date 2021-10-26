@@ -1,17 +1,34 @@
-from postalign.utils.group_by_codons import group_by_codons
-from postalign.processors.codon_alignment import codon_align
-from postalign.models.sequence import Sequence, PositionalSeqStr
+from postalign.utils.group_by_codons import group_by_codons  # type: ignore
+from postalign.processors.codon_alignment import codon_align  # type: ignore
+from postalign.models.sequence import (  # type: ignore
+    Sequence,
+    PositionalSeqStr
+)
 from itertools import groupby
 from operator import itemgetter
+from typing import Generator, Optional, List, Dict, Tuple, Iterator
+
+from .codfreq_types import (
+    AAPos,
+    NAPos,
+    CodonText,
+    GeneText,
+    CodFreqRow,
+    MainFragmentConfig,
+    DerivedFragmentConfig
+)
 
 
 ENCODING = 'UTF-8'
 GAP = ord(b'-')
-DEL_CODON = bytearray(b'---')
+DEL_CODON = b'---'
 CODON_ALIGN_WINDOW_SIZE = 5
 
 
-def get_sequence_obj(seq_bytearray, seqid):
+def get_sequence_obj(
+    seq_bytearray: bytearray,
+    seqid: int
+) -> Sequence:
     return Sequence(
         header='seq{}'.format(seqid),
         description='',
@@ -25,33 +42,51 @@ def get_sequence_obj(seq_bytearray, seqid):
     )
 
 
-def assemble_alignment(geneposcdf_lookup, refseq, genedef):
-    gene = genedef['geneName']
-    gene_refstart = genedef['refStart']
-    gene_refend = genedef['refEnd']
-    gene_refseq = bytearray()
-    gene_queryseq = bytearray()
-    refsize = gene_refend - gene_refstart + 1
-    first_aa = refsize // 3
-    last_aa = 0
+def assemble_alignment(
+    geneposcdf_lookup: Dict[
+        Tuple[GeneText, AAPos],
+        List[CodFreqRow]
+    ],
+    refseq: bytearray,
+    genedef: DerivedFragmentConfig
+) -> Tuple[
+    Optional[Sequence],
+    Optional[Sequence],
+    Optional[AAPos],
+    Optional[AAPos]
+]:
+    aapos: AAPos
+    napos: NAPos
+    ref_codon: bytearray
+    cons_codon: bytearray
+    cons_codon_size: int
+    geneposcdf: Optional[List[CodFreqRow]]
+    gene: GeneText = genedef['geneName']
+    gene_refstart: NAPos = genedef['refStart']
+    gene_refend: NAPos = genedef['refEnd']
+    gene_refseq: bytearray = bytearray()
+    gene_queryseq: bytearray = bytearray()
+    refsize: int = gene_refend - gene_refstart + 1
+    first_aa: AAPos = refsize // 3
+    last_aa: AAPos = 0
 
     for aapos in range(1, refsize // 3 + 1):
         napos = gene_refstart + aapos * 3 - 4
         ref_codon = refseq[napos:napos + 3]
         geneposcdf = geneposcdf_lookup.get((gene, aapos))
         if geneposcdf:
-            cons_codon = bytearray(geneposcdf[0]['codon'], ENCODING)
+            cons_codon = bytearray(geneposcdf[0]['codon'])
             first_aa = min(first_aa, aapos)
             last_aa = max(last_aa, aapos)
         else:
-            cons_codon = DEL_CODON
+            cons_codon = bytearray(DEL_CODON)
         cons_codon_size = len(cons_codon)
         if cons_codon_size < 3:
-            cons_codon += bytearray([GAP]) * (3 - cons_codon_size)
+            cons_codon.extend([GAP] * (3 - cons_codon_size))
         elif cons_codon_size > 3:
-            ref_codon += bytearray([GAP]) * (cons_codon_size - 3)
-        gene_refseq += ref_codon
-        gene_queryseq += cons_codon
+            ref_codon.extend([GAP] * (cons_codon_size - 3))
+        gene_refseq.extend(ref_codon)
+        gene_queryseq.extend(cons_codon)
 
     if last_aa == 0:
         return None, None, None, None
@@ -67,9 +102,31 @@ codon_getter = itemgetter('codon')
 count_getter = itemgetter('count')
 
 
-def codonalign_consensus(codonfreq, ref, genes):
-    refseq = bytearray(ref['refSequence'], ENCODING)
-    geneposcdf_lookup = {
+def codonalign_consensus(
+    codonfreq: Generator[CodFreqRow, None, None],
+    ref: MainFragmentConfig,
+    genes: List[DerivedFragmentConfig],
+) -> Generator[CodFreqRow, None, None]:
+    gene: GeneText
+    genedef: DerivedFragmentConfig
+    gene_ref_seq_obj: Optional[Sequence]
+    gene_queryseq_obj: Optional[Sequence]
+    first_aa: Optional[AAPos]
+    last_aa: Optional[AAPos]
+    aapos0: AAPos
+    aapos: AAPos
+    refcodon: List[PositionalSeqStr]
+    querycodon: List[PositionalSeqStr]
+    geneposcdf: Optional[List[CodFreqRow]]
+    merged_geneposcdf: List[CodFreqRow]
+    cdfs: Iterator[CodFreqRow]
+    cdf_list: List[CodFreqRow]
+    codon: CodonText
+    refseq: bytearray = bytearray(ref['refSequence'], ENCODING)
+    geneposcdf_lookup: Dict[
+        Tuple[GeneText, AAPos],
+        List[CodFreqRow]
+    ] = {
         genepos: sorted(genecdf, key=count_getter, reverse=True)
         for genepos, genecdf in
         groupby(codonfreq, key=genepos_getter)
@@ -84,7 +141,12 @@ def codonalign_consensus(codonfreq, ref, genes):
              geneposcdf_lookup, refseq, genedef
         )
 
-        if last_aa is None:
+        if (
+            gene_refseq_obj is None or
+            gene_queryseq_obj is None or
+            first_aa is None or
+            last_aa is None
+        ):
             continue
 
         (gene_refseq_obj,
@@ -106,7 +168,7 @@ def codonalign_consensus(codonfreq, ref, genes):
                 continue
             geneposcdf[0]['codon'] = str(
                 PositionalSeqStr.join(querycodon)
-            )
+            ).encode(ENCODING)
 
             # merge same codons
             merged_geneposcdf = []
@@ -114,12 +176,12 @@ def codonalign_consensus(codonfreq, ref, genes):
                 sorted(geneposcdf, key=codon_getter),
                 codon_getter
             ):
-                cdfs = list(cdfs)
-                cdfs[0]['count'] = sum(cdf['count'] for cdf in cdfs)
-                cdfs[0]['total_quality_score'] = sum(
-                    cdf['total_quality_score'] for cdf in cdfs
+                cdf_list = list(cdfs)
+                cdf_list[0]['count'] = sum(cdf['count'] for cdf in cdf_list)
+                cdf_list[0]['total_quality_score'] = sum(
+                    cdf['total_quality_score'] for cdf in cdf_list
                 )
-                merged_geneposcdf.append(cdfs[0])
+                merged_geneposcdf.append(cdf_list[0])
             yield from sorted(
                 merged_geneposcdf,
                 key=count_getter,

@@ -1,18 +1,41 @@
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 from itertools import groupby
 from operator import itemgetter
+from pysam import AlignedSegment  # type: ignore
+from typing import List, Tuple, Any, Union, Generator, Iterator
 
+from .paired_reads import PairedReads
+from .codfreq_types import (
+    MainFragmentConfig,
+    DerivedFragmentConfig,
+    Header,
+    AAPos,
+    NAPos,
+    GeneText,
+    CodonText
+)
 from .json_progress import JsonProgress
-from .posnas import iter_single_read_posnas
+from .posnas import iter_single_read_posnas, PosNA
 
 # frameshift types
-REPEAT = 0x01
-SKIP = 0x02
+REPEAT: int = 0x01
+SKIP: int = 0x02
 
-UNSEQ = b'.'
+UNSEQ: bytes = b'.'
+
+RefStart = NAPos
+RefEnd = NAPos
+Qua = int
+GeneInterval = Tuple[RefStart, RefEnd, GeneText]
+PosCodon = Tuple[GeneText, AAPos, Tuple[CodonText, ...], Qua]
+GroupedPosNAs = Generator[
+    Tuple[GeneText, AAPos, List[PosNA]], None, None
+]
 
 
-def build_gene_intervals(genes):
+def build_gene_intervals(
+    genes: List[DerivedFragmentConfig]
+) -> List[GeneInterval]:
     return [(
         genedef['refStart'],
         genedef['refEnd'],
@@ -20,15 +43,29 @@ def build_gene_intervals(genes):
     ) for genedef in genes]
 
 
-def group_posnas(posnas, gene_intervals):
+def pos_from_posna(posna: PosNA) -> int:
+    return posna[0][0]
+
+
+def group_posnas(
+    posnas: Generator[PosNA, None, None],
+    gene_intervals: Generator[GeneInterval, None, None]
+) -> GroupedPosNAs:
     """Group posnas by position and add gene AA position"""
-    grouped_posnas = [
-        (pos, tuple(na_and_ins))
+
+    grouped_posnas: List[Tuple[int, List[PosNA]]] = [
+        (pos, list(na_and_ins))
         for pos, na_and_ins in
-        groupby(posnas, key=lambda posna: posna[0][0])
+        groupby(posnas, key=pos_from_posna)
     ]
-    curidx = -1
-    size = len(grouped_posnas)
+
+    pos: NAPos
+    na_and_ins: List[PosNA]
+    gene_refstart: RefStart
+    gene_refend: RefEnd
+    gene: GeneText
+    curidx: int = -1
+    size: int = len(grouped_posnas)
     for gene_refstart, gene_refend, gene in gene_intervals:
         pos = 0
         # seek back if pos at curidx is after gene_refstart
@@ -54,7 +91,14 @@ def group_posnas(posnas, gene_intervals):
             )
 
 
-def find_overlapped_genes(gene_intervals, read_refstart, read_refend):
+def find_overlapped_genes(
+    gene_intervals: List[GeneInterval],
+    read_refstart: RefStart,
+    read_refend: RefEnd
+) -> Generator[GeneInterval, None, None]:
+    gene_refstart: RefStart
+    gene_refend: RefEnd
+    gene: GeneText
     for gene_refstart, gene_refend, gene in gene_intervals:
         if read_refend < gene_refstart:
             break
@@ -63,53 +107,73 @@ def find_overlapped_genes(gene_intervals, read_refstart, read_refend):
         yield gene_refstart, gene_refend, gene
 
 
-def get_comparable_codon(codon):
-    codon_nas = tuple(
-        tuple(na for _, na, _ in posnas)
-        for _, _, posnas in codon
+def get_comparable_codon(
+    codon_posnas: List[List[PosNA]]
+) -> Tuple[Tuple[CodonText, ...], bool]:
+    posnas: List[PosNA]
+    codon_nas: Tuple[CodonText, ...] = tuple(
+        bytes(na for _, na, _ in posnas)
+        for posnas in codon_posnas
     )
-    is_partial = len(codon_nas) < 3
+    is_partial: bool = len(codon_nas) < 3
     return codon_nas, is_partial
 
 
 def posnas2poscodons(
-    posnas,
-    gene_intervals,
-    read_refstart,  # 1-based first aligned refpos
-    read_refend,    # 1-based last aligned refpos
-    site_quality_cutoff
-):
-    genes = find_overlapped_genes(gene_intervals, read_refstart, read_refend)
-    grouped_posnas = group_posnas(posnas, genes)
-    for (gene, aapos), codon in groupby(grouped_posnas, key=itemgetter(0, 1)):
-        codon_tuple = tuple(codon)
-        meanq = [
-            qua
-            for _, _, posnas in codon_tuple
-            for _, _, qua in posnas
-        ]
-        meanq = sum(meanq) / len(meanq) if meanq else 0
-        if meanq < site_quality_cutoff:
+    posnas: Generator[PosNA, None, None],
+    gene_intervals: List[GeneInterval],
+    read_refstart: int,  # 1-based first aligned refpos
+    read_refend: int,    # 1-based last aligned refpos
+    site_quality_cutoff: int
+) -> Generator[PosCodon, None, None]:
+    meanq: List[Qua]
+    meanq_int: Qua
+    gene: GeneText
+    aapos: AAPos
+    codon_iter: Iterator[Tuple[GeneText, AAPos, List[PosNA]]]
+    codon_posnas: List[List[PosNA]]
+    codons: Tuple[CodonText, ...]
+    is_partial: bool
+
+    genes: Generator[GeneInterval, None, None] = find_overlapped_genes(
+        gene_intervals, read_refstart, read_refend)
+    grouped_posnas: GroupedPosNAs = group_posnas(posnas, genes)
+    for (gene, aapos), codon_iter in groupby(
+        grouped_posnas, key=itemgetter(0, 1)
+    ):
+        codon_posnas = [pnas for _, _, pnas in codon_iter]
+        meanq = [qua for pnas in codon_posnas for _, _, qua in pnas]
+        meanq_int = round(sum(meanq) / len(meanq) if meanq else 0)
+        if meanq_int < site_quality_cutoff:
             continue
-        nas, is_partial = get_comparable_codon(codon_tuple)
+        codons, is_partial = get_comparable_codon(codon_posnas)
         if is_partial:
             continue
-        yield gene, aapos, nas, meanq
+        yield gene, aapos, codons, meanq_int
 
 
 def iter_poscodons(
-    all_paired_reads,
-    ref,
-    genes,
-    description,
-    site_quality_cutoff=0,
-    log_format='text',
-    **extras
-):
-    gene_intervals = build_gene_intervals(genes)
+    all_paired_reads: List[PairedReads],
+    ref: MainFragmentConfig,
+    genes: List[DerivedFragmentConfig],
+    description: str,
+    site_quality_cutoff: int = 0,
+    log_format: str = 'text',
+    **extras: Any
+) -> Generator[
+    Tuple[Header, Generator[PosCodon, None, None]],
+    None,
+    None
+]:
+    pbar: Union[JsonProgress, tqdm]
+    header: Header
+    read: AlignedSegment
+    pair: List[AlignedSegment]
+    posnas: Generator[PosNA, None, None]
+    poscodons: Generator[PosCodon, None, None]
+    gene_intervals: List[GeneInterval] = build_gene_intervals(genes)
+    total: int = len(all_paired_reads)
 
-    all_paired_reads = list(all_paired_reads)
-    total = len(all_paired_reads)
     if log_format == 'json':
         pbar = JsonProgress(
             total=total, description=description, **extras)

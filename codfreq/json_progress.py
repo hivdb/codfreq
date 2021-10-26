@@ -1,12 +1,26 @@
 import sys
 import time
 import json
-import click
+import click  # type: ignore
+
+from typing import Dict, Any
 
 
 class JsonProgress:
+    description: str
+    total: int
+    count: int
+    prev_ts: int
+    ts_interval: int
+    extras: Dict[str, Any]
 
-    def __init__(self, description, total, ts_interval=1000, **extras):
+    def __init__(
+        self,
+        description: str,
+        total: int,
+        ts_interval: int = 1000,
+        **extras: Any
+    ):
         self.description = description
         self.total = total
         self.count = 0
@@ -14,9 +28,9 @@ class JsonProgress:
         self.prev_ts = int(time.time() * 1000)
         self.extras = extras
 
-    def update(self, count):
+    def update(self, count: int) -> None:
         self.count += count
-        now = int(time.time() * 1000)
+        now: int = int(time.time() * 1000)
         if now - self.prev_ts >= self.ts_interval:
             self.prev_ts = now
             click.echo(json.dumps({
@@ -30,8 +44,8 @@ class JsonProgress:
             }))
             sys.stdout.flush()
 
-    def close(self):
-        now = int(time.time() * 1000)
+    def close(self) -> None:
+        now: int = int(time.time() * 1000)
         click.echo(json.dumps({
             'op': 'progress',
             'status': 'done',

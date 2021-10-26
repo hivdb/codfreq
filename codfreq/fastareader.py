@@ -5,23 +5,26 @@ from .codfreq_types import Sequence
 def load(fp: TextIO) -> List[Sequence]:
     sequences: List[Sequence] = []
     header: Optional[str] = None
-    curseq: str = ''
+    curseq: bytearray = bytearray()
     for line in fp:
         if line.startswith('>'):
             if header and curseq:
                 sequences.append({
                     'header': header,
-                    'sequence': curseq.upper()
+                    'sequence': curseq.upper().decode('U8')
                 })
             header = line[1:].strip()
-            curseq = ''
+            curseq = bytearray()
         elif line.startswith('#'):
             continue
         else:
-            curseq += line.strip()
+            curseq.extend(
+                line.strip()
+                .encode('ASCII', errors='ignore')
+            )
     if header and curseq:
         sequences.append({
             'header': header,
-            'sequence': curseq.upper()
+            'sequence': curseq.upper().decode('U8')
         })
     return sequences

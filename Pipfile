@@ -7,6 +7,7 @@ verify_ssl = true
 # post-align = {editable = true, path = "./../post-align"}
 boto3 = "*"
 cython = "*"
+codfreq = {editable = true, path = "."}
 
 [packages]
 pysam = "==0.15.4"
