@@ -1,6 +1,4 @@
-#! /usr/bin/env python
-
-import click
+import click  # type: ignore
 from subprocess import Popen, PIPE
 
 REFINIT_FUNCTIONS = {}

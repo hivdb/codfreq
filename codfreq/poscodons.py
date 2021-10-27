@@ -1,7 +1,6 @@
 import pysam  # type: ignore
+import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
-from itertools import groupby
-from operator import itemgetter
 from pysam import AlignedSegment  # type: ignore
 from typing import List, Tuple, Any, Union, Generator, Iterator
 
@@ -12,7 +11,7 @@ from .codfreq_types import (
     AAPos,
     NAPos,
     GeneText,
-    CodonText
+    MultiNAText
 )
 from .json_progress import JsonProgress
 from .posnas import iter_single_read_posnas, PosNA
@@ -26,14 +25,15 @@ UNSEQ: bytes = b'.'
 #                  refStart refEnd
 #                      v      v
 GeneInterval = Tuple[NAPos, NAPos, GeneText]
-#                                                        Qual
-#                                                         v
-PosCodon = Tuple[GeneText, AAPos, Tuple[CodonText, ...], int]
-GroupedPosNAs = List[
-    Tuple[GeneText, AAPos, List[PosNA]]
-]
+#                                                          Qual
+#                                                           v
+PosCodon = Tuple[GeneText, AAPos, Tuple[MultiNAText, ...], int]
+BasePair = Tuple[GeneText, AAPos, List[PosNA]]
 
 
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
 def build_gene_intervals(
     genes: List[DerivedFragmentConfig]
 ) -> List[GeneInterval]:
@@ -44,21 +44,37 @@ def build_gene_intervals(
     ) for genedef in genes]
 
 
+@cython.cfunc
+@cython.inline
 def pos_from_posna(posna: PosNA) -> int:
-    return posna[0][0]
+    return posna[0]
 
 
-def group_posnas(
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def group_posnas_by_napos(
+    posnas: List[PosNA]
+) -> List[Tuple[NAPos, List[PosNA]]]:
+    prev_pos: int = -1
+    by_napos: List[Tuple[NAPos, List[PosNA]]] = []
+    for posna in posnas:
+        if prev_pos == posna[0]:
+            by_napos[-1][1].append(posna)
+        else:
+            prev_pos = posna[0]
+            by_napos.append((posna[0], [posna]))
+    return by_napos
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def group_basepairs(
     posnas: List[PosNA],
     gene_intervals: List[GeneInterval]
-) -> GroupedPosNAs:
-    """Group posnas by position and add gene AA position"""
-
-    posnas_by_napos: List[Tuple[NAPos, List[PosNA]]] = [
-        (pos, list(na_and_ins))
-        for pos, na_and_ins in
-        groupby(posnas, key=pos_from_posna)
-    ]
+) -> List[BasePair]:
+    """Group same base-pair posnas by its gene AA position"""
 
     pos: NAPos
     na_and_ins: List[PosNA]
@@ -67,8 +83,12 @@ def group_posnas(
     gene_refend: NAPos
     gene: GeneText
     curidx: int = -1
+
+    posnas_by_napos: List[
+        Tuple[NAPos, List[PosNA]]
+    ] = group_posnas_by_napos(posnas)
     size: int = len(posnas_by_napos)
-    grouped_posnas: GroupedPosNAs = []
+    basepairs: List[BasePair] = []
 
     # convert napos to gene and aapos
     for gene_refstart, gene_refend, gene in gene_intervals:
@@ -96,14 +116,17 @@ def group_posnas(
                 continue
             aapos = (pos - gene_refstart) // 3 + 1
 
-            grouped_posnas.append((
+            basepairs.append((
                 gene,
                 aapos,
                 na_and_ins
             ))
-    return grouped_posnas
+    return basepairs
 
 
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
 def find_overlapped_genes(
     gene_intervals: List[GeneInterval],
     read_refstart: NAPos,
@@ -122,18 +145,53 @@ def find_overlapped_genes(
     return filtered
 
 
+@cython.cfunc
+@cython.inline
+@cython.returns(tuple)
 def get_comparable_codon(
     codon_posnas: List[List[PosNA]]
-) -> Tuple[Tuple[CodonText, ...], bool]:
+) -> Tuple[Tuple[MultiNAText, ...], bool]:
     posnas: List[PosNA]
-    codon_nas: Tuple[CodonText, ...] = tuple([
-        bytes([na for _, na, _ in posnas])
+    codon_nas: Tuple[MultiNAText, ...] = tuple([
+        bytes([na for _, _, na, _ in posnas])
         for posnas in codon_posnas
     ])
     is_partial: bool = len(codon_nas) < 3
     return codon_nas, is_partial
 
 
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def group_codons(
+    basepairs: List[BasePair]
+) -> List[Tuple[GeneText, AAPos, List[List[PosNA]]]]:
+    """Group base-pairs into complete codons
+
+    A codon is represented by a nested list. The inner List[PosNA]
+    is an individual base-pair with its insertions; the outer
+    List[List[PosNA]] is a complete codon
+    """
+    gene: GeneText
+    aapos: AAPos
+    prev_gene: GeneText = '\a0FakeGene\a0'
+    prev_aapos: AAPos = -1
+
+    bp: List[PosNA]
+    codons: List[Tuple[GeneText, AAPos, List[List[PosNA]]]] = []
+
+    for gene, aapos, na_and_ins in basepairs:
+        if gene == prev_gene and aapos == prev_aapos:
+            codons[-1][2].append(na_and_ins)
+        else:
+            prev_gene = gene
+            prev_aapos = aapos
+            codons.append((gene, aapos, [na_and_ins]))
+    return codons
+
+
+@cython.cfunc
+@cython.returns(list)
 def posnas2poscodons(
     posnas: List[PosNA],
     gene_intervals: List[GeneInterval],
@@ -147,26 +205,32 @@ def posnas2poscodons(
     aapos: AAPos
     codon_iter: Iterator[Tuple[GeneText, AAPos, List[PosNA]]]
     codon_posnas: List[List[PosNA]]
-    codons: Tuple[CodonText, ...]
+    codon: Tuple[MultiNAText, ...]
     is_partial: bool
+    totalq: int
+    sizeq: int
 
     genes: List[GeneInterval] = find_overlapped_genes(
         gene_intervals, read_refstart, read_refend)
-    grouped_posnas: GroupedPosNAs = group_posnas(posnas, genes)
+    basepairs: List[BasePair] = group_basepairs(posnas, genes)
 
     poscodons: List[PosCodon] = []
-    for (gene, aapos), codon_iter in groupby(
-        grouped_posnas, key=itemgetter(0, 1)
-    ):
-        codon_posnas = [pnas for _, _, pnas in codon_iter]
-        meanq = [qua for pnas in codon_posnas for _, _, qua in pnas]
-        meanq_int = round(sum(meanq) / len(meanq) if meanq else 0)
-        if meanq_int < site_quality_cutoff:
-            continue
-        codons, is_partial = get_comparable_codon(codon_posnas)
+    for gene, aapos, codon_posnas in group_codons(basepairs):
+        codon, is_partial = get_comparable_codon(codon_posnas)
         if is_partial:
             continue
-        poscodons.append((gene, aapos, codons, meanq_int))
+
+        totalq = 0
+        sizeq = 0
+        for pnas in codon_posnas:
+            for pna in pnas:
+                totalq += pna[3]
+                sizeq += 1
+        meanq_int = round(totalq / sizeq if totalq else 0)
+        if meanq_int < site_quality_cutoff:
+            continue
+
+        poscodons.append((gene, aapos, codon, meanq_int))
     return poscodons
 
 

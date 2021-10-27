@@ -18,7 +18,7 @@ def sam2consensus(sampath, regions):
         tCounter[NAChar]
     ] = defaultdict(Counter)
     for _, posnas in iter_posnas(sampath, progress=False):
-        for (refpos, i), na, _ in posnas:
+        for refpos, i, na, _ in posnas:
             nafreqs[(refpos, i)][na] += 1
     nacons_lookup = {
         pos: nas.most_common(1)[0][0]

@@ -1,3 +1,4 @@
+import cython  # type: ignore
 from postalign.utils.group_by_codons import group_by_codons  # type: ignore
 from postalign.processors.codon_alignment import codon_align  # type: ignore
 from postalign.models.sequence import (  # type: ignore
@@ -6,7 +7,7 @@ from postalign.models.sequence import (  # type: ignore
 )
 from itertools import groupby
 from operator import itemgetter
-from typing import Generator, Optional, List, Dict, Tuple, Iterator
+from typing import Optional, List, Dict, Tuple, Iterator
 
 from .codfreq_types import (
     AAPos,
@@ -42,6 +43,9 @@ def get_sequence_obj(
     )
 
 
+@cython.cfunc
+@cython.inline
+@cython.returns(tuple)
 def assemble_alignment(
     geneposcdf_lookup: Dict[
         Tuple[GeneText, AAPos],
@@ -102,11 +106,14 @@ codon_getter = itemgetter('codon')
 count_getter = itemgetter('count')
 
 
+@cython.ccall
+@cython.inline
+@cython.returns(list)
 def codonalign_consensus(
-    codonfreq: Generator[CodFreqRow, None, None],
+    codonfreq: List[CodFreqRow],
     ref: MainFragmentConfig,
     genes: List[DerivedFragmentConfig],
-) -> Generator[CodFreqRow, None, None]:
+) -> List[CodFreqRow]:
     gene: GeneText
     genedef: DerivedFragmentConfig
     gene_ref_seq_obj: Optional[Sequence]
@@ -131,6 +138,7 @@ def codonalign_consensus(
         for genepos, genecdf in
         groupby(codonfreq, key=genepos_getter)
     }
+    rows: List[CodFreqRow] = []
     for genedef in genes:
         gene = genedef['geneName']
 
@@ -177,13 +185,16 @@ def codonalign_consensus(
                 codon_getter
             ):
                 cdf_list = list(cdfs)
-                cdf_list[0]['count'] = sum(cdf['count'] for cdf in cdf_list)
+                cdf_list[0]['count'] = sum(
+                    [cdf['count'] for cdf in cdf_list]
+                )
                 cdf_list[0]['total_quality_score'] = sum(
-                    cdf['total_quality_score'] for cdf in cdf_list
+                    [cdf['total_quality_score'] for cdf in cdf_list]
                 )
                 merged_geneposcdf.append(cdf_list[0])
-            yield from sorted(
+            rows.extend(sorted(
                 merged_geneposcdf,
                 key=count_getter,
                 reverse=True
-            )
+            ))
+    return rows

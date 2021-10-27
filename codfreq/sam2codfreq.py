@@ -1,6 +1,4 @@
-# cython: profile=True
-# cython: linetrace=True
-from more_itertools import flatten  # type: ignore
+import cython  # type: ignore
 from collections import defaultdict, Counter
 
 import typing
@@ -15,15 +13,16 @@ from typing import (
 from .codfreq_types import (
     Profile,
     CodFreqRow,
+    MultiNAText,
     FASTQFileName,
     FragmentConfig,
     MainFragmentConfig,
     DerivedFragmentConfig,
 )
 from .sam2codfreq_types import (
-    TypedRefFragment,
-    CodonStat,
-    Qualities
+    CodonCounter,
+    QualityCounter,
+    TypedRefFragment
 )
 from .poscodons import iter_poscodons, PosCodon
 from .codonalign_consensus import codonalign_consensus
@@ -38,12 +37,13 @@ CODFREQ_HEADER: List[str] = [
 ENCODING: str = 'UTF-8'
 
 
-def iter_ref_fragments(
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def get_ref_fragments(
     profile: Profile
-) -> Generator[
-    Tuple[str, MainFragmentConfig, List[DerivedFragmentConfig]],
-    None,
-    None
+) -> List[
+    Tuple[str, MainFragmentConfig, List[DerivedFragmentConfig]]
 ]:
     refname: str
     refseq: Optional[str]
@@ -79,33 +79,41 @@ def iter_ref_fragments(
                 'refEnd': refend
             })
 
-    for refname, pair in ref_fragments.items():
-        yield refname, pair['ref'], pair['genes']
+    return [
+        (refname, pair['ref'], pair['genes'])
+        for refname, pair in ref_fragments.items()
+    ]
 
 
-def iter_codonfreq(
-    codonstat: CodonStat,
-    qualities: Qualities
-) -> Generator[CodFreqRow, None, None]:
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def get_codonfreq(
+    codonstat: CodonCounter,
+    qualities: QualityCounter
+) -> List[CodFreqRow]:
     gene: str
     refpos: int
-    codons: typing.Counter[Tuple[bytes, ...]]
-    codon: Tuple[bytes, ...]
+    codons: typing.Counter[Tuple[MultiNAText, ...]]
+    codon: Tuple[MultiNAText, ...]
     count: int
     total: int
     qua: int
+    rows: List[CodFreqRow] = []
+
     for (gene, refpos), codons in codonstat.items():
         total = sum(codons.values())
         for codon, count in sorted(codons.most_common()):
             qua = qualities[(gene, refpos, codon)]
-            yield {
+            rows.append({
                 'gene': gene,
                 'position': refpos,
                 'total': total,
-                'codon': bytes(flatten(codon)),
+                'codon': bytes([na for bp in codon for na in bp]),
                 'count': count,
                 'total_quality_score': round(qua, 2)
-            }
+            })
+    return rows
 
 
 def sam2codfreq(
@@ -116,7 +124,7 @@ def sam2codfreq(
     log_format: str = 'text',
     include_partial_codons: bool = False,
     **extras: Any
-) -> Generator[CodFreqRow, None, None]:
+) -> List[CodFreqRow]:
     """Iterate CodFreq rows from a SAM/BAM file
 
     :param samfile: str of the SAM/BAM file path
@@ -136,8 +144,8 @@ def sam2codfreq(
     refpos: int
     codon: Tuple[bytes, ...]
     qua: int
-    codonstat: CodonStat = defaultdict(Counter)
-    qualities: Qualities = Counter()
+    codonstat: CodonCounter = defaultdict(Counter)
+    qualities: QualityCounter = Counter()
     # Iterate through the whole SAM/BAM and stat each individual gene
     # position and codon
     for _, poscodons in iter_poscodons(
@@ -155,9 +163,7 @@ def sam2codfreq(
             qualities[(gene, refpos, codon)] += qua
         del poscodons
 
-    codonfreq: Generator[
-        CodFreqRow, None, None
-    ] = iter_codonfreq(codonstat, qualities)
+    codonfreq: List[CodFreqRow] = get_codonfreq(codonstat, qualities)
 
     # Apply codon-alignment to consensus codons. This step is an imperfect
     # approach to address the out-frame deletions/insertions. However, it
@@ -165,7 +171,8 @@ def sam2codfreq(
     # right now very slow and time-consuming.  This approach may need to be
     # changed in the future when optimization was done for the post-align
     # codon-alignment program.
-    yield from codonalign_consensus(codonfreq, ref, genes)
+    codonfreq = codonalign_consensus(codonfreq, ref, genes)
+    return codonfreq
 
 
 def sam2codfreq_all(
@@ -179,7 +186,7 @@ def sam2codfreq_all(
     refname: str
     ref: MainFragmentConfig
     genes: List[DerivedFragmentConfig]
-    for refname, ref, genes in iter_ref_fragments(profile):
+    for refname, ref, genes in get_ref_fragments(profile):
         samfile: str = name_bamfile(name, refname)
         yield from sam2codfreq(
             samfile,

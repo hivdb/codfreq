@@ -1,16 +1,26 @@
 import pysam  # type: ignore
+import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from array import array
 from pysam import AlignedSegment  # type: ignore
 from typing import List, Tuple, Optional, Generator
 
 from .codfreq_types import NAPos, NAChar, SeqText, Header
-from .posnas_types import PosNA
 
 ENCODING: str = 'UTF-8'
 GAP: int = ord(b'-')
 
+PosNA = Tuple[
+    NAPos,   # refpos
+    int,     # insertion_index
+    NAChar,  # na
+    int      # qua
+]
 
+
+@cython.ccall
+@cython.inline
+@cython.returns(list)
 def iter_single_read_posnas(
     seq: SeqText,
     qua: array,
@@ -18,12 +28,12 @@ def iter_single_read_posnas(
 ) -> List[PosNA]:
     seqpos0: Optional[NAPos]
     refpos0: Optional[NAPos]
-    refpos: int
+    refpos: NAPos
     insidx: int = 0
     n: NAChar
     q: int
 
-    seqchars: bytearray = bytearray(seq, ENCODING)
+    seqchars: bytes = bytes(seq, ENCODING)
 
     prev_refpos: int = 0
     prev_seqpos0: int = 0
@@ -54,7 +64,7 @@ def iter_single_read_posnas(
             # insertion before the first ref position
             continue
 
-        posnas.append(((refpos, insidx), n, q))
+        posnas.append((refpos, insidx, n, q))
 
         if insidx > 0:
             buffer_size += 1
@@ -98,8 +108,8 @@ def iter_posnas(
             )
             if site_quality_cutoff > 0:
                 results = [
-                    (posidx, na, q)
-                    for posidx, na, q in results
+                    (pos, idx, na, q)
+                    for pos, idx, na, q in results
                     if q >= site_quality_cutoff
                 ]
             yield read.query_name, results

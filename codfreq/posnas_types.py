@@ -3,10 +3,8 @@ from .codfreq_types import NAPos, NAChar
 
 
 PosNA = Tuple[
-    Tuple[
-        NAPos,  # refpos
-        int   # insertion_index
-    ],
+    NAPos,   # refpos
+    int,     # insertion_index
     NAChar,  # na
-    int   # qua
+    int      # qua
 ]

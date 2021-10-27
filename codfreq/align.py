@@ -219,7 +219,7 @@ def find_paired_fastqs(workdir: str) -> Generator[PairedFASTQ, None, None]:
 
 
 def align_with_profile(
-    paired_fastqs: List[PairedFASTQ],
+    paired_fastq: PairedFASTQ,
     program: str,
     profile: Profile,
     log_format: str
@@ -235,32 +235,31 @@ def align_with_profile(
             refseq = config['refSequence']
             with open(refpath, 'w') as fp:
                 fp.write('>{}\n{}\n\n'.format(refname, refseq))
-        # refaas = get_refaas(reference)
-            for pairobj in paired_fastqs:
-                samfile = name_bamfile(pairobj['name'], refname)
-                refinit(refpath)
-                if log_format == 'text':
-                    click.echo(
-                        'Aligning {} with {}...'
-                        .format(pairobj['name'], refname)
-                    )
-                else:
-                    click.echo(json.dumps({
-                        'op': 'alignment',
-                        'status': 'working',
-                        'query': pairobj['name'],
-                        'target': refname
-                    }))
-                alignfunc(refpath, *pairobj['pair'], samfile)
-                if log_format == 'text':
-                    click.echo('Done')
-                else:
-                    click.echo(json.dumps({
-                        'op': 'alignment',
-                        'status': 'done',
-                        'query': pairobj['name'],
-                        'target': refname
-                    }))
+
+            samfile = name_bamfile(paired_fastq['name'], refname)
+            refinit(refpath)
+            if log_format == 'text':
+                click.echo(
+                    'Aligning {} with {}...'
+                    .format(paired_fastq['name'], refname)
+                )
+            else:
+                click.echo(json.dumps({
+                    'op': 'alignment',
+                    'status': 'working',
+                    'query': paired_fastq['name'],
+                    'target': refname
+                }))
+            alignfunc(refpath, *paired_fastq['pair'], samfile)
+            if log_format == 'text':
+                click.echo('Done')
+            else:
+                click.echo(json.dumps({
+                    'op': 'alignment',
+                    'status': 'done',
+                    'query': paired_fastq['name'],
+                    'target': refname
+                }))
 
 
 def align(
@@ -272,9 +271,9 @@ def align(
     row: CodFreqRow
     profile_obj: Profile = json.load(profile)
     paired_fastqs = list(find_paired_fastqs(workdir))
-    align_with_profile(paired_fastqs, program, profile_obj, log_format)
 
     for pairobj in paired_fastqs:
+        align_with_profile(pairobj, program, profile_obj, log_format)
         codfreqfile = name_codfreq(pairobj['name'])
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
