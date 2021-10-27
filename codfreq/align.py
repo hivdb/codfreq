@@ -6,7 +6,6 @@ import csv
 import json
 import click  # type: ignore
 import tempfile
-import multiprocessing
 from itertools import combinations
 from collections import defaultdict
 from typing import (
@@ -322,7 +321,7 @@ def align(
 @click.option(
     '--workers',
     type=int,
-    default=multiprocessing.cpu_count() // 2,
+    default=4,
     show_default=True,
     help='Number of sub-process workers to be used')
 def align_cmd(
