@@ -281,7 +281,7 @@ def iter_poscodons(
     description: str,
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
-    chunk_size: int = 5000,
+    chunk_size: int = 50000,
     **extras: Any
 ) -> Generator[
     Tuple[Header, List[PosCodon]],
