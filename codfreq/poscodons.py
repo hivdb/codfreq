@@ -2,10 +2,10 @@ import pysam  # type: ignore
 import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Any, Union, Generator, Iterator
+from typing import List, Tuple, Any, Union, Generator, Iterator, Optional
+from concurrent.futures import ProcessPoolExecutor
 
 from .codfreq_types import (
-    MainFragmentConfig,
     DerivedFragmentConfig,
     Header,
     AAPos,
@@ -13,6 +13,7 @@ from .codfreq_types import (
     GeneText,
     MultiNAText
 )
+from .samfile_helper import chunked_samfile
 from .json_progress import JsonProgress
 from .posnas import iter_single_read_posnas, PosNA
 
@@ -42,12 +43,6 @@ def build_gene_intervals(
         genedef['refEnd'],
         genedef['geneName']
     ) for genedef in genes]
-
-
-@cython.cfunc
-@cython.inline
-def pos_from_posna(posna: PosNA) -> int:
-    return posna[0]
 
 
 @cython.cfunc
@@ -234,42 +229,29 @@ def posnas2poscodons(
     return poscodons
 
 
-def iter_poscodons(
+@cython.ccall
+@cython.returns(list)
+def get_poscodons_between(
     samfile: str,
-    ref: MainFragmentConfig,
-    genes: List[DerivedFragmentConfig],
-    description: str,
-    site_quality_cutoff: int = 0,
-    log_format: str = 'text',
-    **extras: Any
-) -> Generator[
-    Tuple[Header, List[PosCodon]],
-    None,
-    None
-]:
+    samfile_start: int,
+    samfile_end: int,
+    gene_intervals: List[GeneInterval],
+    site_quality_cutoff: int = 0
+) -> List[Tuple[Header, List[PosCodon]]]:
 
-    pbar: Union[JsonProgress, tqdm]
-    header: Header
     read: AlignedSegment
-    pair: List[AlignedSegment]
     posnas: List[PosNA]
     poscodons: List[PosCodon]
-    gene_intervals: List[GeneInterval] = build_gene_intervals(genes)
-    total: int = int(
-        pysam.idxstats(samfile)
-        .splitlines()[0]
-        .split('\t')[2]
-    )
-    if log_format == 'json':
-        pbar = JsonProgress(
-            total=total, description=description, **extras)
-    else:
-        pbar = tqdm(total=total)
-        pbar.set_description('Processing {}'.format(description))
+
+    results: List[Tuple[Header, List[PosCodon]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
-        for read in samfp.fetch():
-            pbar.update(1)
+        samfp.seek(samfile_start)
+
+        for read in samfp:
+            if samfp.tell() >= samfile_end:
+                break
+
             if not read.query_sequence:
                 continue
 
@@ -287,5 +269,68 @@ def iter_poscodons(
                                      #  last aligned residue."
                 site_quality_cutoff
             )
-            yield read.query_name, poscodons
+
+            results.append((read.query_name, poscodons))
+    return results
+
+
+def iter_poscodons(
+    samfile: str,
+    genes: List[DerivedFragmentConfig],
+    workers: int,
+    description: str,
+    site_quality_cutoff: int = 0,
+    log_format: str = 'text',
+    chunk_size: int = 5000,
+    **extras: Any
+) -> Generator[
+    Tuple[Header, List[PosCodon]],
+    None,
+    None
+]:
+
+    total: int
+    read: AlignedSegment
+    posnas: List[PosNA]
+    chunks: List[Tuple[int, int]]
+    samfile_begin: int
+    samfile_end: int
+    one: Tuple[Header, List[PosCodon]]
+    poscodons: List[Tuple[Header, List[PosCodon]]]
+    pbar: Optional[Union[JsonProgress, tqdm]]
+
+    with pysam.AlignmentFile(samfile, 'rb') as samfp:
+        total = samfp.mapped
+        if log_format == 'json':
+            pbar = JsonProgress(
+                total=total, description=description, **extras)
+        elif log_format == 'text':
+            pbar = tqdm(total=total)
+            pbar.set_description('Processing {}'.format(description))
+
+    chunks = chunked_samfile(samfile, chunk_size)
+    gene_intervals: List[GeneInterval] = build_gene_intervals(genes)
+
+    with ProcessPoolExecutor(workers) as executor:
+
+        for poscodons in executor.map(
+            get_poscodons_between,
+            *zip(*[
+                (
+                    samfile,
+                    samfile_begin,
+                    samfile_end,
+                    gene_intervals,
+                    site_quality_cutoff
+                )
+                for samfile_begin, samfile_end in chunks
+            ])
+        ):
+            if pbar:
+                for one in poscodons:
+                    yield one
+                    pbar.update(1)
+            else:
+                yield from poscodons
+    if pbar:
         pbar.close()

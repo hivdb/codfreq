@@ -3,8 +3,11 @@ import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from array import array
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Optional, Generator
+from typing import List, Tuple, Optional, Generator, Any, Union
+from concurrent.futures import ProcessPoolExecutor
 
+from .json_progress import JsonProgress
+from .samfile_helper import chunked_samfile
 from .codfreq_types import NAPos, NAChar, SeqText, Header
 
 ENCODING: str = 'UTF-8'
@@ -74,44 +77,149 @@ def iter_single_read_posnas(
     return posnas[:len(posnas) - buffer_size]
 
 
-def iter_posnas(
+@cython.ccall
+@cython.returns(list)
+def get_posnas_between(
     samfile: str,
-    site_quality_cutoff: int = 0,
-    progress: bool = True
-) -> Generator[
-    Tuple[str, List[PosNA]],
-    None,
-    None
-]:
-    header: Header
-    read: AlignedSegment
-    results: List[PosNA]
-    pbar: Optional[tqdm] = None
+    samfile_start: int,
+    samfile_end: int,
+    site_quality_cutoff: int = 0
+) -> List[Tuple[Header, List[PosNA]]]:
 
-    if progress:
-        total: int = int(
-            pysam.idxstats(samfile)
-            .splitlines()[0]
-            .split('\t')[2]
-        )
-        pbar = tqdm(total=total)
+    pos: NAPos
+    idx: int
+    na: NAChar
+    q: int
+    read: AlignedSegment
+    posnas: List[PosNA]
+
+    results: List[Tuple[Header, List[PosNA]]] = []
+
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
-        for read in samfp.fetch():
-            if pbar:
-                pbar.update(1)
+
+        samfp.seek(samfile_start)
+
+        for read in samfp:
+            if samfp.tell() >= samfile_end:
+                break
+
             if not read.query_sequence:
                 continue
-            results = iter_single_read_posnas(
+
+            posnas = iter_single_read_posnas(
                 read.query_sequence,
                 read.query_qualities,
                 read.get_aligned_pairs(False)
             )
             if site_quality_cutoff > 0:
-                results = [
+                posnas = [
                     (pos, idx, na, q)
-                    for pos, idx, na, q in results
+                    for pos, idx, na, q in posnas
                     if q >= site_quality_cutoff
                 ]
-            yield read.query_name, results
-        if pbar:
-            pbar.close()
+            results.append((read.query_name, posnas))
+
+    return results
+
+
+@cython.ccall
+@cython.returns(list)
+def get_posnas_in_genome_region(
+    samfile: str,
+    ref_name: str,
+    ref_start: NAPos,
+    ref_end: NAPos,
+    site_quality_cutoff: int = 0
+) -> List[Tuple[Header, List[PosNA]]]:
+
+    pos: NAPos
+    idx: int
+    na: NAChar
+    q: int
+    read: AlignedSegment
+    posnas: List[PosNA]
+
+    results: List[Tuple[Header, List[PosNA]]] = []
+
+    with pysam.AlignmentFile(samfile, 'rb') as samfp:
+
+        for read in samfp.fetch(ref_name, ref_start - 1, ref_end):
+
+            if not read.query_sequence:
+                continue
+
+            posnas = iter_single_read_posnas(
+                read.query_sequence,
+                read.query_qualities,
+                read.get_aligned_pairs(False)
+            )
+            if site_quality_cutoff > 0:
+                posnas = [
+                    (pos, idx, na, q)
+                    for pos, idx, na, q in posnas
+                    if q >= site_quality_cutoff
+                ]
+            results.append((read.query_name, posnas))
+
+    return results
+
+
+def iter_posnas(
+    samfile: str,
+    workers: int,
+    description: str,
+    jsonop: str = 'progress',
+    site_quality_cutoff: int = 0,
+    chunk_size: int = 5000,
+    log_format: str = 'text',
+    **extras: Any
+) -> Generator[
+    Tuple[Header, List[PosNA]],
+    None,
+    None
+]:
+    total: int
+    header: Header
+    chunks: List[Tuple[int, int]]
+    samfile_begin: int
+    samfile_end: int
+    one: Tuple[Header, List[PosNA]]
+    poscodons: List[Tuple[Header, List[PosNA]]]
+    pbar: Optional[Union[JsonProgress, tqdm]] = None
+
+    with pysam.AlignmentFile(samfile, 'rb') as samfp:
+        total = samfp.mapped
+        if log_format == 'json':
+            pbar = JsonProgress(
+                op=jsonop,
+                total=total,
+                description=description,
+                **extras)
+        elif log_format == 'text':
+            pbar = tqdm(total=total)
+            pbar.set_description('Processing {}'.format(description))
+
+    chunks = chunked_samfile(samfile, chunk_size)
+
+    with ProcessPoolExecutor(workers) as executor:
+
+        for posnas in executor.map(
+            get_posnas_between,
+            *zip(*[
+                (
+                    samfile,
+                    samfile_begin,
+                    samfile_end,
+                    site_quality_cutoff
+                )
+                for samfile_begin, samfile_end in chunks
+            ])
+        ):
+            if pbar:
+                for one in posnas:
+                    yield one
+                    pbar.update(1)
+            else:
+                yield from posnas
+    if pbar:
+        pbar.close()

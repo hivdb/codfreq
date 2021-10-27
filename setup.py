@@ -16,10 +16,10 @@ from Cython.Build import cythonize  # type: ignore
 
 
 extensions = [
-    # Extension(
-    #     name='codfreq.codfreq_types',
-    #     sources=['codfreq/codfreq_types.py']
-    # ),
+    Extension(
+        name='codfreq.samfile_helper',
+        sources=['codfreq/samfile_helper.py']
+    ),
     Extension(
         name='codfreq.paired_reads',
         sources=['codfreq/paired_reads.py'],

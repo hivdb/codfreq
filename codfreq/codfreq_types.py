@@ -54,6 +54,20 @@ class SequenceAssemblyConfig(TypedDict):
     refEnd: Optional[int]
 
 
+class NARegionConfig(TypedDict):
+    name: str
+    fromFragment: str
+    refStart: int
+    refEnd: int
+
+
+class RegionalConsensus(TypedDict):
+    name: str
+    refStart: NAPos
+    refEnd: NAPos
+    consensus: str
+
+
 class Profile(TypedDict):
     fragmentConfig: List[FragmentConfig]
     sequenceAssemblyConfig: List[SequenceAssemblyConfig]

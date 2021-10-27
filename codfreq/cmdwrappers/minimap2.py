@@ -2,10 +2,11 @@
 
 import os
 from subprocess import Popen, PIPE
+from typing import List, Dict
 
 from .base import execute, raise_on_proc_error, refinit_func, align_func
 
-MINIMAP2_ARGS = [
+MINIMAP2_ARGS: List[str] = [
     '-A', '2',        # matching score [2]
     '-B', '4',        # mismatch penalty [4]
     '-O', '4,24',     # gap open penalty [4,24]
@@ -18,33 +19,44 @@ MINIMAP2_ARGS = [
 
 
 @refinit_func('minimap2')
-def minimap2_refinit(refseq):
+def minimap2_refinit(refseq: str) -> None:
     return
 
 
 @align_func('minimap2')
-def minimap2_align(refseq, fastq1, fastq2, bam):
-    command = [
+def minimap2_align(
+    refseq: str,
+    fastq1: str,
+    fastq2: str,
+    bam: str
+) -> Dict[str, float]:
+    out_sam2bam: str
+    err_sam2bam: str
+    out_samidx: str
+    err_samidx: str
+    command: List[str] = [
         'minimap2',
         *MINIMAP2_ARGS,
         '-a', refseq, fastq1
     ]
     if fastq2:
         command.append(fastq2)
-    proc_minimap2 = Popen(
+    proc_minimap2: Popen = Popen(
         command,
         stdout=PIPE,
         stderr=PIPE,
         encoding='U8')
-    proc_sam2bam = Popen(
+    proc_sam2bam: Popen = Popen(
         ['samtools', 'sort', '-O', 'bam', '-o', bam],
         stdin=proc_minimap2.stdout,
         stdout=PIPE,
         stderr=PIPE,
         encoding='U8')
-    proc_minimap2.stdout.close()
-    err_minimap2 = proc_minimap2.stderr.read()
-    proc_minimap2.stderr.close()
+    if proc_minimap2.stdout is not None:
+        proc_minimap2.stdout.close()
+    if proc_minimap2.stderr is not None:
+        err_minimap2 = proc_minimap2.stderr.read()
+        proc_minimap2.stderr.close()
     raise_on_proc_error(proc_minimap2, err_minimap2)
     out_sam2bam, err_sam2bam = proc_sam2bam.communicate()
     raise_on_proc_error(proc_sam2bam, err_sam2bam)

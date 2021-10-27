@@ -120,6 +120,7 @@ def sam2codfreq(
     samfile: str,
     ref: MainFragmentConfig,
     genes: List[DerivedFragmentConfig],
+    workers: int,
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
     include_partial_codons: bool = False,
@@ -150,8 +151,8 @@ def sam2codfreq(
     # position and codon
     for _, poscodons in iter_poscodons(
         samfile,
-        ref,
         genes,
+        workers,
         description=samfile,
         site_quality_cutoff=site_quality_cutoff,
         log_format=log_format,
@@ -179,6 +180,7 @@ def sam2codfreq_all(
     name: str,
     fnpair: Tuple[Optional[FASTQFileName], ...],
     profile: Profile,
+    workers: int,
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
     include_partial_codons: bool = False
@@ -192,6 +194,7 @@ def sam2codfreq_all(
             samfile,
             ref,
             genes,
+            workers,
             site_quality_cutoff=site_quality_cutoff,
             log_format=log_format,
             include_partial_codons=include_partial_codons,

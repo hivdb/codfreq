@@ -6,6 +6,7 @@ import csv
 import json
 import click  # type: ignore
 import tempfile
+import multiprocessing
 from itertools import combinations
 from collections import defaultdict
 from typing import (
@@ -266,6 +267,7 @@ def align(
     workdir: str,
     program: str,
     profile: TextIO,
+    workers: int,
     log_format: str
 ) -> None:
     row: CodFreqRow
@@ -282,6 +284,7 @@ def align(
                 name=pairobj['name'],
                 fnpair=pairobj['pair'],
                 profile=profile_obj,
+                workers=workers,
                 log_format=log_format
             ):
                 writer.writerow({
@@ -289,7 +292,10 @@ def align(
                     'codon': row['codon'].decode(ENCODING)
                 })
 
-        create_untrans_region_consensus(pairobj['name'], profile_obj)
+        create_untrans_region_consensus(
+            pairobj['name'],
+            profile_obj
+        )
 
 
 @click.command()
@@ -313,12 +319,19 @@ def align(
     '--enable-profiling/--disable-profiling',
     default=False,
     help='Enable cProfile')
+@click.option(
+    '--workers',
+    type=int,
+    default=multiprocessing.cpu_count() // 2,
+    show_default=True,
+    help='Number of sub-process workers to be used')
 def align_cmd(
     workdir: str,
     program: str,
     profile: TextIO,
     log_format: str,
-    enable_profiling: bool
+    enable_profiling: bool,
+    workers: int
 ) -> None:
     if enable_profiling:
         import cProfile
@@ -326,13 +339,13 @@ def align_cmd(
         profile_obj = None
         try:
             with cProfile.Profile() as profile_obj:
-                align(workdir, program, profile, log_format)
+                align(workdir, program, profile, workers, log_format)
         finally:
             if profile_obj is not None:
                 ps = pstats.Stats(profile_obj)
                 ps.print_stats()
     else:
-        align(workdir, program, profile, log_format)
+        align(workdir, program, profile, workers, log_format)
 
 
 if __name__ == '__main__':
