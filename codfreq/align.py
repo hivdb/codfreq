@@ -322,7 +322,7 @@ def align(
 @click.option(
     '--workers',
     type=int,
-    default=multiprocessing.cpu_count() // 2,
+    default=min(4, multiprocessing.cpu_count() // 2),
     show_default=True,
     help='Number of sub-process workers to be used')
 def align_cmd(
