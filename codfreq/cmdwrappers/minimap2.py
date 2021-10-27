@@ -3,8 +3,11 @@
 import os
 from subprocess import Popen, PIPE
 from typing import List, Dict
+import multiprocessing
 
 from .base import execute, raise_on_proc_error, refinit_func, align_func
+
+THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
 
 MINIMAP2_ARGS: List[str] = [
     '-A', '2',        # matching score [2]
@@ -14,6 +17,9 @@ MINIMAP2_ARGS: List[str] = [
     '-z', '400,200',  # Z-drop score and inversion Z-drop score [400,200]
     '-s', '80',       # minimal peak DP alignment score [80]
     '-u', 'n',        # how to find GT-AG [n]
+    #                   number of threads [3]
+    '-t', THREADS,
+    '-K', '1g',       # minibatch size for mapping [500M]
     '--sam-hit-only'
 ]
 
@@ -47,7 +53,11 @@ def minimap2_align(
         stderr=PIPE,
         encoding='U8')
     proc_sam2bam: Popen = Popen(
-        ['samtools', 'sort', '-O', 'bam', '-o', bam],
+        ['samtools',
+         'sort',
+         '-@', THREADS,
+         '-O', 'bam',
+         '-o', bam],
         stdin=proc_minimap2.stdout,
         stdout=PIPE,
         stderr=PIPE,
@@ -60,7 +70,12 @@ def minimap2_align(
     raise_on_proc_error(proc_minimap2, err_minimap2)
     out_sam2bam, err_sam2bam = proc_sam2bam.communicate()
     raise_on_proc_error(proc_sam2bam, err_sam2bam)
-    out_samidx, err_samidx = execute(['samtools', 'index', bam])
+    out_samidx, err_samidx = execute([
+        'samtools',
+        'index',
+        '-@', THREADS,
+        bam
+    ])
     with open(os.path.splitext(bam)[0] + '.log', 'w') as fp:
         fp.write(err_minimap2)
         fp.write(out_sam2bam)
