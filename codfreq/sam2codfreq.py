@@ -1,4 +1,3 @@
-import cython  # type: ignore
 from collections import defaultdict, Counter
 
 import typing
@@ -13,7 +12,7 @@ from typing import (
 from .codfreq_types import (
     Profile,
     CodFreqRow,
-    MultiNAText,
+    CodonText,
     FASTQFileName,
     FragmentConfig,
     MainFragmentConfig,
@@ -28,6 +27,7 @@ from .poscodons import iter_poscodons, PosCodon
 from .codonalign_consensus import codonalign_consensus
 from .filename_helper import name_bamfile
 
+
 CODFREQ_HEADER: List[str] = [
     'gene', 'position',
     'total', 'codon', 'count',
@@ -37,9 +37,6 @@ CODFREQ_HEADER: List[str] = [
 ENCODING: str = 'UTF-8'
 
 
-@cython.cfunc
-@cython.inline
-@cython.returns(list)
 def get_ref_fragments(
     profile: Profile
 ) -> List[
@@ -85,17 +82,14 @@ def get_ref_fragments(
     ]
 
 
-@cython.cfunc
-@cython.inline
-@cython.returns(list)
 def get_codonfreq(
     codonstat: CodonCounter,
     qualities: QualityCounter
 ) -> List[CodFreqRow]:
     gene: str
     refpos: int
-    codons: typing.Counter[Tuple[MultiNAText, ...]]
-    codon: Tuple[MultiNAText, ...]
+    codons: typing.Counter[CodonText]
+    codon: CodonText
     count: int
     total: int
     qua: int
@@ -109,7 +103,7 @@ def get_codonfreq(
                 'gene': gene,
                 'position': refpos,
                 'total': total,
-                'codon': bytes([na for bp in codon for na in bp]),
+                'codon': codon,
                 'count': count,
                 'total_quality_score': round(qua, 2)
             })
@@ -143,12 +137,14 @@ def sam2codfreq(
     poscodons: List[PosCodon]
     gene: str
     refpos: int
-    codon: Tuple[bytes, ...]
+    codon: CodonText
     qua: int
     codonstat: CodonCounter = defaultdict(Counter)
     qualities: QualityCounter = Counter()
     # Iterate through the whole SAM/BAM and stat each individual gene
     # position and codon
+    # Note: Don't cythonize this for loop, it will cause memory leak
+    # problem
     for _, poscodons in iter_poscodons(
         samfile,
         genes,
@@ -162,7 +158,6 @@ def sam2codfreq(
         for gene, refpos, codon, qua in poscodons:
             codonstat[(gene, refpos)][codon] += 1
             qualities[(gene, refpos, codon)] += qua
-        del poscodons
 
     codonfreq: List[CodFreqRow] = get_codonfreq(codonstat, qualities)
 

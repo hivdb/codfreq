@@ -6,7 +6,6 @@ verify_ssl = true
 [dev-packages]
 # post-align = {editable = true, path = "./../post-align"}
 boto3 = "*"
-line-profiler = "*"
 
 [packages]
 cython = "*"

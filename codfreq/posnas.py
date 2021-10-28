@@ -184,7 +184,7 @@ def iter_posnas(
     samfile_begin: int
     samfile_end: int
     one: Tuple[Header, List[PosNA]]
-    poscodons: List[Tuple[Header, List[PosNA]]]
+    posnas: List[Tuple[Header, List[PosNA]]]
     pbar: Optional[Union[JsonProgress, tqdm]] = None
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:

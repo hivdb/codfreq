@@ -18,9 +18,9 @@ class TypedRefFragment(TypedDict):
 
 CodonCounter = DefaultDict[
     Tuple[str, int],
-    Counter[Tuple[bytes, ...]]
+    Counter[bytes]
 ]
 
 QualityCounter = Counter[
-    Tuple[str, int, Tuple[bytes, ...]]
+    Tuple[str, int, bytes]
 ]

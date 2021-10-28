@@ -1,39 +1,35 @@
-import pysam  # type: ignore
 import cython  # type: ignore
+import pysam  # type: ignore
 from tqdm import tqdm  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Any, Union, Generator, Iterator, Optional
+from typing import List, Tuple, Any, Union, Generator, Optional
 from concurrent.futures import ProcessPoolExecutor
+# from multiprocessing import Queue
+# from multiprocessing import current_process
 
 from .codfreq_types import (
     DerivedFragmentConfig,
     Header,
+    NAChar,
     AAPos,
     NAPos,
     GeneText,
-    MultiNAText
+    CodonText
 )
 from .samfile_helper import chunked_samfile
 from .json_progress import JsonProgress
 from .posnas import iter_single_read_posnas, PosNA
 
-# frameshift types
-REPEAT: int = 0x01
-SKIP: int = 0x02
-
-UNSEQ: bytes = b'.'
-
 #                  refStart refEnd
 #                      v      v
 GeneInterval = Tuple[NAPos, NAPos, GeneText]
-#                                                          Qual
-#                                                           v
-PosCodon = Tuple[GeneText, AAPos, Tuple[MultiNAText, ...], int]
+#                                            Qual
+#                                             v
+PosCodon = Tuple[GeneText, AAPos, CodonText, int]
 BasePair = Tuple[GeneText, AAPos, List[PosNA]]
 
 
-@cython.cfunc
-@cython.inline
+@cython.ccall
 @cython.returns(list)
 def build_gene_intervals(
     genes: List[DerivedFragmentConfig]
@@ -145,14 +141,18 @@ def find_overlapped_genes(
 @cython.returns(tuple)
 def get_comparable_codon(
     codon_posnas: List[List[PosNA]]
-) -> Tuple[Tuple[MultiNAText, ...], bool]:
+) -> Tuple[CodonText, bool]:
     posnas: List[PosNA]
-    codon_nas: Tuple[MultiNAText, ...] = tuple([
-        bytes([na for _, _, na, _ in posnas])
-        for posnas in codon_posnas
-    ])
-    is_partial: bool = len(codon_nas) < 3
-    return codon_nas, is_partial
+    codon_chars: List[NAChar] = []
+    num_bps: int = 0
+
+    for posnas in codon_posnas:
+        num_bps += 1
+        for posna in posnas:
+            codon_chars.append(posna[2])
+
+    is_partial: bool = num_bps < 3
+    return bytes(codon_chars), is_partial
 
 
 @cython.cfunc
@@ -186,6 +186,7 @@ def group_codons(
 
 
 @cython.cfunc
+@cython.inline
 @cython.returns(list)
 def posnas2poscodons(
     posnas: List[PosNA],
@@ -198,9 +199,8 @@ def posnas2poscodons(
     meanq_int: int
     gene: GeneText
     aapos: AAPos
-    codon_iter: Iterator[Tuple[GeneText, AAPos, List[PosNA]]]
     codon_posnas: List[List[PosNA]]
-    codon: Tuple[MultiNAText, ...]
+    codon: CodonText
     is_partial: bool
     totalq: int
     sizeq: int
@@ -238,6 +238,7 @@ def get_poscodons_between(
     gene_intervals: List[GeneInterval],
     site_quality_cutoff: int = 0
 ) -> List[Tuple[Header, List[PosCodon]]]:
+    """Retrieve poscodons from given SAM/BAM file position range"""
 
     read: AlignedSegment
     posnas: List[PosNA]
@@ -288,6 +289,7 @@ def iter_poscodons(
     None,
     None
 ]:
+    """Iterate poscodons from given SAM/BAM file"""
 
     total: int
     read: AlignedSegment
