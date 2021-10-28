@@ -1,15 +1,10 @@
-import gc
 import cython  # type: ignore
 import pysam  # type: ignore
-from tqdm import tqdm  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Any, Union, Generator, Optional
-from concurrent.futures import ProcessPoolExecutor
-# from multiprocessing import Queue
-# from multiprocessing import current_process
+from typing import List, Tuple, Generator
 
 from .codfreq_types import (
-    DerivedFragmentConfig,
+    GeneInterval,
     Header,
     NAChar,
     AAPos,
@@ -17,29 +12,12 @@ from .codfreq_types import (
     GeneText,
     CodonText
 )
-from .samfile_helper import chunked_samfile
-from .json_progress import JsonProgress
 from .posnas import iter_single_read_posnas, PosNA
 
-#                  refStart refEnd
-#                      v      v
-GeneInterval = Tuple[NAPos, NAPos, GeneText]
 #                                            Qual
 #                                             v
 PosCodon = Tuple[GeneText, AAPos, CodonText, int]
 BasePair = Tuple[GeneText, AAPos, List[PosNA]]
-
-
-@cython.ccall
-@cython.returns(list)
-def build_gene_intervals(
-    genes: List[DerivedFragmentConfig]
-) -> List[GeneInterval]:
-    return [(
-        genedef['refStart'],
-        genedef['refEnd'],
-        genedef['geneName']
-    ) for genedef in genes]
 
 
 @cython.cfunc
@@ -230,22 +208,18 @@ def posnas2poscodons(
     return poscodons
 
 
-@cython.ccall
-@cython.returns(list)
-def get_poscodons_between(
+def iter_poscodons(
     samfile: str,
     samfile_start: int,
     samfile_end: int,
     gene_intervals: List[GeneInterval],
     site_quality_cutoff: int = 0
-) -> List[Tuple[Header, List[PosCodon]]]:
+) -> Generator[Tuple[Header, List[PosCodon]], None, None]:
     """Retrieve poscodons from given SAM/BAM file position range"""
 
     read: AlignedSegment
     posnas: List[PosNA]
     poscodons: List[PosCodon]
-
-    results: List[Tuple[Header, List[PosCodon]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
         samfp.seek(samfile_start)
@@ -272,70 +246,4 @@ def get_poscodons_between(
                 site_quality_cutoff
             )
 
-            results.append((read.query_name, poscodons))
-    return results
-
-
-def iter_poscodons(
-    samfile: str,
-    genes: List[DerivedFragmentConfig],
-    workers: int,
-    description: str,
-    site_quality_cutoff: int = 0,
-    log_format: str = 'text',
-    chunk_size: int = 20000,
-    **extras: Any
-) -> Generator[
-    Tuple[Header, List[PosCodon]],
-    None,
-    None
-]:
-    """Iterate poscodons from given SAM/BAM file"""
-
-    total: int
-    read: AlignedSegment
-    posnas: List[PosNA]
-    chunks: List[Tuple[int, int]]
-    samfile_begin: int
-    samfile_end: int
-    one: Tuple[Header, List[PosCodon]]
-    poscodons: List[Tuple[Header, List[PosCodon]]]
-    pbar: Optional[Union[JsonProgress, tqdm]]
-
-    with pysam.AlignmentFile(samfile, 'rb') as samfp:
-        total = samfp.mapped
-        if log_format == 'json':
-            pbar = JsonProgress(
-                total=total, description=description, **extras)
-        elif log_format == 'text':
-            pbar = tqdm(total=total)
-            pbar.set_description('Processing {}'.format(description))
-
-    chunks = chunked_samfile(samfile, chunk_size)
-    gene_intervals: List[GeneInterval] = build_gene_intervals(genes)
-
-    with ProcessPoolExecutor(workers) as executor:
-
-        for poscodons in executor.map(
-            get_poscodons_between,
-            *zip(*[
-                (
-                    samfile,
-                    samfile_begin,
-                    samfile_end,
-                    gene_intervals,
-                    site_quality_cutoff
-                )
-                for samfile_begin, samfile_end in chunks
-            ])
-        ):
-            if pbar:
-                for one in poscodons:
-                    yield one
-                    pbar.update(1)
-            else:
-                yield from poscodons
-            del poscodons
-            gc.collect()
-    if pbar:
-        pbar.close()
+            yield read.query_name, poscodons

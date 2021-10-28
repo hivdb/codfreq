@@ -275,7 +275,7 @@ def align(
     paired_fastqs = list(find_paired_fastqs(workdir))
 
     for pairobj in paired_fastqs:
-        align_with_profile(pairobj, program, profile_obj, log_format)
+        # align_with_profile(pairobj, program, profile_obj, log_format)
         codfreqfile = name_codfreq(pairobj['name'])
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
@@ -322,7 +322,7 @@ def align(
 @click.option(
     '--workers',
     type=int,
-    default=min(8, multiprocessing.cpu_count() // 2 + 1),
+    default=max(1, multiprocessing.cpu_count() - 2),
     show_default=True,
     help='Number of sub-process workers to be used')
 def align_cmd(

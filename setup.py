@@ -30,13 +30,11 @@ extensions = [
         sources=['codfreq/posnas.py'],
         # define_macros=[('CYTHON_TRACE', '1')]
     ),
-    # cythonizing poscodons causes memory leak problem
-    #
-    # Extension(
-    #     name='codfreq.poscodons',
-    #     sources=['codfreq/poscodons.py'],
-    #     # define_macros=[('CYTHON_TRACE', '1')]
-    # ),
+    Extension(
+        name='codfreq.poscodons',
+        sources=['codfreq/poscodons.py'],
+        # define_macros=[('CYTHON_TRACE', '1')]
+    ),
     Extension(
         name='codfreq.sam2codfreq',
         sources=['codfreq/sam2codfreq.py'],

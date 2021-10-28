@@ -2,7 +2,6 @@ from typing import (
     Tuple,
     List,
     TypedDict,
-    DefaultDict,
     Counter
 )
 from .codfreq_types import (
@@ -16,11 +15,6 @@ class TypedRefFragment(TypedDict):
     genes: List[DerivedFragmentConfig]
 
 
-CodonCounter = DefaultDict[
-    Tuple[str, int],
-    Counter[bytes]
-]
-
-QualityCounter = Counter[
+CodonCounter = Counter[
     Tuple[str, int, bytes]
 ]

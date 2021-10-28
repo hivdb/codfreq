@@ -82,4 +82,8 @@ class CodFreqRow(TypedDict):
     total_quality_score: int
 
 
+#                  refStart refEnd
+#                      v      v
+GeneInterval = Tuple[NAPos, NAPos, GeneText]
+
 RefAAs = Dict[AAPos, MultiAAText]
