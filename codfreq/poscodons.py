@@ -251,7 +251,7 @@ def get_poscodons_between(
         samfp.seek(samfile_start)
 
         for read in samfp:
-            if samfp.tell() >= samfile_end:
+            if samfp.tell() > samfile_end:
                 break
 
             if not read.query_sequence:
