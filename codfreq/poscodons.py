@@ -1,3 +1,4 @@
+import gc
 import cython  # type: ignore
 import pysam  # type: ignore
 from tqdm import tqdm  # type: ignore
@@ -334,5 +335,7 @@ def iter_poscodons(
                     pbar.update(1)
             else:
                 yield from poscodons
+            del poscodons
+            gc.collect()
     if pbar:
         pbar.close()

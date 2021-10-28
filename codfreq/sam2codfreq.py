@@ -10,6 +10,7 @@ from typing import (
     Any
 )
 from .codfreq_types import (
+    Header,
     Profile,
     CodFreqRow,
     CodonText,
@@ -134,7 +135,7 @@ def sam2codfreq(
     :return: CodFreq rows
     """
 
-    poscodons: List[PosCodon]
+    poscodons: Tuple[Header, List[PosCodon]]
     gene: str
     refpos: int
     codon: CodonText
@@ -145,7 +146,7 @@ def sam2codfreq(
     # position and codon
     # Note: Don't cythonize this for loop, it will cause memory leak
     # problem
-    for _, poscodons in iter_poscodons(
+    for poscodons in iter_poscodons(
         samfile,
         genes,
         workers,
@@ -155,9 +156,10 @@ def sam2codfreq(
         include_partial_codons=include_partial_codons,
         **extras
     ):
-        for gene, refpos, codon, qua in poscodons:
+        for gene, refpos, codon, qua in poscodons[1]:
             codonstat[(gene, refpos)][codon] += 1
             qualities[(gene, refpos, codon)] += qua
+        del poscodons
 
     codonfreq: List[CodFreqRow] = get_codonfreq(codonstat, qualities)
 
