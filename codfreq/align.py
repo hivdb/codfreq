@@ -275,7 +275,7 @@ def align(
     paired_fastqs = list(find_paired_fastqs(workdir))
 
     for pairobj in paired_fastqs:
-        # align_with_profile(pairobj, program, profile_obj, log_format)
+        align_with_profile(pairobj, program, profile_obj, log_format)
         codfreqfile = name_codfreq(pairobj['name'])
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
