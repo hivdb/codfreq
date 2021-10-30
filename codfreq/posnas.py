@@ -26,7 +26,7 @@ PosNA = Tuple[
 @cython.returns(list)
 def iter_single_read_posnas(
     seq: SeqText,
-    qua: array,
+    qua: Optional[array],
     aligned_pairs: List[Tuple[Optional[NAPos], Optional[NAPos]]]
 ) -> List[PosNA]:
     seqpos0: Optional[NAPos]
@@ -60,7 +60,7 @@ def iter_single_read_posnas(
             # deletion
             n, q = GAP, qua[prev_seqpos0]
         else:
-            n, q = seqchars[seqpos0], qua[seqpos0]
+            n, q = seqchars[seqpos0], qua[seqpos0] if qua else 1
             prev_seqpos0 = seqpos0
 
         if refpos == 0:
