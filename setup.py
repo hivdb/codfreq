@@ -80,7 +80,7 @@ def req(filename: str) -> list[str]:
 
 setup_params = dict(
     name="codfreq",
-    version="0.1",
+    version="0.2",
     url="https://github.com/hivdb/codfreq",
     author='Philip Tzou',
     author_email="philiptz@stanford.edu",
@@ -103,6 +103,7 @@ setup_params = dict(
     # include_package_data=True,
     entry_points={'console_scripts': [
         'fastq2codfreq = codfreq.align:align_cmd',
+        'compress-codfreq = codfreq.compress_codfreq:compress_codfreq',
         'make-response = codfreq.make_response:make_response'
     ]},
     classifiers=[
