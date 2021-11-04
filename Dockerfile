@@ -32,7 +32,7 @@ RUN mv /python-packages/bin /python-scripts
 FROM python:3.9-alpine
 ENV LANG="C.UTF-8" \
     HTSLIB_CONFIGURE_OPTIONS="--enable-plugins"
-RUN apk add --no-cache bash libc6-compat libcurl jq
+RUN apk add --no-cache bash libc6-compat libcurl jq zip pigz
 COPY --from=py_builder /python-scripts/ /usr/local/bin/
 COPY --from=py_builder /python-packages/ /usr/local/lib/python3.9/site-packages/
 COPY --from=samtools_builder /usr/local/samtools/ /usr/local/samtools/

@@ -86,7 +86,12 @@ for file in $(lss3 $PATH_PREFIX); do
 done
 
 fastq2codfreq $tmpdir -p minimap2 -r $PROFILE --log-format json
-
 make-response $tmpdir $PATH_PREFIX
+compress-codfreq $tmpdir -v
+
+pushd $tmpdir > /dev/null
+rm -rf *.codfreq *.untrans.json
+zip -q codfreqs.zip *.codfreq.gz
+popd > /dev/null
 syncs3 $tmpdir $PATH_PREFIX
 echo '{"op": "done"}'

@@ -1,7 +1,7 @@
 import os
 import csv
 import json
-import click
+import click  # type: ignore
 from datetime import datetime, timezone
 
 

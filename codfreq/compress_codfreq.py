@@ -92,7 +92,10 @@ def compress_codfreq(workdir: str, verbose: bool) -> None:
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
         if verbose:
-            click.echo(f'Write to {codfreq}.gz')
+            click.echo(json.dumps({
+                'op': 'compress-codfreq',
+                'to': f'{codfreq}.gz'
+            }))
 
 
 if __name__ == '__main__':

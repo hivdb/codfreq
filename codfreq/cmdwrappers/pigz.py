@@ -27,6 +27,8 @@ def compress(
 
 
 def decompress(data: ByteString) -> bytes:
+    out: bytes
+    error: bytes
     cmd: List[str] = ['pigz', '-d', '-c']
     proc: Popen = Popen(
         cmd,
