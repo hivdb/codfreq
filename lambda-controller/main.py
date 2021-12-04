@@ -194,6 +194,32 @@ def fetch_codfreqs(request):
     }, 302
 
 
+def fetch_codfreqs_zip(request):
+    """Step 5 alt: fetch codfreq zip file"""
+    uniqkey = request.get('taskKey')
+    if not uniqkey:
+        return {"error": "'taskKey' not provided"}, 400
+    try:
+        taskmeta = load_taskmeta(uniqkey)
+    except S3.exceptions.NoSuchKey:
+        return {"error": "taskKey not found"}, 404
+    if is_expired(taskmeta):
+        return {"error": "this task is expired"}, 404
+    if not is_success(taskmeta):
+        return {"error": "this task is not finished yet"}, 400
+    location = S3.generate_presigned_url(
+        'get_object',
+        Params={
+            'Bucket': S3_BUCKET,
+            'Key': 'tasks/{}/codfreqs.zip'.format(uniqkey)
+        },
+        ExpiresIn=300)
+
+    return {
+        'location': location
+    }, 302
+
+
 def fetch_runner_logs(request):
     """Step 4: fetch codfreq-runner logs"""
     uniqkey = request.get('taskKey')
@@ -444,13 +470,14 @@ def dispatch(event, context):
         method = fetch_runner_logs
     elif handlername == 'fetch-codfreqs':
         method = fetch_codfreqs
+    elif handlername == 'fetch-codfreqs-zip':
+        method = fetch_codfreqs_zip
     else:
         method = method_not_found
     response_body, status = method(request)
 
     common_headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json'
+        'Access-Control-Allow-Origin': '*'
     }
 
     if status in (301, 302):
@@ -464,6 +491,9 @@ def dispatch(event, context):
     else:
         return {
             'statusCode': status,
-            'headers': common_headers,
+            'headers': {
+                **common_headers,
+                'Content-Type': 'application/json'
+            },
             'body': json.dumps(response_body)
         }
