@@ -103,7 +103,7 @@ def assemble_alignment(
 
 genepos_getter = itemgetter('gene', 'position')
 codon_getter = itemgetter('codon')
-count_getter = itemgetter('count')
+order_getter = itemgetter('count', 'total_quality_score')
 
 
 @cython.ccall
@@ -134,7 +134,7 @@ def codonalign_consensus(
         Tuple[GeneText, AAPos],
         List[CodFreqRow]
     ] = {
-        genepos: sorted(genecdf, key=count_getter, reverse=True)
+        genepos: sorted(genecdf, key=order_getter, reverse=True)
         for genepos, genecdf in
         groupby(codonfreq, key=genepos_getter)
     }
@@ -162,7 +162,8 @@ def codonalign_consensus(
              gene_refseq_obj, gene_queryseq_obj,
              window_size=CODON_ALIGN_WINDOW_SIZE,
              refstart=first_aa * 3 - 2,
-             refend=last_aa * 3
+             refend=last_aa * 3,
+             check_boundary=False
         )
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(
@@ -194,7 +195,7 @@ def codonalign_consensus(
                 merged_geneposcdf.append(cdf_list[0])
             rows.extend(sorted(
                 merged_geneposcdf,
-                key=count_getter,
+                key=order_getter,
                 reverse=True
             ))
     return rows
