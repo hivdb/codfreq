@@ -58,7 +58,7 @@ def iter_single_read_posnas(
 
         if seqpos0 is None:
             # deletion
-            n, q = GAP, qua[prev_seqpos0]
+            n, q = GAP, qua[prev_seqpos0] if qua else 1
         else:
             n, q = seqchars[seqpos0], qua[seqpos0] if qua else 1
             prev_seqpos0 = seqpos0

@@ -33,7 +33,6 @@ from .filename_helper import (
     name_bamfile,
     name_codfreq
 )
-# from .reference_helper import get_refaas
 
 ENCODING = 'UTF-8'
 FILENAME_DELIMITERS = (' ', '_', '-')
