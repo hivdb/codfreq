@@ -29,15 +29,24 @@ class MainFragmentConfig(TypedDict):
     refSequence: SeqText
 
 
-class DerivedFragmentConfig(TypedDict):
+class CodonAlignmentConfig(TypedDict, total=False):
+    refStart: NAPos
+    refEnd: NAPos
+    windowSize: Optional[AAPos]
+    minGapDistance: Optional[NAPos]
+    gapPlacementScore: Optional[str]
+
+
+class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
     geneName: GeneText
     refStart: NAPos
     refEnd: NAPos
+    codonAlignment: Optional[List[CodonAlignmentConfig]]
 
 
-class FragmentConfig(TypedDict):
+class FragmentConfig(TypedDict, total=False):
     fragmentName: str
     refSequence: Optional[str]
     fromFragment: Optional[str]

@@ -20,9 +20,16 @@ RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packa
 RUN pip install 'cython>=0.29.23'
 RUN pip install 'pysam'
 
+FROM python:3.9-alpine as orjson_builder
+RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
+RUN apk add rust cargo patchelf
+RUN pip install 'orjson==3.6.6'
+
 FROM python:3.9-alpine as py_builder
 RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
 COPY --from=pysam_builder /root/.cache/ /root/.cache/
+COPY --from=orjson_builder /root/.cache/ /root/.cache/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cython>=0.29.23'
 COPY . /codfreq/

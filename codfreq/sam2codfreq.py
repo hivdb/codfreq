@@ -25,6 +25,7 @@ from .codfreq_types import (
     FASTQFileName,
     FragmentConfig,
     MainFragmentConfig,
+    CodonAlignmentConfig,
     DerivedFragmentConfig,
 )
 from .sam2codfreq_types import (
@@ -73,6 +74,8 @@ def get_ref_fragments(
     fromref: Optional[str]
     refstart: Optional[int]
     refend: Optional[int]
+    codon_alignment: Optional[List[CodonAlignmentConfig]]
+    cda: CodonAlignmentConfig
     config: FragmentConfig
     ref_fragments: Dict[str, TypedRefFragment] = {}
     for config in profile['fragmentConfig']:
@@ -92,14 +95,30 @@ def get_ref_fragments(
         gene = config.get('geneName')
         refstart = config.get('refStart')
         refend = config.get('refEnd')
-
+        codon_alignment_raw: Any = config.get('codonAlignment')
+        codon_alignment = None
+        if isinstance(codon_alignment_raw, list):
+            codon_alignment = []
+            for one in codon_alignment_raw:
+                cda = {
+                    'refStart': one['refStart'],
+                    'refEnd': one['refEnd']
+                }
+                if 'windowSize' in one:
+                    cda['windowSize'] = one['windowSize']
+                if 'minGapDistance' in one:
+                    cda['minGapDistance'] = one['minGapDistance']
+                if 'gapPlacementScore' in one:
+                    cda['gapPlacementScore'] = one['gapPlacementScore']
+                codon_alignment.append(cda)
         if fromref and gene and refstart and refend:
             ref_fragments[fromref]['genes'].append({
                 'fragmentName': refname,
                 'fromFragment': fromref,
                 'geneName': gene,
                 'refStart': refstart,
-                'refEnd': refend
+                'refEnd': refend,
+                'codonAlignment': codon_alignment
             })
 
     return [

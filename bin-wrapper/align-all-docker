@@ -25,16 +25,19 @@ if [ ! -f "$DOCKER_CMD" ]; then
   exit 4
 fi
 
-USAGE="command usage: $(basename $0) -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
+USAGE="command usage: $(basename $0) [-s] -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
+SKIP_REMOTE_DOCKER=0
 
-
-while getopts ':r:d:' OPT; do
+while getopts ':r:d:s' OPT; do
     case "$OPT" in
         r)
             PROFILE=$OPTARG
             ;;
         d)
             WORKDIR=$OPTARG
+            ;;
+        s)
+            SKIP_REMOTE_DOCKER=1
             ;;
         \?)
             echo $USAGE >&2
@@ -63,7 +66,9 @@ fi
 PROFILE="$(realpath $PROFILE)" || echo $USAGE || false
 WORKDIR="$(realpath $WORKDIR)" || echo $USAGE || false
 
-docker pull hivdb/codfreq-runner:latest
+if [ "$SKIP_REMOTE_DOCKER" -eq "0" ]; then
+  docker pull hivdb/codfreq-runner:latest
+fi
 docker run \
     -it --rm \
     --mount type=bind,source="$PROFILE",target=/tmp/profile.json \

@@ -17,7 +17,7 @@ awscli = "*"
 urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
-post-align = {file = "https://github.com/hivdb/post-align/archive/c0bc440f1166d4f102473efb933b7adc6bc8c58d.zip"}
+post-align = {file = "https://github.com/hivdb/post-align/archive/b5851f032bd6a5b1368b4d8c00aed39a23fcb7c8.zip"}
 
 [requires]
 python_version = "3.9"

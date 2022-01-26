@@ -1,9 +1,12 @@
 import cython  # type: ignore
-from postalign.utils.group_by_codons import group_by_codons  # type: ignore
-from postalign.processors.codon_alignment import codon_align  # type: ignore
-from postalign.models.sequence import (  # type: ignore
+from postalign.utils.group_by_codons import group_by_codons
+from postalign.processors.codon_alignment import (
+    codon_align,
+    parse_gap_placement_score
+)
+from postalign.models.sequence import (
     Sequence,
-    PositionalSeqStr
+    NAPosition
 )
 from itertools import groupby
 from operator import itemgetter
@@ -16,14 +19,16 @@ from .codfreq_types import (
     GeneText,
     CodFreqRow,
     MainFragmentConfig,
-    DerivedFragmentConfig
+    DerivedFragmentConfig,
+    CodonAlignmentConfig
 )
 
 
 ENCODING = 'UTF-8'
 GAP = ord(b'-')
 DEL_CODON = b'---'
-CODON_ALIGN_WINDOW_SIZE = 5
+CODON_ALIGN_WINDOW_SIZE = 10
+CODON_ALIGN_MIN_GAP_DISTANCE = 30
 
 
 def get_sequence_obj(
@@ -33,11 +38,9 @@ def get_sequence_obj(
     return Sequence(
         header='seq{}'.format(seqid),
         description='',
-        seqtext=PositionalSeqStr.init_from_nastring(
-            bytes(seq_bytearray).decode(ENCODING)
-        ),
+        seqtext=NAPosition.init_from_bytes(seq_bytearray),
         seqid=seqid,
-        seqtype='NA',
+        seqtype=NAPosition,
         abs_seqstart=0,
         skip_invalid=True
     )
@@ -95,10 +98,12 @@ def assemble_alignment(
     if last_aa == 0:
         return None, None, None, None
 
-    return (get_sequence_obj(gene_refseq, 1),
-            get_sequence_obj(gene_queryseq, 2),
-            first_aa,
-            last_aa)
+    return (
+        get_sequence_obj(gene_refseq, 1),
+        get_sequence_obj(gene_queryseq, 2),
+        first_aa,
+        last_aa
+    )
 
 
 genepos_getter = itemgetter('gene', 'position')
@@ -116,14 +121,18 @@ def codonalign_consensus(
 ) -> List[CodFreqRow]:
     gene: GeneText
     genedef: DerivedFragmentConfig
-    gene_ref_seq_obj: Optional[Sequence]
+    gene_refseq_obj: Optional[Sequence]
     gene_queryseq_obj: Optional[Sequence]
     first_aa: Optional[AAPos]
     last_aa: Optional[AAPos]
+    seq_ref_start: NAPos
     aapos0: AAPos
     aapos: AAPos
-    refcodon: List[PositionalSeqStr]
-    querycodon: List[PositionalSeqStr]
+    refstart: NAPos
+    refend: NAPos
+    ref_offset: NAPos
+    refcodon: List[NAPosition]
+    querycodon: List[NAPosition]
     geneposcdf: Optional[List[CodFreqRow]]
     merged_geneposcdf: List[CodFreqRow]
     cdfs: Iterator[CodFreqRow]
@@ -141,6 +150,14 @@ def codonalign_consensus(
     rows: List[CodFreqRow] = []
     for genedef in genes:
         gene = genedef['geneName']
+        codon_align_config: Optional[
+            List[CodonAlignmentConfig]
+        ] = genedef.get('codonAlignment')
+        if not codon_align_config:
+            codon_align_config = [{
+                'refStart': genedef['refStart'],
+                'refEnd': genedef['refEnd']
+            }]
 
         (gene_refseq_obj,
          gene_queryseq_obj,
@@ -157,14 +174,52 @@ def codonalign_consensus(
         ):
             continue
 
-        (gene_refseq_obj,
-         gene_queryseq_obj) = codon_align(
-             gene_refseq_obj, gene_queryseq_obj,
-             window_size=CODON_ALIGN_WINDOW_SIZE,
-             refstart=first_aa * 3 - 2,
-             refend=last_aa * 3,
-             check_boundary=False
-        )
+        seq_refstart = first_aa * 3 - 2
+        seq_refend = last_aa * 3
+        ref_offset = genedef['refStart'] - 1
+
+        for cda_config in codon_align_config:
+            refstart = cda_config['refStart'] - ref_offset
+            refend = cda_config['refEnd'] - ref_offset
+            if refstart < seq_refend and refend > seq_refstart:
+                refstart = max(refstart, seq_refstart)
+                refend = min(refend, seq_refend)
+            min_gap_distance = cda_config.get(
+                'minGapDistance'
+            ) or CODON_ALIGN_MIN_GAP_DISTANCE
+            window_size = cda_config.get(
+                'windowSize'
+            ) or CODON_ALIGN_WINDOW_SIZE
+            gap_placement_score: Dict[
+                int, Dict[Tuple[int, int], int]
+            ] = parse_gap_placement_score(
+                cda_config.get('gapPlacementScore') or '')
+            # position in gap_placement_score should all
+            # be subtracted by ref_offset
+            gap_placement_score = {
+                indel: {
+                    (pos - ref_offset, size): score
+                    for (pos, size), score in scores.items()
+                }
+                for indel, scores in gap_placement_score.items()
+            }
+            (gene_refseq_obj,
+             gene_queryseq_obj) = codon_align(
+                 gene_refseq_obj, gene_queryseq_obj,
+                 min_gap_distance=min_gap_distance,
+                 window_size=window_size,
+                 gap_placement_score=gap_placement_score,
+                 refstart=refstart,
+                 refend=refend,
+                 check_boundary=False
+            )
+
+        if (
+            gene_refseq_obj is None or
+            gene_queryseq_obj is None
+        ):
+            continue
+
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(
                 gene_refseq_obj.seqtext,
@@ -175,9 +230,7 @@ def codonalign_consensus(
             geneposcdf = geneposcdf_lookup.get((gene, aapos))
             if not geneposcdf:
                 continue
-            geneposcdf[0]['codon'] = str(
-                PositionalSeqStr.join(querycodon)
-            ).encode(ENCODING)
+            geneposcdf[0]['codon'] = NAPosition.as_bytes(querycodon)
 
             # merge same codons
             merged_geneposcdf = []
