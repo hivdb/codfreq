@@ -37,7 +37,7 @@ from .filename_helper import (
 ENCODING = 'UTF-8'
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
-INVALID_PAIRED_FASTQ_MARKER = re.compile(r'01|02|10|20')
+INVALID_PAIRED_FASTQ_MARKER = re.compile(r'\d1|\d2|1\d|2\d')
 
 
 def find_paired_marker(text1: str, text2: str) -> int:
