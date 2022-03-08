@@ -10,7 +10,7 @@ login-ecr:
 build-runner: requirements.txt
 	@docker build . -t hivdb/codfreq-runner:latest
 
-release-runner: build-runner login-ecr
+release-runner: build-runner login-ecr deploy-profiles
 	@docker push hivdb/codfreq-runner:latest
 	@docker tag hivdb/codfreq-runner:latest 931437602538.dkr.ecr.us-west-2.amazonaws.com/hivdb/codfreq-runner:latest
 	@docker push 931437602538.dkr.ecr.us-west-2.amazonaws.com/hivdb/codfreq-runner:latest
@@ -37,3 +37,5 @@ debug-runner:
 
 deploy-profiles:
 	@aws s3 sync profiles s3://codfreq-assets.hivdb.org/profiles --delete
+
+.PHONY: login-ecr *-runner *-controller deploy-profiles
