@@ -70,7 +70,7 @@ if [ "$SKIP_REMOTE_DOCKER" -eq "0" ]; then
   docker pull hivdb/codfreq-runner:latest
 fi
 docker run \
-    -it --rm \
+    -i --rm \
     --mount type=bind,source="$PROFILE",target=/tmp/profile.json \
     --mount type=bind,source="$WORKDIR",target=/fastqfiles \
     hivdb/codfreq-runner:latest \
