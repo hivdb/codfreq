@@ -84,7 +84,7 @@ def get_posnas_between(
     samfile_start: int,
     samfile_end: int,
     site_quality_cutoff: int = 0
-) -> List[Tuple[Header, List[PosNA]]]:
+) -> List[Tuple[Optional[Header], List[PosNA]]]:
 
     pos: NAPos
     idx: int
@@ -93,7 +93,7 @@ def get_posnas_between(
     read: AlignedSegment
     posnas: List[PosNA]
 
-    results: List[Tuple[Header, List[PosNA]]] = []
+    results: List[Tuple[Optional[Header], List[PosNA]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
 
@@ -130,7 +130,7 @@ def get_posnas_in_genome_region(
     ref_start: NAPos,
     ref_end: NAPos,
     site_quality_cutoff: int = 0
-) -> List[Tuple[Header, List[PosNA]]]:
+) -> List[Tuple[Optional[Header], List[PosNA]]]:
 
     pos: NAPos
     idx: int
@@ -139,7 +139,7 @@ def get_posnas_in_genome_region(
     read: AlignedSegment
     posnas: List[PosNA]
 
-    results: List[Tuple[Header, List[PosNA]]] = []
+    results: List[Tuple[Optional[Header], List[PosNA]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
 

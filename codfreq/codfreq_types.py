@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict, Tuple, List, Dict
+from typing import Optional, TypedDict, Tuple, List, Dict, Union, Literal
 
 FASTQFileName = str
 Header = str
@@ -40,19 +40,18 @@ class CodonAlignmentConfig(TypedDict, total=False):
 class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
-    geneName: GeneText
+    geneName: Optional[GeneText]
     refStart: NAPos
     refEnd: NAPos
-    codonAlignment: Optional[List[CodonAlignmentConfig]]
+    codonAlignment: Optional[Union[
+        Literal[False], List[CodonAlignmentConfig]
+    ]]
 
 
-class FragmentConfig(TypedDict, total=False):
-    fragmentName: str
-    refSequence: Optional[str]
-    fromFragment: Optional[str]
-    geneName: Optional[str]
-    refStart: Optional[int]
-    refEnd: Optional[int]
+FragmentConfig = Union[
+    MainFragmentConfig,
+    DerivedFragmentConfig
+]
 
 
 class SequenceAssemblyConfig(TypedDict):
@@ -91,8 +90,8 @@ class CodFreqRow(TypedDict):
     total_quality_score: int
 
 
-#                  refStart refEnd
-#                      v      v
-GeneInterval = Tuple[NAPos, NAPos, GeneText]
+#                      refStart refEnd
+#                          v      v
+FragmentInterval = Tuple[NAPos, NAPos, Header]
 
 RefAAs = Dict[AAPos, MultiAAText]

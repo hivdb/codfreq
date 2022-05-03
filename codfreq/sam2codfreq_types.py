@@ -1,10 +1,15 @@
 from typing import (
+    Dict,
     Tuple,
     List,
     TypedDict,
     Counter
 )
 from .codfreq_types import (
+    Header,
+    AAPos,
+    GeneText,
+    CodonText,
     MainFragmentConfig,
     DerivedFragmentConfig,
 )
@@ -12,9 +17,22 @@ from .codfreq_types import (
 
 class TypedRefFragment(TypedDict):
     ref: MainFragmentConfig
-    genes: List[DerivedFragmentConfig]
+    fragments: List[DerivedFragmentConfig]
 
 
 CodonCounter = Counter[
-    Tuple[str, int, bytes]
+    Tuple[Header, AAPos, CodonText]
+]
+
+CodonCounterByFragPos = Dict[
+    Tuple[Header, AAPos],
+    Counter[CodonText]
+]
+
+FragmentGeneLookup = Dict[
+    Header, List[
+        Tuple[GeneText, AAPos]
+        #                 ^
+        #              AAOffset
+    ]
 ]

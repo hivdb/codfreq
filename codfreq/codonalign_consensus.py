@@ -8,15 +8,24 @@ from postalign.models.sequence import (
     Sequence,
     NAPosition
 )
-from itertools import groupby
 from operator import itemgetter
-from typing import Optional, List, Dict, Tuple, Iterator
+from typing import (
+    Optional,
+    List,
+    Dict,
+    Tuple,
+    Iterator,
+    Union,
+    Literal,
+    Counter
+)
 
+from .sam2codfreq_types import CodonCounterByFragPos
 from .codfreq_types import (
     AAPos,
     NAPos,
     CodonText,
-    GeneText,
+    Header,
     CodFreqRow,
     MainFragmentConfig,
     DerivedFragmentConfig,
@@ -50,12 +59,9 @@ def get_sequence_obj(
 @cython.inline
 @cython.returns(tuple)
 def assemble_alignment(
-    geneposcdf_lookup: Dict[
-        Tuple[GeneText, AAPos],
-        List[CodFreqRow]
-    ],
+    codonstat_by_fragpos: CodonCounterByFragPos,
     refseq: bytearray,
-    genedef: DerivedFragmentConfig
+    fragment: DerivedFragmentConfig
 ) -> Tuple[
     Optional[Sequence],
     Optional[Sequence],
@@ -66,41 +72,43 @@ def assemble_alignment(
     napos: NAPos
     ref_codon: bytearray
     cons_codon: bytearray
+    cons_codon_bytes: bytes
     cons_codon_size: int
-    geneposcdf: Optional[List[CodFreqRow]]
-    gene: GeneText = genedef['geneName']
-    gene_refstart: NAPos = genedef['refStart']
-    gene_refend: NAPos = genedef['refEnd']
-    gene_refseq: bytearray = bytearray()
-    gene_queryseq: bytearray = bytearray()
-    refsize: int = gene_refend - gene_refstart + 1
+    codons: Optional[Counter[CodonText]]
+    fragment_name: Header = fragment['fragmentName']
+    frag_refstart: NAPos = fragment['refStart']
+    frag_refend: NAPos = fragment['refEnd']
+    frag_refseq: bytearray = bytearray()
+    frag_queryseq: bytearray = bytearray()
+    refsize: int = frag_refend - frag_refstart + 1
     first_aa: AAPos = refsize // 3
     last_aa: AAPos = 0
 
     for aapos in range(1, refsize // 3 + 1):
-        napos = gene_refstart + aapos * 3 - 4
+        napos = frag_refstart + aapos * 3 - 4
         ref_codon = refseq[napos:napos + 3]
-        geneposcdf = geneposcdf_lookup.get((gene, aapos))
-        if geneposcdf:
-            cons_codon = bytearray(geneposcdf[0]['codon'])
+        codons = codonstat_by_fragpos.get((fragment_name, aapos))
+        if codons:
+            ((cons_codon_bytes, _),) = codons.most_common(1)
             first_aa = min(first_aa, aapos)
             last_aa = max(last_aa, aapos)
         else:
-            cons_codon = bytearray(DEL_CODON)
-        cons_codon_size = len(cons_codon)
+            cons_codon_bytes = DEL_CODON
+        cons_codon = bytearray(cons_codon_bytes)
+        cons_codon_size = len(cons_codon_bytes)
         if cons_codon_size < 3:
             cons_codon.extend([GAP] * (3 - cons_codon_size))
         elif cons_codon_size > 3:
             ref_codon.extend([GAP] * (cons_codon_size - 3))
-        gene_refseq.extend(ref_codon)
-        gene_queryseq.extend(cons_codon)
+        frag_refseq.extend(ref_codon)
+        frag_queryseq.extend(cons_codon)
 
     if last_aa == 0:
         return None, None, None, None
 
     return (
-        get_sequence_obj(gene_refseq, 1),
-        get_sequence_obj(gene_queryseq, 2),
+        get_sequence_obj(frag_refseq, 1),
+        get_sequence_obj(frag_queryseq, 2),
         first_aa,
         last_aa
     )
@@ -113,16 +121,17 @@ order_getter = itemgetter('count', 'total_quality_score')
 
 @cython.ccall
 @cython.inline
-@cython.returns(list)
+@cython.returns(tuple)
 def codonalign_consensus(
-    codonfreq: List[CodFreqRow],
+    codonstat_by_fragpos: CodonCounterByFragPos,
+    qualities_by_fragpos: CodonCounterByFragPos,
     ref: MainFragmentConfig,
-    genes: List[DerivedFragmentConfig],
-) -> List[CodFreqRow]:
-    gene: GeneText
-    genedef: DerivedFragmentConfig
-    gene_refseq_obj: Optional[Sequence]
-    gene_queryseq_obj: Optional[Sequence]
+    fragments: List[DerivedFragmentConfig],
+) -> Tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
+    fragment_name: Header
+    fragment: DerivedFragmentConfig
+    frag_refseq_obj: Optional[Sequence]
+    frag_queryseq_obj: Optional[Sequence]
     first_aa: Optional[AAPos]
     last_aa: Optional[AAPos]
     seq_ref_start: NAPos
@@ -133,57 +142,68 @@ def codonalign_consensus(
     ref_offset: NAPos
     refcodon: List[NAPosition]
     querycodon: List[NAPosition]
-    geneposcdf: Optional[List[CodFreqRow]]
-    merged_geneposcdf: List[CodFreqRow]
+    codons: Optional[Counter[CodonText]]
     cdfs: Iterator[CodFreqRow]
     cdf_list: List[CodFreqRow]
     codon: CodonText
+
     refseq: bytearray = bytearray(ref['refSequence'], ENCODING)
-    geneposcdf_lookup: Dict[
-        Tuple[GeneText, AAPos],
-        List[CodFreqRow]
-    ] = {
-        genepos: sorted(genecdf, key=order_getter, reverse=True)
-        for genepos, genecdf in
-        groupby(codonfreq, key=genepos_getter)
-    }
-    rows: List[CodFreqRow] = []
-    for genedef in genes:
-        gene = genedef['geneName']
+    for fragment in fragments:
+        fragment_name = fragment['fragmentName']
         codon_align_config: Optional[
-            List[CodonAlignmentConfig]
-        ] = genedef.get('codonAlignment')
+            Union[Literal[False], List[CodonAlignmentConfig]]
+        ] = fragment.get('codonAlignment')
+
+        if codon_align_config is False:
+            # skip this gene if explicitly defined codonAlignment=False
+            continue
+
         if not codon_align_config:
             codon_align_config = [{
-                'refStart': genedef['refStart'],
-                'refEnd': genedef['refEnd']
+                'refStart': fragment['refStart'],
+                'refEnd': fragment['refEnd']
             }]
 
-        (gene_refseq_obj,
-         gene_queryseq_obj,
+        # assemble consensus codon reads into pairwise alignment
+        (frag_refseq_obj,
+         frag_queryseq_obj,
          first_aa,
          last_aa) = assemble_alignment(
-             geneposcdf_lookup, refseq, genedef
+             codonstat_by_fragpos, refseq, fragment
         )
 
         if (
-            gene_refseq_obj is None or
-            gene_queryseq_obj is None or
+            frag_refseq_obj is None or
+            frag_queryseq_obj is None or
             first_aa is None or
             last_aa is None
         ):
             continue
 
+        # convert AA positions to NA positions
         seq_refstart = first_aa * 3 - 2
         seq_refend = last_aa * 3
-        ref_offset = genedef['refStart'] - 1
 
+        # load gene reference absolute start position
+        ref_offset = fragment['refStart'] - 1
+
+        # apply codon alignment (CDA) to pairwise alignment
         for cda_config in codon_align_config:
-            refstart = cda_config['refStart'] - ref_offset
-            refend = cda_config['refEnd'] - ref_offset
+
+            # The config defines CDA's refStart and refEnd based on the
+            # absolute reference positions (e.g. HXB2, Wuhan-Hu-1). This
+            # converts them to relative positions
+            refstart = cda_config.get(
+                'refStart', fragment['refStart']) - ref_offset
+            refend = cda_config.get(
+                'refEnd', fragment['refEnd']) - ref_offset
+
+            # Codon alignment shouldn't exceed query sequence boundary
             if refstart < seq_refend and refend > seq_refstart:
                 refstart = max(refstart, seq_refstart)
                 refend = min(refend, seq_refend)
+
+            # Load minGapDistance, windowSize and gapPlacementScore from config
             min_gap_distance = cda_config.get(
                 'minGapDistance'
             ) or CODON_ALIGN_MIN_GAP_DISTANCE
@@ -194,8 +214,9 @@ def codonalign_consensus(
                 int, Dict[Tuple[int, int], int]
             ] = parse_gap_placement_score(
                 cda_config.get('gapPlacementScore') or '')
-            # position in gap_placement_score should all
-            # be subtracted by ref_offset
+
+            # positions in gap_placement_score should also be converted to
+            # relative positions
             gap_placement_score = {
                 indel: {
                     (pos - ref_offset, size): score
@@ -203,9 +224,11 @@ def codonalign_consensus(
                 }
                 for indel, scores in gap_placement_score.items()
             }
-            (gene_refseq_obj,
-             gene_queryseq_obj) = codon_align(
-                 gene_refseq_obj, gene_queryseq_obj,
+
+            # perform postalign's codon_align
+            (frag_refseq_obj,
+             frag_queryseq_obj) = codon_align(
+                 frag_refseq_obj, frag_queryseq_obj,
                  min_gap_distance=min_gap_distance,
                  window_size=window_size,
                  gap_placement_score=gap_placement_score,
@@ -215,40 +238,29 @@ def codonalign_consensus(
             )
 
         if (
-            gene_refseq_obj is None or
-            gene_queryseq_obj is None
+            frag_refseq_obj is None or
+            frag_queryseq_obj is None
         ):
             continue
 
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(
-                gene_refseq_obj.seqtext,
-                gene_queryseq_obj.seqtext
+                frag_refseq_obj.seqtext,
+                frag_queryseq_obj.seqtext
             )
         )):
             aapos = aapos0 + 1
-            geneposcdf = geneposcdf_lookup.get((gene, aapos))
-            if not geneposcdf:
-                continue
-            geneposcdf[0]['codon'] = NAPosition.as_bytes(querycodon)
+            oldcodon: CodonText
+            newcodon: CodonText = NAPosition.as_bytes(querycodon)
 
-            # merge same codons
-            merged_geneposcdf = []
-            for codon, cdfs in groupby(
-                sorted(geneposcdf, key=codon_getter),
-                codon_getter
-            ):
-                cdf_list = list(cdfs)
-                cdf_list[0]['count'] = sum(
-                    [cdf['count'] for cdf in cdf_list]
-                )
-                cdf_list[0]['total_quality_score'] = sum(
-                    [cdf['total_quality_score'] for cdf in cdf_list]
-                )
-                merged_geneposcdf.append(cdf_list[0])
-            rows.extend(sorted(
-                merged_geneposcdf,
-                key=order_getter,
-                reverse=True
-            ))
-    return rows
+            codons = codonstat_by_fragpos.get((fragment_name, aapos))
+            quas = qualities_by_fragpos.get((fragment_name, aapos))
+            if not codons or not quas:
+                continue
+
+            # replace the consensus codon to codon aligned codon
+            ((oldcodon, _),) = codons.most_common(1)
+            codons[newcodon] += codons.pop(oldcodon)
+            quas[newcodon] += quas.pop(oldcodon)
+
+    return codonstat_by_fragpos, qualities_by_fragpos

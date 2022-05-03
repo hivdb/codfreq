@@ -1,23 +1,23 @@
 import cython  # type: ignore
 import pysam  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Generator
+from typing import List, Dict, Tuple, Generator, Optional
+from collections import defaultdict
 
 from .codfreq_types import (
-    GeneInterval,
+    FragmentInterval,
     Header,
     NAChar,
     AAPos,
     NAPos,
-    GeneText,
     CodonText
 )
 from .posnas import iter_single_read_posnas, PosNA
 
-#                                            Qual
-#                                             v
-PosCodon = Tuple[GeneText, AAPos, CodonText, int]
-BasePair = Tuple[GeneText, AAPos, List[PosNA]]
+#                                          Qual
+#                                           v
+PosCodon = Tuple[Header, AAPos, CodonText, int]
+BasePair = Tuple[AAPos, List[PosNA]]
 
 
 @cython.cfunc
@@ -42,76 +42,52 @@ def group_posnas_by_napos(
 @cython.returns(list)
 def group_basepairs(
     posnas: List[PosNA],
-    gene_intervals: List[GeneInterval]
-) -> List[BasePair]:
-    """Group same base-pair posnas by its gene AA position"""
+    fragment_intervals: List[FragmentInterval]
+) -> List[Tuple[Header, List[BasePair]]]:
+    """Group same base-pair posnas (NA and ins) by its fragment AA position"""
 
-    pos: NAPos
+    napos: NAPos
     na_and_ins: List[PosNA]
     aapos: AAPos
-    gene_refstart: NAPos
-    gene_refend: NAPos
-    gene: GeneText
-    curidx: int = -1
+    frag_refstart: NAPos
+    frag_refend: NAPos
+    fragment_name: Header
 
     posnas_by_napos: List[
         Tuple[NAPos, List[PosNA]]
     ] = group_posnas_by_napos(posnas)
-    size: int = len(posnas_by_napos)
-    basepairs: List[BasePair] = []
+    basepairs: Dict[Header, List[BasePair]] = defaultdict(list)
 
-    # convert napos to gene and aapos
-    for gene_refstart, gene_refend, gene in gene_intervals:
-        pos = 0
-        # seek back if pos at curidx is after gene_refstart.
-        # this deals with situations such as the overlap of
-        # ORF1a and ORF1b.
-        while (
-            curidx > -1 and
-            curidx + 1 < size and
-            posnas_by_napos[curidx + 1][0] > gene_refstart
-        ):
-            curidx -= posnas_by_napos[curidx + 1][0] - gene_refstart
-        # The above while loop can set curidx < -1. We had to change
-        # it back to -1 or the index applied to posnas_by_napos below
-        # will be a negative number.
-        if curidx < -1:
-            curidx = -1
-        while curidx + 1 < size and pos < gene_refend:
-            curidx += 1
-            # This number should be zero or positive
-            #                                   v
-            pos, na_and_ins = posnas_by_napos[curidx]
-            if pos < gene_refstart:
+    for napos, na_and_ins in posnas_by_napos:
+        for frag_refstart, frag_refend, fragment_name in fragment_intervals:
+            if napos < frag_refstart or napos > frag_refend:
                 continue
-            aapos = (pos - gene_refstart) // 3 + 1
-
-            basepairs.append((
-                gene,
+            aapos = (napos - frag_refstart) // 3 + 1
+            basepairs[fragment_name].append((
                 aapos,
                 na_and_ins
             ))
-    return basepairs
+    return list(basepairs.items())
 
 
 @cython.cfunc
 @cython.inline
 @cython.returns(list)
-def find_overlapped_genes(
-    gene_intervals: List[GeneInterval],
+def find_intersected_fragments(
+    fragment_intervals: List[FragmentInterval],
     read_refstart: NAPos,
     read_refend: NAPos
-) -> List[GeneInterval]:
-    gene_refstart: NAPos
-    gene_refend: NAPos
-    gene: GeneText
-    filtered: List[GeneInterval] = []
-    for gene_refstart, gene_refend, gene in gene_intervals:
-        if read_refend < gene_refstart:
+) -> List[FragmentInterval]:
+    frag_refstart: NAPos
+    frag_refend: NAPos
+    fragment_name: Header
+    filtered: List[FragmentInterval] = []
+    for frag_refstart, frag_refend, fragment_name in fragment_intervals:
+        if read_refend < frag_refstart:
             break
-        if read_refstart > gene_refend:
+        if read_refstart > frag_refend:
             continue
-        filtered.append((gene_refstart, gene_refend, gene))
+        filtered.append((frag_refstart, frag_refend, fragment_name))
     return filtered
 
 
@@ -138,29 +114,29 @@ def get_comparable_codon(
 @cython.inline
 @cython.returns(list)
 def group_codons(
-    basepairs: List[BasePair]
-) -> List[Tuple[GeneText, AAPos, List[List[PosNA]]]]:
+    basepairs: List[Tuple[Header, List[BasePair]]]
+) -> List[Tuple[Header, AAPos, List[List[PosNA]]]]:
     """Group base-pairs into complete codons
 
     A codon is represented by a nested list. The inner List[PosNA]
     is an individual base-pair with its insertions; the outer
     List[List[PosNA]] is a complete codon
     """
-    gene: GeneText
     aapos: AAPos
-    prev_gene: GeneText = '\a0FakeGene\a0'
-    prev_aapos: AAPos = -1
+    fragment_name: Header
+    fragment_bps: List[BasePair]
 
     bp: List[PosNA]
-    codons: List[Tuple[GeneText, AAPos, List[List[PosNA]]]] = []
+    codons: List[Tuple[Header, AAPos, List[List[PosNA]]]] = []
 
-    for gene, aapos, na_and_ins in basepairs:
-        if gene == prev_gene and aapos == prev_aapos:
-            codons[-1][2].append(na_and_ins)
-        else:
-            prev_gene = gene
-            prev_aapos = aapos
-            codons.append((gene, aapos, [na_and_ins]))
+    for fragment_name, fragment_bps in basepairs:
+        prev_aapos: AAPos = -1
+        for aapos, na_and_ins in fragment_bps:
+            if aapos == prev_aapos:
+                codons[-1][2].append(na_and_ins)
+            else:
+                prev_aapos = aapos
+                codons.append((fragment_name, aapos, [na_and_ins]))
     return codons
 
 
@@ -169,14 +145,14 @@ def group_codons(
 @cython.returns(list)
 def posnas2poscodons(
     posnas: List[PosNA],
-    gene_intervals: List[GeneInterval],
+    fragment_intervals: List[FragmentInterval],
     read_refstart: int,  # 1-based first aligned refpos
     read_refend: int,    # 1-based last aligned refpos
     site_quality_cutoff: int
 ) -> List[PosCodon]:
     meanq: List[int]
     meanq_int: int
-    gene: GeneText
+    fragment_name: Header
     aapos: AAPos
     codon_posnas: List[List[PosNA]]
     codon: CodonText
@@ -184,12 +160,14 @@ def posnas2poscodons(
     totalq: int
     sizeq: int
 
-    genes: List[GeneInterval] = find_overlapped_genes(
-        gene_intervals, read_refstart, read_refend)
-    basepairs: List[BasePair] = group_basepairs(posnas, genes)
+    fragments: List[FragmentInterval] = find_intersected_fragments(
+        fragment_intervals, read_refstart, read_refend)
+    basepairs: List[
+        Tuple[Header, List[BasePair]]
+    ] = group_basepairs(posnas, fragments)
 
     poscodons: List[PosCodon] = []
-    for gene, aapos, codon_posnas in group_codons(basepairs):
+    for fragment_name, aapos, codon_posnas in group_codons(basepairs):
         codon, is_partial = get_comparable_codon(codon_posnas)
         if is_partial:
             continue
@@ -204,7 +182,7 @@ def posnas2poscodons(
         if meanq_int < site_quality_cutoff:
             continue
 
-        poscodons.append((gene, aapos, codon, meanq_int))
+        poscodons.append((fragment_name, aapos, codon, meanq_int))
     return poscodons
 
 
@@ -212,9 +190,9 @@ def iter_poscodons(
     samfile: str,
     samfile_start: int,
     samfile_end: int,
-    gene_intervals: List[GeneInterval],
+    fragment_intervals: List[FragmentInterval],
     site_quality_cutoff: int = 0
-) -> Generator[Tuple[Header, List[PosCodon]], None, None]:
+) -> Generator[Tuple[Optional[Header], List[PosCodon]], None, None]:
     """Retrieve poscodons from given SAM/BAM file position range"""
 
     read: AlignedSegment
@@ -239,7 +217,7 @@ def iter_poscodons(
 
             poscodons = posnas2poscodons(
                 posnas,
-                gene_intervals,
+                fragment_intervals,
                 read.reference_start + 1,  # pysam has 0-based numbering
                 read.reference_end,  # "reference_end points to one past the
                                      #  last aligned residue."

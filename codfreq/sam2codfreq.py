@@ -2,9 +2,9 @@ import pysam  # type: ignore
 import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from collections import defaultdict, Counter
+from more_itertools import unique_everseen
 
 from typing import (
-    Generator,
     Tuple,
     List,
     Dict,
@@ -12,16 +12,19 @@ from typing import (
     Any,
     Union,
     DefaultDict,
+    Literal,
     Counter as tCounter
 )
 from concurrent.futures import ProcessPoolExecutor
 
 from .codfreq_types import (
     Header,
+    AAPos,
     Profile,
+    GeneText,
     CodFreqRow,
     CodonText,
-    GeneInterval,
+    FragmentInterval,
     FASTQFileName,
     FragmentConfig,
     MainFragmentConfig,
@@ -30,7 +33,9 @@ from .codfreq_types import (
 )
 from .sam2codfreq_types import (
     CodonCounter,
-    TypedRefFragment
+    CodonCounterByFragPos,
+    TypedRefFragment,
+    FragmentGeneLookup
 )
 from .samfile_helper import chunked_samfile
 from .json_progress import JsonProgress
@@ -51,43 +56,48 @@ ENCODING: str = 'UTF-8'
 @cython.cfunc
 @cython.inline
 @cython.returns(list)
-def build_gene_intervals(
-    genes: List[DerivedFragmentConfig]
-) -> List[GeneInterval]:
+def build_fragment_intervals(
+    fragments: List[DerivedFragmentConfig]
+) -> List[FragmentInterval]:
     return [(
-        genedef['refStart'],
-        genedef['refEnd'],
-        genedef['geneName']
-    ) for genedef in genes]
+        fragment['refStart'],
+        fragment['refEnd'],
+        fragment['fragmentName']
+    ) for fragment in fragments]
 
 
 @cython.cfunc
 @cython.inline
-@cython.returns(list)
+@cython.returns(tuple)
 def get_ref_fragments(
     profile: Profile
-) -> List[
-    Tuple[str, MainFragmentConfig, List[DerivedFragmentConfig]]
+) -> Tuple[
+    List[Tuple[
+        Header,
+        MainFragmentConfig,
+        List[DerivedFragmentConfig]
+    ]],
+    FragmentGeneLookup
 ]:
     refname: str
-    refseq: Optional[str]
-    fromref: Optional[str]
-    refstart: Optional[int]
-    refend: Optional[int]
-    codon_alignment: Optional[List[CodonAlignmentConfig]]
+    codon_alignment: Optional[Union[
+        Literal[False],
+        List[CodonAlignmentConfig]
+    ]]
     cda: CodonAlignmentConfig
     config: FragmentConfig
-    ref_fragments: Dict[str, TypedRefFragment] = {}
+    ref_fragments: Dict[Header, TypedRefFragment] = {}
+    frag_size_lookup: Dict[Header, AAPos] = {}
     for config in profile['fragmentConfig']:
         refname = config['fragmentName']
         refseq = config.get('refSequence')
-        if refseq:
+        if isinstance(refseq, str):
             ref_fragments[refname] = {
                 'ref': {
                     'fragmentName': refname,
                     'refSequence': refseq
                 },
-                'genes': []
+                'fragments': []
             }
     for config in profile['fragmentConfig']:
         refname = config['fragmentName']
@@ -100,10 +110,11 @@ def get_ref_fragments(
         if isinstance(codon_alignment_raw, list):
             codon_alignment = []
             for one in codon_alignment_raw:
-                cda = {
-                    'refStart': one['refStart'],
-                    'refEnd': one['refEnd']
-                }
+                cda = {}
+                if 'refStart' in one:
+                    cda['refStart'] = one['refStart']
+                if 'refEnd' in one:
+                    cda['refEnd'] = one['refEnd']
                 if 'windowSize' in one:
                     cda['windowSize'] = one['windowSize']
                 if 'minGapDistance' in one:
@@ -111,8 +122,15 @@ def get_ref_fragments(
                 if 'gapPlacementScore' in one:
                     cda['gapPlacementScore'] = one['gapPlacementScore']
                 codon_alignment.append(cda)
-        if fromref and gene and refstart and refend:
-            ref_fragments[fromref]['genes'].append({
+        elif codon_alignment_raw is False:
+            codon_alignment = False
+        if (
+            isinstance(fromref, str) and
+            (gene is None or isinstance(gene, str)) and
+            isinstance(refstart, int) and
+            isinstance(refend, int)
+        ):
+            ref_fragments[fromref]['fragments'].append({
                 'fragmentName': refname,
                 'fromFragment': fromref,
                 'geneName': gene,
@@ -120,48 +138,88 @@ def get_ref_fragments(
                 'refEnd': refend,
                 'codonAlignment': codon_alignment
             })
+            frag_size_lookup[refname] = (refend - refstart + 1) // 3
+
+    # build frag_gene_lookup
+    gene_offsets: Dict[GeneText, AAPos] = defaultdict(lambda: 0)
+    frag_gene_lookup: FragmentGeneLookup = defaultdict(list)
+    for config in profile['fragmentConfig']:
+        refname = config['fragmentName']
+        gene = config.get('geneName')
+
+        if not isinstance(gene, str):
+            continue
+
+        frag_gene_lookup[refname].append((gene, gene_offsets[gene]))
+        gene_offsets[gene] += frag_size_lookup[refname]
 
     return [
-        (refname, pair['ref'], pair['genes'])
+        (refname, pair['ref'], pair['fragments'])
         for refname, pair in ref_fragments.items()
-    ]
+    ], frag_gene_lookup
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(dict)
+def to_codon_counter_by_fragpos(
+    codon_counter: CodonCounter
+) -> CodonCounterByFragPos:
+    fragment_name: Header
+    refpos: AAPos
+    codons: tCounter[CodonText]
+    codon: CodonText
+    reformed: DefaultDict[
+        Tuple[Header, AAPos],
+        Counter[CodonText]
+    ] = defaultdict(Counter)
+
+    for (fragment_name, refpos, codon), count in codon_counter.items():
+        reformed[(fragment_name, refpos)][codon] = count
+
+    return dict(reformed)
 
 
 @cython.cfunc
 @cython.inline
 @cython.returns(list)
 def get_codonfreq(
-    codonstat: CodonCounter,
-    qualities: CodonCounter
+    codonstat_by_fragpos: CodonCounterByFragPos,
+    qualities_by_fragpos: CodonCounterByFragPos,
+    frag_gene_lookup: FragmentGeneLookup
 ) -> List[CodFreqRow]:
-    gene: str
-    refpos: int
+    fragment_name: Header
+    gene: GeneText
+    gene_offset: AAPos
+    refpos: AAPos
     codons: tCounter[CodonText]
     codon: CodonText
     count: int
     qua: int
     total: int
     rows: List[CodFreqRow] = []
-    reformed: DefaultDict[
-        Tuple[str, int],
-        Counter[CodonText]
-    ] = defaultdict(Counter)
+    ordered_genes: List[GeneText] = list(unique_everseen([
+        gene for genes in frag_gene_lookup.values() for gene, _ in genes
+    ]))
 
-    for (gene, refpos, codon), count in codonstat.items():
-        reformed[(gene, refpos)][codon] = count
-
-    for (gene, refpos), codons in reformed.items():
+    for (fragment_name, refpos), codons in codonstat_by_fragpos.items():
         total = sum(codons.values())
-        for codon, count in sorted(codons.most_common()):
-            qua = qualities[(gene, refpos, codon)]
-            rows.append({
-                'gene': gene,
-                'position': refpos,
-                'total': total,
-                'codon': codon,
-                'count': count,
-                'total_quality_score': round(qua, 2)
-            })
+        for codon, count in codons.items():
+            qua = qualities_by_fragpos[(fragment_name, refpos)][codon]
+            for gene, gene_offset in frag_gene_lookup[fragment_name]:
+                rows.append({
+                    'gene': gene,
+                    'position': refpos + gene_offset,
+                    'total': total,
+                    'codon': codon,
+                    'count': count,
+                    'total_quality_score': round(qua, 2)
+                })
+    rows.sort(key=lambda row: (
+        ordered_genes.index(row['gene']),
+        row['position'],
+        row['codon']
+    ))
     return rows
 
 
@@ -171,7 +229,7 @@ def sam2codfreq_between(
     samfile: str,
     samfile_start: int,
     samfile_end: int,
-    gene_intervals: List[GeneInterval],
+    fragment_intervals: List[FragmentInterval],
     site_quality_cutoff: int = 0
 ) -> Tuple[CodonCounter, CodonCounter, int]:
     """subprocess function to call iter_poscodons and count codons
@@ -187,10 +245,13 @@ def sam2codfreq_between(
     The main process was simply not fast enough to process such amount of huge
     data. The unprocessed data was piled in the memory of main process and
     caused out-of-memory eventually.
+
+    The solution is simple, just processing the partial results in subprocess
+    instead of in main process.
     """
 
     poscodons: List[PosCodon]
-    gene: str
+    fragment_name: str
     refpos: int
     codon: CodonText
     qua: int
@@ -202,13 +263,13 @@ def sam2codfreq_between(
         samfile,
         samfile_start,
         samfile_end,
-        gene_intervals,
+        fragment_intervals,
         site_quality_cutoff
     ):
         num_row += 1
-        for gene, refpos, codon, qua in poscodons:
-            codonstat[(gene, refpos, codon)] += 1
-            qualities[(gene, refpos, codon)] += qua
+        for fragment_name, refpos, codon, qua in poscodons:
+            codonstat[(fragment_name, refpos, codon)] += 1
+            qualities[(fragment_name, refpos, codon)] += qua
 
     return codonstat, qualities, num_row
 
@@ -216,14 +277,14 @@ def sam2codfreq_between(
 def sam2codfreq(
     samfile: str,
     ref: MainFragmentConfig,
-    genes: List[DerivedFragmentConfig],
+    fragments: List[DerivedFragmentConfig],
     workers: int,
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
     include_partial_codons: bool = False,
     chunk_size: int = 25000,
     **extras: Any
-) -> List[CodFreqRow]:
+) -> Tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
     """Returns CodFreq rows from a SAM/BAM file
 
     This function utilizes subprocesses to process alignment data from a
@@ -236,7 +297,7 @@ def sam2codfreq(
 
     :param samfile: str of the SAM/BAM file path
     :param ref: dict of the reference configuration
-    :param genes: list of dict of the gene configurations
+    :param fragments: list of dict of the fragment/gene configurations
     :param site_quality_cutoff: phred-score quality cutoff of each codon
                                 position
     :param log_format: 'json' or 'text', default to 'text'
@@ -247,7 +308,7 @@ def sam2codfreq(
     """
 
     poscodons: Tuple[Header, List[PosCodon]]
-    gene: str
+    fragment_name: str
     refpos: int
     codon: CodonText
     qua: int
@@ -264,7 +325,9 @@ def sam2codfreq(
             pbar.set_description('Processing {}'.format(samfile))
 
     chunks: List[Tuple[int, int]] = chunked_samfile(samfile, chunk_size)
-    gene_intervals: List[GeneInterval] = build_gene_intervals(genes)
+    fragment_intervals: List[
+        FragmentInterval
+    ] = build_fragment_intervals(fragments)
     codonstat: CodonCounter = Counter()
     qualities: CodonCounter = Counter()
 
@@ -277,7 +340,7 @@ def sam2codfreq(
                     samfile,
                     samfile_begin,
                     samfile_end,
-                    gene_intervals,
+                    fragment_intervals,
                     site_quality_cutoff
                 )
                 for samfile_begin, samfile_end in chunks
@@ -290,7 +353,12 @@ def sam2codfreq(
         if pbar:
             pbar.close()
 
-    codonfreq: List[CodFreqRow] = get_codonfreq(codonstat, qualities)
+    codonstat_by_fragpos: CodonCounterByFragPos = (
+        to_codon_counter_by_fragpos(codonstat)
+    )
+    qualities_by_fragpos: CodonCounterByFragPos = (
+        to_codon_counter_by_fragpos(qualities)
+    )
 
     # Apply codon-alignment to consensus codons. This step is an imperfect
     # approach to address the out-frame deletions/insertions. However, it
@@ -298,8 +366,14 @@ def sam2codfreq(
     # right now very slow and time-consuming.  This approach may need to be
     # changed in the future when optimization was done for the post-align
     # codon-alignment program.
-    codonfreq = codonalign_consensus(codonfreq, ref, genes)
-    return codonfreq
+    codonstat_by_fragpos, qualities_by_fragpos = codonalign_consensus(
+        codonstat_by_fragpos,
+        qualities_by_fragpos,
+        ref,
+        fragments
+    )
+
+    return codonstat_by_fragpos, qualities_by_fragpos
 
 
 def sam2codfreq_all(
@@ -310,19 +384,31 @@ def sam2codfreq_all(
     site_quality_cutoff: int = 0,
     log_format: str = 'text',
     include_partial_codons: bool = False
-) -> Generator[CodFreqRow, None, None]:
+) -> List[CodFreqRow]:
     refname: str
     ref: MainFragmentConfig
-    genes: List[DerivedFragmentConfig]
-    for refname, ref, genes in get_ref_fragments(profile):
+    fragments: List[DerivedFragmentConfig]
+    ref_fragments, frag_gene_lookup = get_ref_fragments(profile)
+    all_codonstat_by_fragpos: CodonCounterByFragPos = {}
+    all_qualities_by_fragpos: CodonCounterByFragPos = {}
+    for refname, ref, fragments in ref_fragments:
         samfile: str = name_bamfile(name, refname)
-        yield from sam2codfreq(
+        codonstat_by_fragpos, qualities_by_fragpos = sam2codfreq(
             samfile,
             ref,
-            genes,
-            workers,
+            fragments,
+            workers=workers,
             site_quality_cutoff=site_quality_cutoff,
             log_format=log_format,
             include_partial_codons=include_partial_codons,
             fastqs=fnpair
         )
+        all_codonstat_by_fragpos.update(codonstat_by_fragpos)
+        all_qualities_by_fragpos.update(qualities_by_fragpos)
+
+    codfreq_rows: List[CodFreqRow] = get_codonfreq(
+        all_codonstat_by_fragpos,
+        all_qualities_by_fragpos,
+        frag_gene_lookup
+    )
+    return codfreq_rows

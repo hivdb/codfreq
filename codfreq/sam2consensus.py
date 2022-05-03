@@ -89,9 +89,17 @@ def sam2consensus(
         for refpos, idx, na, _ in posnas:
             nafreqs[(refpos, idx)][na] += 1
 
-    nacons_lookup: Dict[Tuple[NAPos, int], NAChar] = {
-        pos: nas.most_common(1)[0][0]
+    nacons_with_count_lookup: Dict[Tuple[NAPos, int], Tuple[NAChar, int]] = {
+        pos: nas.most_common(1)[0]
         for pos, nas in nafreqs.items()
+    }
+    nacons_lookup: Dict[Tuple[NAPos, int], NAChar] = {
+        (pos, idx): na
+        for (pos, idx), (na, count) in nacons_with_count_lookup.items()
+        if idx == 0 or
+        # insertion should only be kept when it's at least as 50% common as the
+        # prior nucleotide
+        count * 2 > nacons_with_count_lookup.get((pos, 0), ('.', 0))[1]
     }
 
     r: RegionalConsensus = make_consensus(nacons_lookup, region)

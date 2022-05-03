@@ -10,3 +10,7 @@ codfreq-js
 **/*.c
 **/*.so
 **/.DS_Store
+Dockerfile
+.git/
+.gitignore
+.dockerignore

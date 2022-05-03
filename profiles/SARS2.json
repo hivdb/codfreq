@@ -1,5 +1,4 @@
 {
-  "method": "PostAlign",
   "fragmentConfig": [
     {
       "fragmentName": "Wuhan-Hu-1::NC_045512.2",
@@ -78,14 +77,14 @@
     {
       "fragmentName": "nsp11",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
-      "geneName": "nsp11",
+      "geneName": "RdRP",
       "refStart": 13442,
       "refEnd": 13468
     },
     {
       "fragmentName": "nsp12",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
-      "geneName": "nsp12",
+      "geneName": "RdRP",
       "refStart": 13468,
       "refEnd": 16236
     },
