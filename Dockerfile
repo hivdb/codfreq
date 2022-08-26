@@ -18,7 +18,7 @@ FROM python:3.9-alpine as pysam_builder
 RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cython==0.29.26'
-RUN pip install 'pysam==0.19.0'
+RUN pip install 'pysam==0.19.1'
 
 FROM python:3.9-alpine as orjson_builder
 RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils

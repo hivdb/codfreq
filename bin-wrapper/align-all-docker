@@ -25,10 +25,11 @@ if [ ! -f "$DOCKER_CMD" ]; then
   exit 4
 fi
 
-USAGE="command usage: $(basename $0) [-s] -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
+USAGE="command usage: $(basename $0) [-s] [-m] -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
 SKIP_REMOTE_DOCKER=0
+AUTOPAIRING=""
 
-while getopts ':r:d:s' OPT; do
+while getopts ':r:d:ms' OPT; do
     case "$OPT" in
         r)
             PROFILE=$OPTARG
@@ -38,6 +39,9 @@ while getopts ':r:d:s' OPT; do
             ;;
         s)
             SKIP_REMOTE_DOCKER=1
+            ;;
+        m)
+            AUTOPAIRING='-m'
             ;;
         \?)
             echo $USAGE >&2
@@ -74,4 +78,4 @@ docker run \
     --mount type=bind,source="$PROFILE",target=/tmp/profile.json \
     --mount type=bind,source="$WORKDIR",target=/fastqfiles \
     hivdb/codfreq-runner:latest \
-    bin/align-all-local -r /tmp/profile.json -d /fastqfiles
+    bin/align-all-local -r /tmp/profile.json -d /fastqfiles $AUTOPAIRING

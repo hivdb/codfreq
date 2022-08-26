@@ -65,7 +65,8 @@ def find_paired_marker(text1: str, text2: str) -> int:
 
 
 def find_paired_fastq_patterns(
-    filenames: List[str]
+    filenames: List[str],
+    autopairing: bool
 ) -> Generator[PairedFASTQ, None, None]:
     """Smartly find paired FASTQ file patterns
 
@@ -108,69 +109,72 @@ def find_paired_fastq_patterns(
         ],
         List[Tuple[str, str]]
     ] = defaultdict(list)
-    for fn1, fn2 in combinations(filenames, 2):
-        if len(fn1) != len(fn2):
-            continue
-        for delimiter in FILENAME_DELIMITERS:
-            if delimiter not in fn1 or delimiter not in fn2:
+    if autopairing:
+        for fn1, fn2 in combinations(filenames, 2):
+            if len(fn1) != len(fn2):
                 continue
-            chunks1: List[str] = fn1.split(delimiter)
-            chunks2: List[str] = fn2.split(delimiter)
-            if len(chunks1) != len(chunks2):
-                continue
-            for reverse in range(2):
-                diffcount = 0
-                diffoffset = -1
-                invalid = False
-                if reverse:
-                    chunks1.reverse()
-                    chunks2.reverse()
-                for n, (left, right) in enumerate(zip(chunks1, chunks2)):
-                    if diffcount > 1:
-                        invalid = True
-                        break
-                    if left == right:
-                        continue
-                    pos_paired_marker: int = find_paired_marker(left, right)
-                    if pos_paired_marker < 0:
-                        invalid = True
-                        break
-                    diffoffset = n
-                    diffcount += 1
-                if not invalid:
-                    patterns[(
-                        delimiter,
-                        diffoffset,
-                        pos_paired_marker,
-                        reverse
-                    )].append((fn1, fn2))
+            for delimiter in FILENAME_DELIMITERS:
+                if delimiter not in fn1 or delimiter not in fn2:
+                    continue
+                chunks1: List[str] = fn1.split(delimiter)
+                chunks2: List[str] = fn2.split(delimiter)
+                if len(chunks1) != len(chunks2):
+                    continue
+                for reverse in range(2):
+                    diffcount = 0
+                    diffoffset = -1
+                    invalid = False
+                    if reverse:
+                        chunks1.reverse()
+                        chunks2.reverse()
+                    for n, (left, right) in enumerate(zip(chunks1, chunks2)):
+                        if diffcount > 1:
+                            invalid = True
+                            break
+                        if left == right:
+                            continue
+                        pos_paired_marker: int = \
+                            find_paired_marker(left, right)
+                        if pos_paired_marker < 0:
+                            invalid = True
+                            break
+                        diffoffset = n
+                        diffcount += 1
+                    if not invalid:
+                        patterns[(
+                            delimiter,
+                            diffoffset,
+                            pos_paired_marker,
+                            reverse
+                        )].append((fn1, fn2))
     covered: Set[str] = set()
-    for pattern, pairs in sorted(
-            patterns.items(), key=lambda p: (-len(p[1]), -p[0][3])):
-        known: Set[str] = set()
-        invalid = False
-        for left, right in pairs:
-            if left in covered or right in covered:
-                # a pattern is invalid if the pairs is already matched
-                # by a previous pattern
-                invalid = True
-                break
+    if autopairing:
+        for pattern, pairs in sorted(
+                patterns.items(), key=lambda p: (-len(p[1]), -p[0][3])):
+            known: Set[str] = set()
+            invalid = False
+            for left, right in pairs:
+                if left in covered or right in covered:
+                    # a pattern is invalid if the pairs is already matched
+                    # by a previous pattern
+                    invalid = True
+                    break
 
-            if left in known or right in known:
-                # a pattern is invalid if there's duplicate in pairs
-                invalid = True
-                break
-            known.add(left)
-            known.add(right)
+                if left in known or right in known:
+                    # a pattern is invalid if there's duplicate in pairs
+                    invalid = True
+                    break
+                known.add(left)
+                known.add(right)
 
-        if not invalid:
-            covered |= known
-            for pair in pairs:
-                yield {
-                    'name': suggest_pair_name(pair, pattern),
-                    'pair': pair,
-                    'n': 2
-                }
+            if not invalid:
+                covered |= known
+                for pair in pairs:
+                    yield {
+                        'name': suggest_pair_name(pair, pattern),
+                        'pair': pair,
+                        'n': 2
+                    }
     if len(filenames) > len(covered):
         remains: List[str] = sorted(set(filenames) - covered)
         pattern = ('', -1, -1, -1)
@@ -197,7 +201,10 @@ def complete_paired_fastqs(
         }
 
 
-def find_paired_fastqs(workdir: str) -> Generator[PairedFASTQ, None, None]:
+def find_paired_fastqs(
+    workdir: str,
+    autopairing: bool
+) -> Generator[PairedFASTQ, None, None]:
     pairinfo: str = os.path.join(workdir, 'pairinfo.json')
     if os.path.isfile(pairinfo):
         with open(pairinfo) as fp:
@@ -213,7 +220,7 @@ def find_paired_fastqs(workdir: str) -> Generator[PairedFASTQ, None, None]:
                 or fn[-9:].lower() == '.fastq.gz'
             ]
             yield from complete_paired_fastqs(
-                find_paired_fastq_patterns(filenames),
+                find_paired_fastq_patterns(filenames, autopairing),
                 dirpath
             )
 
@@ -267,11 +274,12 @@ def align(
     program: str,
     profile: TextIO,
     workers: int,
-    log_format: str
+    log_format: str,
+    autopairing: bool
 ) -> None:
     row: CodFreqRow
     profile_obj: Profile = json.load(profile)
-    paired_fastqs = list(find_paired_fastqs(workdir))
+    paired_fastqs = list(find_paired_fastqs(workdir, autopairing))
 
     for pairobj in paired_fastqs:
         align_with_profile(pairobj, program, profile_obj, log_format)
@@ -317,7 +325,11 @@ def align(
 @click.option(
     '--enable-profiling/--disable-profiling',
     default=False,
-    help='Enable cProfile')
+    help='Enable/disable cProfile')
+@click.option(
+    '--autopairing/--no-autopairing',
+    default=True,
+    help='Enable/disable automatical FASTQ pairing algorithm')
 @click.option(
     '--workers',
     type=int,
@@ -330,6 +342,7 @@ def align_cmd(
     profile: TextIO,
     log_format: str,
     enable_profiling: bool,
+    autopairing: bool,
     workers: int
 ) -> None:
     if enable_profiling:
@@ -338,13 +351,14 @@ def align_cmd(
         profile_obj = None
         try:
             with cProfile.Profile() as profile_obj:
-                align(workdir, program, profile, workers, log_format)
+                align(workdir, program, profile, workers,
+                      log_format, autopairing)
         finally:
             if profile_obj is not None:
                 ps = pstats.Stats(profile_obj)
                 ps.print_stats()
     else:
-        align(workdir, program, profile, workers, log_format)
+        align(workdir, program, profile, workers, log_format, autopairing)
 
 
 if __name__ == '__main__':

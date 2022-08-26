@@ -9,7 +9,7 @@ boto3 = "*"
 
 [packages]
 cython = "*"
-pysam = "*"
+pysam = ">=0.19.1"
 click = "*"
 tqdm = "*"
 more-itertools = "*"

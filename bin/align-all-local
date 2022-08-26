@@ -6,13 +6,18 @@ cd $(dirname $0)/..
 
 USAGE="command usage: $(basename $0) -r <PROFILE_PATH> -d <FASTQ_DIRECTORY>"
 
-while getopts ':r:d:' OPT; do
+AUTOPAIRING=""
+
+while getopts ':r:d:m' OPT; do
     case "$OPT" in
         r)
             PROFILE=$OPTARG
             ;;
         d)
             WORKDIR=$OPTARG
+            ;;
+        m)
+            AUTOPAIRING='--no-autopairing'
             ;;
         \?)
             echo $USAGE >&2
@@ -39,7 +44,7 @@ if [ ! -f $PROFILE ]; then
     exit 1
 fi
 
-fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE
+fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE $AUTOPAIRING
 compress-codfreq $WORKDIR -v
 
 pushd $WORKDIR > /dev/null
