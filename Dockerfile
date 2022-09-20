@@ -1,40 +1,73 @@
-FROM python:3.9-alpine as samtools_builder
+FROM python:3.9-alpine as builder
 RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+
+FROM builder as samtools_builder
 ARG SAMTOOLS_VERSION=1.10
-RUN wget -O /tmp/samtools.tar.bz2 "https://github.com/samtools/samtools/releases/download/1.10/samtools-${SAMTOOLS_VERSION}.tar.bz2" && \
+RUN wget -O /tmp/samtools.tar.bz2 "https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2" && \
     tar -xjC /tmp -f /tmp/samtools.tar.bz2 && \
     cd /tmp/samtools-${SAMTOOLS_VERSION} && \
     ./configure --prefix=/usr/local/samtools && \
     make && make install
 
-FROM python:3.9-alpine as minimap2_installer
-RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+FROM builder as minimap2_installer
 ARG MINIMAP2_VERSION=2.22
 RUN wget -O /tmp/minimap2.tar.bz2 "https://github.com/lh3/minimap2/releases/download/v${MINIMAP2_VERSION}/minimap2-${MINIMAP2_VERSION}_x64-linux.tar.bz2" && \
     tar -xjC /tmp -f /tmp/minimap2.tar.bz2 && \
     mv /tmp/minimap2-${MINIMAP2_VERSION}_x64-linux /usr/local/minimap2
 
-FROM python:3.9-alpine as pysam_builder
-RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+FROM builder as pysam_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cython==0.29.26'
 RUN pip install 'pysam==0.19.1'
 
-FROM python:3.9-alpine as orjson_builder
-RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+FROM builder as orjson_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN apk add rust cargo patchelf
 RUN pip install 'orjson==3.6.6'
 
-FROM python:3.9-alpine as py_builder
-RUN apk add gcc make g++ zlib-dev bzip2-dev xz-dev linux-headers ncurses-dev curl-dev coreutils
+FROM builder as cutadapt_builder
+RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
+RUN pip install 'cutadapt==4.1'
+
+FROM builder as py_builder
 COPY --from=pysam_builder /root/.cache/ /root/.cache/
 COPY --from=orjson_builder /root/.cache/ /root/.cache/
+COPY --from=cutadapt_builder /root/.cache/ /root/.cache/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cython==0.29.26'
 COPY . /codfreq/
 RUN pip install --ignore-installed --target /python-packages /codfreq
 RUN mv /python-packages/bin /python-scripts
+
+FROM builder as fastp_installer
+ARG FASTP_VERSION=0.23.2
+RUN wget -O /usr/local/bin/fastp http://opengene.org/fastp/fastp.${FASTP_VERSION}
+RUN chmod +x /usr/local/bin/fastp
+
+FROM builder as htslib_builder
+RUN apk add automake autoconf
+ARG HTSLIB_VERSION=1.16
+RUN wget -O /tmp/htslib.tar.gz https://github.com/samtools/htslib/releases/download/${HTSLIB_VERSION}/htslib-${HTSLIB_VERSION}.tar.bz2
+RUN tar -xjC /tmp -f /tmp/htslib.tar.gz
+RUN cd /tmp/htslib-${HTSLIB_VERSION} && \
+    autoreconf -i && \
+    ./configure --prefix=/usr/local/htslib && \
+    make && make install
+
+FROM builder as ivar_builder
+RUN apk add automake autoconf
+COPY --from=htslib_builder /usr/local/htslib/ /usr/local/htslib/
+ARG IVAR_VERSION=6b56cb0e67384ee779c95b8f1e0666c22ea5db43
+RUN wget -O /tmp/ivar.tar.gz https://github.com/gkarthik/ivar/archive/${IVAR_VERSION}.tar.gz
+RUN tar -xzC /tmp -f /tmp/ivar.tar.gz
+RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/htslib/lib && \
+    export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/htslib/lib && \
+    export CPATH=$CPATH:/usr/local/htslib/include && \
+    cd /tmp/ivar-${IVAR_VERSION} && \
+    chmod +x autogen.sh && \
+    sh ./autogen.sh && \
+    ./configure --prefix=/usr/local/ivar && \
+    make && make install
 
 FROM python:3.9-alpine
 ENV LANG="C.UTF-8" \
@@ -45,7 +78,11 @@ COPY --from=py_builder /python-packages/ /usr/local/lib/python3.9/site-packages/
 COPY --from=orjson_builder /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
 COPY --from=samtools_builder /usr/local/samtools/ /usr/local/samtools/
 COPY --from=minimap2_installer /usr/local/minimap2/ /usr/local/minimap2/
+COPY --from=fastp_installer /usr/local/bin/fastp /usr/local/bin/fastp
+COPY --from=htslib_builder /usr/local/htslib/lib/libhts.so.3 /usr/lib/libstdc++.so.6 /usr/lib/
+COPY --from=ivar_builder /usr/local/ivar/ /usr/local/ivar/
 RUN ln -s ../minimap2/minimap2 /usr/local/bin/minimap2 && \
-    ln -s ../samtools/bin/samtools /usr/local/bin/samtools
+    ln -s ../samtools/bin/samtools /usr/local/bin/samtools && \
+    ln -s ../ivar/bin/ivar /usr/local/bin/ivar
 WORKDIR /app
 COPY bin/align-all-s3 bin/align-all-local /app/bin/

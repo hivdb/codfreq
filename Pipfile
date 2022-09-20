@@ -19,6 +19,7 @@ Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
 post-align = {file = "https://github.com/hivdb/post-align/archive/b5851f032bd6a5b1368b4d8c00aed39a23fcb7c8.zip"}
 typing-extensions = "*"
+cutadapt = ">=4.1"
 
 [requires]
 python_version = "3.9"

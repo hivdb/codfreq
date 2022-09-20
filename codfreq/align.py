@@ -15,7 +15,8 @@ from typing import (
     List,
     Tuple,
     DefaultDict,
-    Set
+    Set,
+    Optional
 )
 
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
@@ -26,7 +27,7 @@ from .sam2codfreq import (
 )
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
-    get_programs, get_refinit, get_align
+    fastp, ivar, get_programs, get_refinit, get_align
 )
 from .filename_helper import (
     suggest_pair_name,
@@ -193,9 +194,10 @@ def complete_paired_fastqs(
     for pairobj in paired_fastqs:
         yield {
             'name': os.path.join(dirpath, pairobj['name']),
-            'pair': tuple(
-                os.path.join(dirpath, fn) if fn else None
-                for fn in pairobj['pair']
+            'pair': (
+                os.path.join(dirpath, pairobj['pair'][0]),
+                os.path.join(dirpath, pairobj['pair'][1])
+                if pairobj['pair'][1] else None
             ),
             'n': pairobj['n']
         }
@@ -225,12 +227,92 @@ def find_paired_fastqs(
             )
 
 
+def fastp_preprocess(
+    paired_fastq: PairedFASTQ,
+    fastp_config: fastp.FASTPConfig,
+    log_format: str
+) -> PairedFASTQ:
+    if log_format == 'text':
+        click.echo(
+            'Pre-processing {} using fastp...'
+            .format(paired_fastq['name'])
+        )
+    else:
+        click.echo(json.dumps({
+            'op': 'preprocess',
+            'status': 'working',
+            'query': paired_fastq['name']
+        }))
+    paired_fastp_fastq: PairedFASTQ = {
+        'name': paired_fastq['name'],
+        'pair': (
+            '{}.1.fastp.fastq.gz'.format(paired_fastq['name']),
+            '{}.2.fastp.fastq.gz'.format(paired_fastq['name'])
+            if paired_fastq['n'] == 2 else None,
+        ),
+        'n': paired_fastq['n']
+    }
+    fastp.fastp(
+        paired_fastq['pair'][0],
+        paired_fastq['pair'][1],
+        paired_fastp_fastq['pair'][0],
+        paired_fastp_fastq['pair'][1],
+        **fastp_config
+    )
+    if log_format == 'text':
+        click.echo('Done')
+    else:
+        click.echo(json.dumps({
+            'op': 'preprocess',
+            'status': 'done',
+            'query': paired_fastq['name']
+        }))
+    return paired_fastp_fastq
+
+
+def ivar_trim(
+    input_bam: str,
+    output_bam: str,
+    ivar_trim_config: ivar.TrimConfig,
+    log_format: str
+) -> None:
+    name: str = os.path.split(input_bam)[1]
+    if log_format == 'text':
+        click.echo(
+            'Trimming {} using ivar...'
+            .format(name)
+        )
+    else:
+        click.echo(json.dumps({
+            'op': 'trim',
+            'status': 'working',
+            'query': name
+        }))
+    ivar.trim(
+        input_bam,
+        output_bam,
+        **ivar_trim_config
+    )
+    if log_format == 'text':
+        click.echo('Done')
+    else:
+        click.echo(json.dumps({
+            'op': 'trim',
+            'status': 'done',
+            'query': name
+        }))
+
+
 def align_with_profile(
     paired_fastq: PairedFASTQ,
     program: str,
     profile: Profile,
-    log_format: str
+    log_format: str,
+    fastp_config: Optional[fastp.FASTPConfig],
+    ivar_trim_config: Optional[ivar.TrimConfig]
 ) -> None:
+    if fastp_config is not None:
+        paired_fastq = fastp_preprocess(paired_fastq, fastp_config, log_format)
     with tempfile.TemporaryDirectory('codfreq') as tmpdir:
         refpath = os.path.join(tmpdir, 'ref.fas')
         refinit = get_refinit(program)
@@ -243,7 +325,14 @@ def align_with_profile(
             with open(refpath, 'w') as fp:
                 fp.write('>{}\n{}\n\n'.format(refname, refseq))
 
-            samfile = name_bamfile(paired_fastq['name'], refname)
+            orig_bamfile = name_bamfile(
+                paired_fastq['name'],
+                refname,
+                is_trimmed=False)
+            trimmed_bamfile = name_bamfile(
+                paired_fastq['name'],
+                refname,
+                is_trimmed=True)
             refinit(refpath)
             if log_format == 'text':
                 click.echo(
@@ -257,7 +346,7 @@ def align_with_profile(
                     'query': paired_fastq['name'],
                     'target': refname
                 }))
-            alignfunc(refpath, *paired_fastq['pair'], samfile)
+            alignfunc(refpath, *paired_fastq['pair'], orig_bamfile)
             if log_format == 'text':
                 click.echo('Done')
             else:
@@ -267,6 +356,12 @@ def align_with_profile(
                     'query': paired_fastq['name'],
                     'target': refname
                 }))
+            if ivar_trim_config is not None:
+                ivar_trim(
+                    orig_bamfile,
+                    trimmed_bamfile,
+                    ivar_trim_config,
+                    log_format)
 
 
 def align(
@@ -281,8 +376,23 @@ def align(
     profile_obj: Profile = json.load(profile)
     paired_fastqs = list(find_paired_fastqs(workdir, autopairing))
 
+    fastp_config: Optional[fastp.FASTPConfig] = fastp.load_fastp_config(
+        os.path.join(workdir, 'fastp-config.json')
+    )
+    ivar_trim_config: Optional[ivar.TrimConfig] = ivar.load_trim_config(
+        os.path.join(workdir, 'ivar-trim-config.json'),
+        os.path.join(workdir, 'primers.bed')
+    )
+
     for pairobj in paired_fastqs:
-        align_with_profile(pairobj, program, profile_obj, log_format)
+        align_with_profile(
+            pairobj,
+            program,
+            profile_obj,
+            log_format,
+            fastp_config=fastp_config,
+            ivar_trim_config=ivar_trim_config
+        )
         codfreqfile = name_codfreq(pairobj['name'])
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)

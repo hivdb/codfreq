@@ -2,7 +2,7 @@ import os
 import re
 from typing import Optional, Tuple
 
-from .codfreq_types import FASTQFileName, GeneText
+from .codfreq_types import FASTQFileName, Header
 
 FnPair = Tuple[FASTQFileName, Optional[FASTQFileName]]
 Pattern = Tuple[
@@ -42,8 +42,14 @@ def name_file(
     return suggest_pair_name(fnpair, pattern) + suffix
 
 
-def name_bamfile(name: str, gene: GeneText) -> str:
-    return '{}.{}.bam'.format(name, gene)
+def name_bamfile(
+    name: str,
+    ref_name: Header,
+    is_trimmed: bool = True
+) -> str:
+    return (
+        '{}.{}.bam' if is_trimmed else '{}.{}.orig.bam'
+    ).format(name, ref_name)
 
 
 def name_codfreq(name: str) -> str:

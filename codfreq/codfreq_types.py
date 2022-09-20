@@ -15,7 +15,7 @@ MultiAAText = bytes
 
 class PairedFASTQ(TypedDict):
     name: Header
-    pair: Tuple[Optional[FASTQFileName], ...]
+    pair: Tuple[FASTQFileName, Optional[FASTQFileName]]
     n: int
 
 
@@ -40,6 +40,7 @@ class CodonAlignmentConfig(TypedDict, total=False):
 class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
+    refSequence: None
     geneName: Optional[GeneText]
     refStart: NAPos
     refEnd: NAPos

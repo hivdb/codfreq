@@ -11,7 +11,7 @@ from .codfreq_types import (
     GeneText,
     CodonText,
     MainFragmentConfig,
-    DerivedFragmentConfig,
+    DerivedFragmentConfig
 )
 
 

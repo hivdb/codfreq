@@ -29,7 +29,7 @@ from .codfreq_types import (
     FragmentConfig,
     MainFragmentConfig,
     CodonAlignmentConfig,
-    DerivedFragmentConfig,
+    DerivedFragmentConfig
 )
 from .sam2codfreq_types import (
     CodonCounter,
@@ -392,7 +392,7 @@ def sam2codfreq_all(
     all_codonstat_by_fragpos: CodonCounterByFragPos = {}
     all_qualities_by_fragpos: CodonCounterByFragPos = {}
     for refname, ref, fragments in ref_fragments:
-        samfile: str = name_bamfile(name, refname)
+        samfile: str = name_bamfile(name, refname, is_trimmed=True)
         codonstat_by_fragpos, qualities_by_fragpos = sam2codfreq(
             samfile,
             ref,

@@ -123,7 +123,7 @@ def create_untrans_region_consensus(
         if 'fromFragment' in fragment:
             continue
         refname = fragment['fragmentName']
-        samfile = name_bamfile(seqname, refname)
+        samfile = name_bamfile(seqname, refname, is_trimmed=True)
         for region in profile['sequenceAssemblyConfig']:
             if region.get('fromFragment') != refname:
                 continue
