@@ -8,6 +8,7 @@ THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
 
 
 class FASTPConfig(TypedDict, total=False):
+    include_unmerged: Optional[bool]
     disable_quality_filtering: Optional[bool]
     qualified_quality_phred: Optional[int]
     unqualified_percent_limit: Optional[int]
@@ -20,20 +21,20 @@ class FASTPConfig(TypedDict, total=False):
     adapter_sequence_r2: Optional[str]
 
 
-def load_fastp_config(config_path: str) -> Optional[FASTPConfig]:
+def load_config(config_path: str) -> FASTPConfig:
     if os.path.isfile(config_path):
         with open(config_path) as fp:
             config: FASTPConfig = json.load(fp)
             return config
     else:
-        return None
+        return {}
 
 
 def fastp(
     fastq1in: str,
     fastq2in: Optional[str],
-    fastq1out: str,
-    fastq2out: Optional[str],
+    fastq_merged_out: str,
+    include_unmerged: Optional[bool] = False,
     disable_quality_filtering: Optional[bool] = False,
     qualified_quality_phred: Optional[int] = None,
     unqualified_percent_limit: Optional[int] = None,
@@ -48,13 +49,18 @@ def fastp(
     command: List[str] = [
         'fastp',
         '-w', str(THREADS),
-        '-i', fastq1in,
-        '-o', fastq1out
+        '-i', fastq1in
     ]
-    if fastq2in and fastq2out:
+    if fastq2in:
         command.extend([
             '-I', fastq2in,
-            '-O', fastq2out
+            '-m', '--merged_out', fastq_merged_out,
+        ])
+        if include_unmerged:
+            command.append('--include_unmerged')
+    else:
+        command.extend([
+            '-o', fastq_merged_out
         ])
     if disable_quality_filtering:
         command.append('-Q')
@@ -93,5 +99,5 @@ def fastp(
     if error:
         raise RuntimeError(error)
 
-    with open(os.path.splitext(fastq1out)[0] + '.log', 'w') as fp:
+    with open(os.path.splitext(fastq_merged_out)[0] + '.log', 'w') as fp:
         fp.write(out)

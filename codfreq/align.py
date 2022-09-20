@@ -27,7 +27,7 @@ from .sam2codfreq import (
 )
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
-    fastp, ivar, get_programs, get_refinit, get_align
+    fastp, cutadapt, ivar, get_programs, get_refinit, get_align
 )
 from .filename_helper import (
     suggest_pair_name,
@@ -243,20 +243,21 @@ def fastp_preprocess(
             'status': 'working',
             'query': paired_fastq['name']
         }))
-    paired_fastp_fastq: PairedFASTQ = {
+    merged_fastq: PairedFASTQ = {
         'name': paired_fastq['name'],
         'pair': (
-            '{}.1.fastp.fastq.gz'.format(paired_fastq['name']),
-            '{}.2.fastp.fastq.gz'.format(paired_fastq['name'])
-            if paired_fastq['n'] == 2 else None,
+            os.path.join(
+                os.path.dirname(paired_fastq['pair'][0]),
+                '{}.merged.fastq.gz'.format(paired_fastq['name'])
+            ),
+            None
         ),
-        'n': paired_fastq['n']
+        'n': 1
     }
     fastp.fastp(
         paired_fastq['pair'][0],
         paired_fastq['pair'][1],
-        paired_fastp_fastq['pair'][0],
-        paired_fastp_fastq['pair'][1],
+        merged_fastq['pair'][0],
         **fastp_config
     )
     if log_format == 'text':
@@ -267,7 +268,7 @@ def fastp_preprocess(
             'status': 'done',
             'query': paired_fastq['name']
         }))
-    return paired_fastp_fastq
+    return merged_fastq
 
 
 def ivar_trim(
@@ -276,7 +277,7 @@ def ivar_trim(
     ivar_trim_config: ivar.TrimConfig,
     log_format: str
 ) -> None:
-    name: str = os.path.split(input_bam)[1]
+    name: str = os.path.basename(input_bam)
     if log_format == 'text':
         click.echo(
             'Trimming {} using ivar...'
@@ -303,16 +304,65 @@ def ivar_trim(
         }))
 
 
+def cutadapt_trim(
+    merged_fastq: PairedFASTQ,
+    cutadapt_config: cutadapt.CutadaptConfig,
+    log_format: str
+) -> PairedFASTQ:
+    name: str = merged_fastq['name']
+    output_fastq: PairedFASTQ = {
+        'name': merged_fastq['name'],
+        'pair': (
+            os.path.join(
+                os.path.dirname(merged_fastq['pair'][0]),
+                '{}.merged-trimed.fastq.gz'.format(merged_fastq['name'])
+            ),
+            None
+        ),
+        'n': 1
+    }
+    if log_format == 'text':
+        click.echo(
+            'Trimming {} using cutadapt...'
+            .format(name)
+        )
+    else:
+        click.echo(json.dumps({
+            'op': 'trim',
+            'status': 'working',
+            'query': name
+        }))
+    cutadapt.cutadapt(
+        merged_fastq['pair'][0],
+        output_fastq['pair'][0],
+        **cutadapt_config
+    )
+    if log_format == 'text':
+        click.echo('Done')
+    else:
+        click.echo(json.dumps({
+            'op': 'trim',
+            'status': 'done',
+            'query': name
+        }))
+    return output_fastq
+
+
 def align_with_profile(
     paired_fastq: PairedFASTQ,
     program: str,
     profile: Profile,
     log_format: str,
-    fastp_config: Optional[fastp.FASTPConfig],
+    fastp_config: fastp.FASTPConfig,
+    cutadapt_config: Optional[cutadapt.CutadaptConfig],
     ivar_trim_config: Optional[ivar.TrimConfig]
 ) -> None:
-    if fastp_config is not None:
-        paired_fastq = fastp_preprocess(paired_fastq, fastp_config, log_format)
+    paired_fastq = fastp_preprocess(paired_fastq, fastp_config, log_format)
+
+    if cutadapt_config is not None:
+        paired_fastq = cutadapt_trim(
+            paired_fastq, cutadapt_config, log_format)
+
     with tempfile.TemporaryDirectory('codfreq') as tmpdir:
         refpath = os.path.join(tmpdir, 'ref.fas')
         refinit = get_refinit(program)
@@ -376,8 +426,14 @@ def align(
     profile_obj: Profile = json.load(profile)
     paired_fastqs = list(find_paired_fastqs(workdir, autopairing))
 
-    fastp_config: Optional[fastp.FASTPConfig] = fastp.load_fastp_config(
+    fastp_config: fastp.FASTPConfig = fastp.load_config(
         os.path.join(workdir, 'fastp-config.json')
+    )
+    cutadapt_config: Optional[cutadapt.CutadaptConfig] = cutadapt.load_config(
+        os.path.join(workdir, 'cutadapt-config.json'),
+        adapter3_path=os.path.join(workdir, 'primers3.fa'),
+        adapter5_path=os.path.join(workdir, 'primers5.fa'),
+        adapter53_path=os.path.join(workdir, 'primers53.fa')
     )
     ivar_trim_config: Optional[ivar.TrimConfig] = ivar.load_trim_config(
         os.path.join(workdir, 'ivar-trim-config.json'),
@@ -391,6 +447,7 @@ def align(
             profile_obj,
             log_format,
             fastp_config=fastp_config,
+            cutadapt_config=cutadapt_config,
             ivar_trim_config=ivar_trim_config
         )
         codfreqfile = name_codfreq(pairobj['name'])
