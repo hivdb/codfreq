@@ -4,6 +4,8 @@ from subprocess import Popen, PIPE
 from typing import List, Optional, TypedDict
 import multiprocessing
 
+from .base import raise_on_proc_error
+
 THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
 
 
@@ -96,8 +98,8 @@ def fastp(
     error: str
     out, error = proc.communicate()
 
-    if error:
-        raise RuntimeError(error)
+    raise_on_proc_error(proc, error)
 
     with open(os.path.splitext(fastq_merged_out)[0] + '.log', 'w') as fp:
         fp.write(out)
+        fp.write(error)

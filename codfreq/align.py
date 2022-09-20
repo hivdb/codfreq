@@ -406,7 +406,11 @@ def align_with_profile(
                     'query': paired_fastq['name'],
                     'target': refname
                 }))
-            if ivar_trim_config is not None:
+            if ivar_trim_config is None:
+                os.replace(orig_bamfile, trimmed_bamfile)
+                os.replace(orig_bamfile + '.bai', trimmed_bamfile + '.bai')
+                os.replace(orig_bamfile + '.log', trimmed_bamfile + '.log')
+            else:
                 ivar_trim(
                     orig_bamfile,
                     trimmed_bamfile,
