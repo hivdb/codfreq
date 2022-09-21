@@ -1,5 +1,3 @@
-#! /usr/bin/env python
-
 from subprocess import Popen, PIPE
 from typing import List, Dict
 import multiprocessing
@@ -75,7 +73,7 @@ def minimap2_align(
         '-@', THREADS,
         bam
     ])
-    with open(bam + '.log', 'w') as fp:
+    with open(bam + '.minimap2.log', 'w') as fp:
         fp.write(err_minimap2)
         fp.write(out_sam2bam)
         fp.write(err_sam2bam)

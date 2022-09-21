@@ -1,7 +1,7 @@
 import os
 import json
-from uuid import uuid4
 from subprocess import Popen, PIPE
+from tempfile import NamedTemporaryFile
 from typing import List, Optional, TypedDict
 import multiprocessing
 
@@ -43,11 +43,10 @@ def trim(
     include_reads_with_no_primers: Optional[bool] = False
 ) -> None:
     basedir, filename = os.path.split(input_bam)
-    prefix: str = str(uuid4())
+
     command: List[str] = [
-        'ivar',
-        '-i', input_bam,
-        '-p', prefix
+        'ivar', 'trim',
+        '-i', input_bam
     ]
     if primers_bed is not None:
         command.extend(['-b', primers_bed])
@@ -60,22 +59,29 @@ def trim(
     if include_reads_with_no_primers:
         command.append('-e')
 
-    proc: Popen = Popen(
-        command,
-        stdout=PIPE,
-        stderr=PIPE,
-        encoding='U8')
+    with NamedTemporaryFile(suffix='.bam') as tmpbam:
+        command.extend(['-p', os.path.splitext(tmpbam.name)[0]])
 
-    out: str
-    error: str
-    out, error = proc.communicate()
+        proc: Popen = Popen(
+            command,
+            stdout=PIPE,
+            stderr=PIPE,
+            encoding='U8')
 
-    raise_on_proc_error(proc, error)
+        out: str
+        error: str
+        out, error = proc.communicate()
 
-    os.replace(
-        os.path.join(basedir, prefix + '.bam'),
-        output_bam
-    )
+        raise_on_proc_error(proc, error)
+
+        out_samsort, err_samsort = execute([
+            'samtools',
+            'sort',
+            '-@', THREADS,
+            '-O', 'bam',
+            '-o', output_bam,
+            tmpbam.name
+        ])
     out_samidx, err_samidx = execute([
         'samtools',
         'index',
@@ -83,8 +89,10 @@ def trim(
         output_bam
     ])
 
-    with open(output_bam + '.log', 'w') as fp:
+    with open(output_bam + '.ivar.log', 'w') as fp:
         fp.write(out)
         fp.write(error)
+        fp.write(out_samsort)
+        fp.write(err_samsort)
         fp.write(out_samidx)
         fp.write(err_samidx)

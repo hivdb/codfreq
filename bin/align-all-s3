@@ -87,7 +87,7 @@ done
 
 fastq2codfreq $tmpdir -p minimap2 -r $PROFILE --log-format json
 make-response $tmpdir $PATH_PREFIX
-compress-codfreq $tmpdir -v
+compress-codfreq $tmpdir --log-format json
 
 pushd $tmpdir > /dev/null
 rm -rf *.codfreq *.untrans.json

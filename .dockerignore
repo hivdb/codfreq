@@ -1,6 +1,9 @@
 scripts/__pycache__
 local
 build
+lambda-controller
+profiles
+refs
 *.egg
 *.egg-info
 codfreq/__pycache__

@@ -218,8 +218,13 @@ def find_paired_fastqs(
         for dirpath, _, filenames in os.walk(workdir, followlinks=True):
             filenames = [
                 fn for fn in filenames
-                if fn[-6:].lower() == '.fastq'
-                or fn[-9:].lower() == '.fastq.gz'
+                if (
+                    fn[-6:].lower() == '.fastq'
+                    or fn[-9:].lower() == '.fastq.gz'
+                ) and not (
+                    fn[-12:].lower() == 'merged.fastq'
+                    or fn[-15:].lower() == 'merged.fastq.gz'
+                )
             ]
             yield from complete_paired_fastqs(
                 find_paired_fastq_patterns(filenames, autopairing),
@@ -409,7 +414,8 @@ def align_with_profile(
             if ivar_trim_config is None:
                 os.replace(orig_bamfile, trimmed_bamfile)
                 os.replace(orig_bamfile + '.bai', trimmed_bamfile + '.bai')
-                os.replace(orig_bamfile + '.log', trimmed_bamfile + '.log')
+                os.replace(orig_bamfile + '.minimap2.log',
+                           trimmed_bamfile + '.minimap2.log')
             else:
                 ivar_trim(
                     orig_bamfile,

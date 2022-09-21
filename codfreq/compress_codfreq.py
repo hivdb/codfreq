@@ -61,10 +61,10 @@ def find_codfreq_untrans_pairs(
     type=click.Path(exists=True, file_okay=False,
                     dir_okay=True, resolve_path=True))
 @click.option(
-    '-v', '--verbose',
-    is_flag=True,
-    help='Verbose output')
-def compress_codfreq(workdir: str, verbose: bool) -> None:
+    '--log-format',
+    type=click.Choice(['text', 'json']),
+    default='text', show_default=True)
+def compress_codfreq(workdir: str, log_format: str) -> None:
     codfreq: str
     untrans: Optional[str]
     fp: BinaryIO
@@ -91,11 +91,13 @@ def compress_codfreq(workdir: str, verbose: bool) -> None:
         payload = pigz.compress(payload)
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
-        if verbose:
+        if log_format == 'json':
             click.echo(json.dumps({
                 'op': 'compress-codfreq',
                 'to': f'{codfreq}.gz'
             }))
+        else:
+            click.echo(f'Create {codfreq}.gz')
 
 
 if __name__ == '__main__':

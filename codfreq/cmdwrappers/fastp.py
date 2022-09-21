@@ -11,16 +11,17 @@ THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
 
 class FASTPConfig(TypedDict, total=False):
     include_unmerged: Optional[bool]
-    disable_quality_filtering: Optional[bool]
     qualified_quality_phred: Optional[int]
     unqualified_percent_limit: Optional[int]
     average_qual: Optional[int]
-    disable_length_filtering: Optional[bool]
     length_required: Optional[int]
     length_limit: Optional[int]
-    disable_adapter_trimming: Optional[bool]
     adapter_sequence: Optional[str]
     adapter_sequence_r2: Optional[str]
+    disable_adapter_trimming: Optional[bool]
+    disable_trim_poly_g: Optional[bool]
+    disable_quality_filtering: Optional[bool]
+    disable_length_filtering: Optional[bool]
 
 
 def load_config(config_path: str) -> FASTPConfig:
@@ -37,14 +38,15 @@ def fastp(
     fastq2in: Optional[str],
     fastq_merged_out: str,
     include_unmerged: Optional[bool] = False,
-    disable_quality_filtering: Optional[bool] = False,
     qualified_quality_phred: Optional[int] = None,
     unqualified_percent_limit: Optional[int] = None,
     average_qual: Optional[int] = None,
-    disable_length_filtering: Optional[bool] = False,
     length_required: Optional[int] = None,
     length_limit: Optional[int] = None,
     disable_adapter_trimming: Optional[bool] = False,
+    disable_trim_poly_g: Optional[bool] = False,
+    disable_quality_filtering: Optional[bool] = False,
+    disable_length_filtering: Optional[bool] = False,
     adapter_sequence: Optional[str] = None,
     adapter_sequence_r2: Optional[str] = None
 ) -> None:
@@ -100,6 +102,6 @@ def fastp(
 
     raise_on_proc_error(proc, error)
 
-    with open(os.path.splitext(fastq_merged_out)[0] + '.log', 'w') as fp:
+    with open(os.path.splitext(fastq_merged_out)[0] + '.fastp.log', 'w') as fp:
         fp.write(out)
         fp.write(error)

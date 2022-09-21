@@ -45,7 +45,7 @@ if [ ! -f $PROFILE ]; then
 fi
 
 fastq2codfreq $WORKDIR -p minimap2 -r $PROFILE $AUTOPAIRING
-compress-codfreq $WORKDIR -v
+compress-codfreq $WORKDIR
 
 pushd $WORKDIR > /dev/null
 rm -rf *.codfreq *.untrans.json

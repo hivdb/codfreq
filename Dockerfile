@@ -29,10 +29,18 @@ FROM builder as cutadapt_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cutadapt==4.1'
 
-FROM builder as py_builder
+FROM builder as pydep_builder
 COPY --from=pysam_builder /root/.cache/ /root/.cache/
 COPY --from=orjson_builder /root/.cache/ /root/.cache/
 COPY --from=cutadapt_builder /root/.cache/ /root/.cache/
+RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
+RUN pip install 'cython==0.29.26'
+COPY requirements.txt /codfreq/
+RUN pip install -r /codfreq/requirements.txt
+
+
+FROM builder as py_builder
+COPY --from=pydep_builder /root/.cache/ /root/.cache/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN pip install 'cython==0.29.26'
 COPY . /codfreq/
@@ -57,8 +65,8 @@ RUN cd /tmp/htslib-${HTSLIB_VERSION} && \
 FROM builder as ivar_builder
 RUN apk add automake autoconf
 COPY --from=htslib_builder /usr/local/htslib/ /usr/local/htslib/
-ARG IVAR_VERSION=6b56cb0e67384ee779c95b8f1e0666c22ea5db43
-RUN wget -O /tmp/ivar.tar.gz https://github.com/gkarthik/ivar/archive/${IVAR_VERSION}.tar.gz
+ARG IVAR_VERSION=1.3.1
+RUN wget -O /tmp/ivar.tar.gz https://github.com/andersen-lab/ivar/archive/refs/tags/v${IVAR_VERSION}.tar.gz
 RUN tar -xzC /tmp -f /tmp/ivar.tar.gz
 RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/htslib/lib && \
     export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/htslib/lib && \
