@@ -103,5 +103,6 @@ def fastp(
     raise_on_proc_error(proc, error)
 
     with open(os.path.splitext(fastq_merged_out)[0] + '.fastp.log', 'w') as fp:
+        fp.write(' '.join(command) + '\n')
         fp.write(out)
         fp.write(error)

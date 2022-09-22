@@ -81,6 +81,7 @@ def cutadapt(
 
     raise_on_proc_error(proc, error)
 
-    with open(merged_fastq_out + '.log', 'w') as fp:
+    with open(merged_fastq_out + '.cutadapt.log', 'w') as fp:
+        fp.write(' '.join(command) + '\n')
         fp.write(out)
         fp.write(error)

@@ -90,6 +90,7 @@ def trim(
     ])
 
     with open(output_bam + '.ivar.log', 'w') as fp:
+        fp.write(' '.join(command) + '\n')
         fp.write(out)
         fp.write(error)
         fp.write(out_samsort)

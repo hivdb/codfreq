@@ -74,6 +74,7 @@ def minimap2_align(
         bam
     ])
     with open(bam + '.minimap2.log', 'w') as fp:
+        fp.write(' '.join(command) + '\n')
         fp.write(err_minimap2)
         fp.write(out_sam2bam)
         fp.write(err_sam2bam)
