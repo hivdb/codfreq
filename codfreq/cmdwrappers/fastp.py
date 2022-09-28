@@ -13,6 +13,7 @@ class FASTPConfig(TypedDict, total=False):
     include_unmerged: Optional[bool]
     qualified_quality_phred: Optional[int]
     unqualified_percent_limit: Optional[int]
+    n_base_limit: Optional[int]
     average_qual: Optional[int]
     length_required: Optional[int]
     length_limit: Optional[int]
@@ -40,6 +41,7 @@ def fastp(
     include_unmerged: Optional[bool] = False,
     qualified_quality_phred: Optional[int] = None,
     unqualified_percent_limit: Optional[int] = None,
+    n_base_limit: Optional[int] = None,
     average_qual: Optional[int] = None,
     length_required: Optional[int] = None,
     length_limit: Optional[int] = None,
@@ -73,6 +75,8 @@ def fastp(
             command.extend(['-q', str(qualified_quality_phred)])
         if unqualified_percent_limit is not None:
             command.extend(['-u', str(unqualified_percent_limit)])
+        if n_base_limit is not None:
+            command.extend(['-n', str(n_base_limit)])
         if average_qual is not None:
             command.extend(['-e', str(average_qual)])
     if disable_length_filtering:
