@@ -292,6 +292,7 @@ def ivar_trim(
         click.echo(json.dumps({
             'op': 'trim',
             'status': 'working',
+            'command': 'ivar',
             'query': name
         }))
     ivar.trim(
@@ -305,6 +306,7 @@ def ivar_trim(
         click.echo(json.dumps({
             'op': 'trim',
             'status': 'done',
+            'command': 'ivar',
             'query': name
         }))
 
@@ -335,6 +337,7 @@ def cutadapt_trim(
         click.echo(json.dumps({
             'op': 'trim',
             'status': 'working',
+            'command': 'cutadapt',
             'query': name
         }))
     cutadapt.cutadapt(
@@ -348,6 +351,7 @@ def cutadapt_trim(
         click.echo(json.dumps({
             'op': 'trim',
             'status': 'done',
+            'command': 'cutadapt',
             'query': name
         }))
     return output_fastq

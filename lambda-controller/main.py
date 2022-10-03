@@ -1,7 +1,10 @@
+# type: ignore
 import re
+import csv
 import json
 import uuid
 import boto3
+from io import StringIO
 from datetime import datetime, timezone, timedelta
 from botocore.client import Config
 
@@ -79,12 +82,21 @@ def save_taskmeta(uniqkey, status, payload=None):
     return now
 
 
-def save_pairinfo(uniqkey, pairinfo):
+def save_file(uniqkey, config_file, content_type, payload):
     S3.put_object(
         Bucket=S3_BUCKET,
-        Key='tasks/{}/pairinfo.json'.format(uniqkey),
-        ContentType='application/json',
-        Body=json.dumps(pairinfo).encode('U8')
+        Key='tasks/{}/{}'.format(uniqkey, config_file),
+        ContentType=content_type,
+        Body=payload.encode('U8')
+    )
+
+
+def save_pairinfo(uniqkey, pairinfo):
+    save_file(
+        uniqkey,
+        'pairinfo.json',
+        'application/json',
+        json.dumps(pairinfo)
     )
 
 
@@ -157,10 +169,127 @@ def verify_profiles(profiles):
     return True
 
 
+def get_or_default(map, key, default, type_):
+    value = map.get(key)
+    if value is None:
+        return default
+    return type_(value)
+
+
+def save_fastp_config(uniqkey, opts):
+    payload = json.dumps({
+        'include_unmerged': get_or_default(
+            opts, 'includeUnmerged', True, bool),
+        'qualified_quality_phred': get_or_default(
+            opts, 'qualifiedQualityPhred', 15, int),
+        'unqualified_percent_limit': get_or_default(
+            opts, 'unqualifiedPercentLimit', 40, int),
+        'n_base_limit': get_or_default(
+            opts, 'nBaseLimit', 5, int),
+        'average_qual': get_or_default(
+            opts, 'averageQual', 0, int),
+        'length_required': get_or_default(
+            opts, 'lengthRequired', 15, int),
+        'length_limit': get_or_default(
+            opts, 'lengthLimit', 0, int),
+        'adapter_sequence': get_or_default(
+            opts, 'adapterSequence', 'auto', str),
+        'adapter_sequence_r2': get_or_default(
+            opts, 'adapterSequenceR2', 'auto', str),
+        'disable_adapter_trimming': get_or_default(
+            opts, 'disableAdapterTrimming', False, bool),
+        'disable_trim_poly_g': get_or_default(
+            opts, 'disableTrimPolyG', False, bool),
+        'disable_quality_filtering': get_or_default(
+            opts, 'disableQualityFiltering', False, bool),
+        'disable_length_filtering': get_or_default(
+            opts, 'disableLengthFiltering', False, bool)
+    })
+    save_file(uniqkey, 'fastp-config.json', 'application/json', payload)
+
+
+def save_cutadapt_config(uniqkey, opts):
+    config = json.dumps({
+        'error_rate': get_or_default(
+            opts, 'errorRate', 0.1, float),
+        'no_indels': get_or_default(
+            opts, 'noIndels', True, bool),
+        'times': get_or_default(
+            opts, 'times', 1, int),
+        'min_overlap': get_or_default(
+            opts, 'minOverlap', 3, int)
+    })
+    three_end = '\n'.join(
+        '>{}\n{}\n'.format(s['header'], s['sequence'])
+        for s in opts['primerSeqs']
+        if s['type'] == 'three-end'
+    )
+    five_end = '\n'.join(
+        '>{}\n{}\n'.format(s['header'], s['sequence'])
+        for s in opts['primerSeqs']
+        if s['type'] == 'five-end'
+    )
+    both_end = '\n'.join(
+        '>{}\n{}\n'.format(s['header'], s['sequence'])
+        for s in opts['primerSeqs']
+        if s['type'] == 'both-end'
+    )
+    save_file(uniqkey, 'cutadapt-config.json', 'application/json', config)
+    if three_end:
+        save_file(uniqkey, 'primers3.fa', 'text/x-fasta', three_end)
+    if five_end:
+        save_file(uniqkey, 'primers5.fa', 'text/x-fasta', five_end)
+    if both_end:
+        save_file(uniqkey, 'primers53.fa', 'text/x-fasta', both_end)
+
+
+def save_ivar_config(uniqkey, opts):
+    config = json.dumps({
+        'min_length': get_or_default(opts, 'minLength', 0, int),
+        'min_quality': get_or_default(opts, 'minQuality', 0, int),
+        'sliding_window_width': get_or_default(
+            opts, 'slidingWindowWidth', None, int),
+        'include_reads_with_no_primers': get_or_default(
+            opts, 'includeReadsWithNoPrimers', True, bool)
+    })
+    bedfp = StringIO()
+    writer = csv.writer(bedfp, delimiter='\t')
+    for row in opts.get('primerBeds') or []:
+        start = get_or_default(row, 'start', None, int)
+        end = get_or_default(row, 'end', None, int)
+        name = get_or_default(row, 'name', None, str)
+        strand = get_or_default(row, 'strand', None, str)
+        if start is None or \
+                end is None or \
+                name is None or \
+                strand not in ('+', '-'):
+            # skip invalid rows
+            continue
+        writer.writerow([
+            get_or_default(row, 'region', '<Unknown>', str),
+            start,
+            end,
+            name,
+            get_or_default(row, 'score', 60, int),
+            strand
+        ])
+    save_file(uniqkey, 'ivar-trim-config.json', 'application/json', config)
+    save_file(uniqkey, 'primers.bed', 'text/x-bed', bedfp.getvalue())
+
+
 def create_task(request):
     """Step 1: create task meta file"""
     uniqkey = str(uuid.uuid4())
     now = save_taskmeta(uniqkey, 'created')
+    options = request.get('options') if request else None
+    if options:
+        if 'fastpConfig' in options:
+            save_fastp_config(uniqkey, options['fastpConfig'])
+        if 'cutadaptConfig' in options:
+            save_cutadapt_config(uniqkey, options['cutadaptConfig'])
+        if 'ivarConfig' in options:
+            save_ivar_config(uniqkey, options['ivarConfig'])
+
     return {
         'taskKey': uniqkey,
         'lastUpdatedAt': now,
@@ -325,7 +454,7 @@ def trigger_runner(request):
     path_prefix = 'tasks/{}/'.format(uniqkey)
     result = S3.list_objects_v2(
         Bucket=S3_BUCKET,
-        MaxKeys=len(fastq_files) + 1,
+        MaxKeys=len(fastq_files) + 6,
         Prefix=path_prefix
     )
     if result['IsTruncated']:

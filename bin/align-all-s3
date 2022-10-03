@@ -80,7 +80,7 @@ if [ ! -f $PROFILE ]; then
 fi
 
 for file in $(lss3 $PATH_PREFIX); do
-    if [[ $file == *.fastq.gz || $file == *.fastq || $file == pairinfo.json ]]; then
+    if [[ $file == *.fastq.gz || $file == *.fastq || $file == *.json || $file == *.fa || $file == *.bed ]]; then
         downloads3 $PATH_PREFIX$file $tmpdir
     fi
 done
