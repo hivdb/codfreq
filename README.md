@@ -114,7 +114,9 @@ documentation](https://github.com/OpenGene/fastp#all-options) for the usage and
 explanation of these options.
 
 To apply your customized settings, make a `fastp-config.json` file and save it
-under the same folder that includes FASTQ files.
+under the same folder that includes FASTQ files. You can also disable adapter
+trimming, low phred quality filtering or length filtering by set the
+corresponding disabling flags to `true`.
 
 ### Primer trimming - FASTA
 CodFreq pipeline is now support trimming FASTA format primer sequences by using
