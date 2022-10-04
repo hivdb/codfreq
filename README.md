@@ -149,7 +149,8 @@ files: `primers.bed` (example:
 ivar requires a BED6 format which is a tab-delimited file include following six
 columns (no header): reference, start, end, name, score, and strand. We have
 reviewed ivar 4.1 source code and have confirmed that only four columns - start,
-end, name, and strand are used by ivar.
+end, name, and strand are used by ivar. The other two (reference and score) can
+be just supplied in any value to complete BED6 format.
 
 To enable primer trimming (BED), you must make a valid `ivar-config.json` file
 under the same folder that includes FASTQ files.
