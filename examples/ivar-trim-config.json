@@ -1,0 +1,6 @@
+{
+  "min_length": 0,
+  "min_quality": 0,
+  "sliding_window_width": null,
+  "include_reads_with_no_primers": true
+}

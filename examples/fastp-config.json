@@ -1,0 +1,15 @@
+{
+  "include_unmerged": true,
+  "qualified_quality_phred": 15,
+  "unqualified_percent_limit": 40,
+  "n_base_limit": 5,
+  "average_qual": 0,
+  "length_required": 15,
+  "length_limit": 0,
+  "adapter_sequence": "auto",
+  "adapter_sequence_r2": "auto",
+  "disable_adapter_trimming": false,
+  "disable_trim_poly_g": false,
+  "disable_quality_filtering": false,
+  "disable_length_filtering": false
+}
