@@ -260,7 +260,8 @@ def codonalign_consensus(
 
             # replace the consensus codon to codon aligned codon
             ((oldcodon, _),) = codons.most_common(1)
-            codons[newcodon] += codons.pop(oldcodon)
-            quas[newcodon] += quas.pop(oldcodon)
+            if newcodon != oldcodon:
+                codons[newcodon] += codons.pop(oldcodon)
+                quas[newcodon] += quas.pop(oldcodon)
 
     return codonstat_by_fragpos, qualities_by_fragpos

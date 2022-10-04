@@ -249,7 +249,6 @@ def sam2codfreq_between(
     The solution is simple, just processing the partial results in subprocess
     instead of in main process.
     """
-
     poscodons: List[PosCodon]
     fragment_name: str
     refpos: int
@@ -307,11 +306,6 @@ def sam2codfreq(
     :return: CodFreq rows
     """
 
-    poscodons: Tuple[Header, List[PosCodon]]
-    fragment_name: str
-    refpos: int
-    codon: CodonText
-    qua: int
     total: int
     pbar: Optional[Union[JsonProgress, tqdm]]
 
