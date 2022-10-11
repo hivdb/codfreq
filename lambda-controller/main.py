@@ -323,6 +323,51 @@ def fetch_codfreqs(request):
     }, 302
 
 
+def fetch_allfiles(request):
+    """Step 5 alt: fetch all files"""
+    uniqkey = request.get('taskKey')
+    next_token = request.get('nextToken')
+    if not uniqkey:
+        return {"error": "'taskKey' not provided"}, 400
+    try:
+        taskmeta = load_taskmeta(uniqkey)
+    except S3.exceptions.NoSuchKey:
+        return {"error": "taskKey not found"}, 404
+    if is_expired(taskmeta):
+        return {"error": "this task is expired"}, 404
+    if not is_success(taskmeta):
+        return {"error": "this task is not finished yet"}, 400
+
+    path_prefix = 'tasks/{}/'.format(uniqkey)
+    lskw = {
+        'Bucket': S3_BUCKET,
+        'MaxKeys': 1000,
+        'Prefix': path_prefix
+    }
+    if next_token:
+        lskw['ContinuationToken'] = next_token
+    result = S3.list_objects_v2(**lskw)
+    files = []
+    for file in result['Contents']:
+        files.append({
+            'fileName': file['Key'].rsplit('/', 1)[-1],
+            'url': S3.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': S3_BUCKET,
+                    'Key': file['Key']
+                },
+                ExpiresIn=7200)
+        })
+
+    return {
+        'taskKey': uniqkey,
+        'files': files,
+        'isTruncated': result['IsTruncated'],
+        'nextToken': result.get('NextContinuationToken')
+    }, 200
+
+
 def fetch_codfreqs_zip(request):
     """Step 5 alt: fetch codfreq zip file"""
     uniqkey = request.get('taskKey')
@@ -601,6 +646,8 @@ def dispatch(event, context):
         method = fetch_codfreqs
     elif handlername == 'fetch-codfreqs-zip':
         method = fetch_codfreqs_zip
+    elif handlername == 'fetch-allfiles':
+        method = fetch_allfiles
     else:
         method = method_not_found
     response_body, status = method(request)
