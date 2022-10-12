@@ -11,6 +11,7 @@
         "codon-alignment",
         "--min-gap-distance=15",
         "--gap-placement-score=2756/3ins:20,2756/6ins:30,2756/9ins:40,2756/12ins:50",
+        "--gap-placement-score=4994/6ins:20",
         "2088",
         "5096",
         "codon-alignment",
