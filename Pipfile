@@ -17,7 +17,7 @@ awscli = "*"
 urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
-post-align = {file = "https://github.com/hivdb/post-align/archive/b5851f032bd6a5b1368b4d8c00aed39a23fcb7c8.zip"}
+post-align = {file = "https://github.com/hivdb/post-align/archive/5ba0eb0cb4edd47a3d9ccd8083c1537988dd2224.zip"}
 typing-extensions = "*"
 cutadapt = ">=4.1"
 

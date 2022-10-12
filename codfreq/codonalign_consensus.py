@@ -228,13 +228,13 @@ def codonalign_consensus(
             # perform postalign's codon_align
             (frag_refseq_obj,
              frag_queryseq_obj) = codon_align(
-                 frag_refseq_obj, frag_queryseq_obj,
+                 frag_refseq_obj,
+                 frag_queryseq_obj,
                  min_gap_distance=min_gap_distance,
                  window_size=window_size,
                  gap_placement_score=gap_placement_score,
-                 refstart=refstart,
-                 refend=refend,
-                 check_boundary=False
+                 ref_start=refstart,
+                 ref_end=refend
             )
 
         if (
