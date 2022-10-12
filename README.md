@@ -119,7 +119,7 @@ trimming, low phred quality filtering or length filtering by set the
 corresponding disabling flags to `true`.
 
 ### Primer trimming - FASTA
-CodFreq pipeline is now support trimming FASTA format primer sequences by using
+CodFreq pipeline supports trimming FASTA format primer sequences by using
 [cutadapt](https://cutadapt.readthedocs.io/en/v4.1/guide.html).
 [`examples/cutadapt-config.json`](https://github.com/hivdb/codfreq/tree/main/examples/cutadapt-config.json)
 listed all cutadapt options supported by this pipeline. Please refer to
@@ -137,7 +137,7 @@ To enable primer trimming (FASTA), you must make a valid `cutadapt-config.json`
 file under the same folder that includes FASTQ files.
 
 ### Primer trimming - BED
-CodFreq pipeline is now support trimming BED format primer locations by using
+CodFreq pipeline supports trimming BED format primer locations by using
 [ivar](https://andersen-lab.github.io/ivar/html/manualpage.html).
 [`examples/ivar-trim-config.json`](https://github.com/hivdb/codfreq/tree/main/examples/ivar-trim-config.json)
 listed all `ivar trim` options supported by this pipeline. Please refer to
@@ -154,7 +154,7 @@ reviewed ivar 4.1 source code and have confirmed that only four columns - start,
 end, name, and strand are used by ivar. The other two (reference and score) can
 be just supplied in any values for completing the BED6 format.
 
-To enable primer trimming (BED), you must make a valid `ivar-config.json` file
+To enable primer trimming (BED), you must make a valid `ivar-trim-config.json` file
 under the same folder that includes FASTQ files.
 
 <!--
