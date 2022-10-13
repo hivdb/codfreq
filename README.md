@@ -91,8 +91,8 @@ use this script.
 
 ### Offline usage
 
-The `fastq2codfreq` command can be used offline, although the usage are slightly
-different from the above description. Following are the points:
+The `fastq2codfreq` command can be used offline, although the usage is slightly
+different from the above description. Followings are the difference:
 
 - Docker's installation package, the `fastq2codfreq` script and the alignment
   profiles can be transfered to the offline server using a portable drive.
@@ -105,13 +105,11 @@ different from the above description. Following are the points:
   # Run this command on the offline server
   docker load < codfreq-runner.tar.gz
   ```
-
-The auto-update option of `fastq2codfreq` should be also disabled by using
+- The auto-update option of `fastq2codfreq` should also be disabled with
 argument `-s`:
-
-```bash
-fastq2codfreq -s -r profiles/HIV1.json -d path/to/fastq/folders
-```
+  ```bash
+  fastq2codfreq -s -r profiles/HIV1.json -d path/to/fastq/folders
+  ```
 
 ### Advanced usages
 #### Disable auto-pairing FASTQ files
