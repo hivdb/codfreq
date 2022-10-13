@@ -89,6 +89,30 @@ Note: the `fastq2codfreq` script can only be executed in an Unix-like system. If
 you need to install the [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10) to
 use this script.
 
+### Offline usage
+
+The `fastq2codfreq` command can be used offline also the usage are slightly
+different from the above description. Following are the points:
+
+- Docker's installation package, the `fastq2codfreq` script and the alignment
+  profiles can be transfered to the offline server using a portable drive.
+- Docker image used by `fastq2codfreq` can be downloaded into a binary file, and
+  transfer to the offline server using a portable drive.
+  ```bash
+  # Run this command on a computer with Internet access
+  docker save hivdb/codfreq-runner:latest | gzip > codfreq-runner.tar.gz
+  
+  # Run this command on the offline server
+  docker load < codfreq-runner.tar.gz
+  ```
+
+The auto-update option of `fastq2codfreq` should be also disabled by using
+argument `-s`:
+
+```bash
+fastq2codfreq -s -r profiles/HIV1.json -d path/to/fastq/folders
+```
+
 ### Advanced usages
 #### Disable auto-pairing FASTQ files
 A flag argument `-m` can be added to `fastq2codfreq` command to dissable
