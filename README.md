@@ -92,7 +92,7 @@ use this script.
 ### Offline usage
 
 The `fastq2codfreq` command can be used offline, although the usage is slightly
-different from the above description. Followings are the difference:
+different from the above description. Followings are the differences:
 
 - Docker's installation package, the `fastq2codfreq` script and the alignment
   profiles can be transfered to the offline server using a portable drive.
