@@ -57,7 +57,7 @@ The `.sam` or `.bam` files are the alignment output from many multiple sequence 
 2. Download script:
 
    ```bash
-   sudo curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/bin-wrapper/align-all-docker -o /usr/local/bin/fastq2codfreq
+   sudo curl -sL https://raw.githubusercontent.com/hivdb/codfreq/main/bin-wrapper/align-all-docker -o /usr/local/bin/fastq2codfreq
    sudo chmod +x /usr/local/bin/fastq2codfreq
    ```
 
@@ -65,8 +65,8 @@ The `.sam` or `.bam` files are the alignment output from many multiple sequence 
 
    ```bash
    mkdir profiles
-   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/profiles/HIV1.json -o profiles/HIV1.json
-   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/master/profiles/SARS2.json -o profiles/SARS2.json
+   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/main/profiles/HIV1.json -o profiles/HIV1.json
+   curl -sL https://raw.githubusercontent.com/hivdb/codfreq/main/profiles/SARS2.json -o profiles/SARS2.json
    ```
 
 4. Use following command to process FASTQ files and generate CodFreq files.
