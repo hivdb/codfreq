@@ -36,6 +36,7 @@ from .filename_helper import (
 )
 
 ENCODING = 'UTF-8'
+REQUIRED_PROFILE_VERSION = '20221213'
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
 INVALID_PAIRED_FASTQ_MARKER = re.compile(r'[1-9]0*[12]|[^0]00+[12]|[12]\d')
@@ -438,6 +439,12 @@ def align(
 ) -> None:
     row: CodFreqRow
     profile_obj: Profile = json.load(profile)
+    if profile_obj.get('version') != REQUIRED_PROFILE_VERSION:
+        click.echo(
+            'Incompatible profile detected. Download the latest profile files '
+            'from: https://github.com/hivdb/codfreq/tree/main/profiles',
+            err=True)
+        raise click.Abort()
     paired_fastqs = list(find_paired_fastqs(workdir, autopairing))
 
     fastp_config: fastp.FASTPConfig = fastp.load_config(
