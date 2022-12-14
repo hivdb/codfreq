@@ -20,6 +20,7 @@ from concurrent.futures import ProcessPoolExecutor
 from .codfreq_types import (
     Header,
     AAPos,
+    NAPosRange,
     Profile,
     GeneText,
     CodFreqRow,
@@ -60,10 +61,24 @@ def build_fragment_intervals(
     fragments: List[DerivedFragmentConfig]
 ) -> List[FragmentInterval]:
     return [(
-        fragment['refStart'],
-        fragment['refEnd'],
+        fragment['refRanges'],
         fragment['fragmentName']
     ) for fragment in fragments]
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(list)
+def get_ref_ranges(config: Dict) -> List[NAPosRange]:
+    refstart = config.get('refStart')
+    refend = config.get('refEnd')
+    orig_refranges = config.get('refRanges')
+    refranges: List[NAPosRange] = []
+    if isinstance(orig_refranges, list):
+        refranges = [(start, end) for start, end in orig_refranges]
+    elif isinstance(refstart, int) and isinstance(refend, int):
+        refranges = [(refstart, refend)]
+    return refranges
 
 
 @cython.cfunc
@@ -103,42 +118,42 @@ def get_ref_fragments(
         refname = config['fragmentName']
         fromref = config.get('fromFragment')
         gene = config.get('geneName')
-        refstart = config.get('refStart')
-        refend = config.get('refEnd')
+        refranges = get_ref_ranges(config)
         codon_alignment_raw: Any = config.get('codonAlignment')
         codon_alignment = None
         if isinstance(codon_alignment_raw, list):
             codon_alignment = []
             for one in codon_alignment_raw:
                 cda = {}
-                if 'refStart' in one:
-                    cda['refStart'] = one['refStart']
-                if 'refEnd' in one:
-                    cda['refEnd'] = one['refEnd']
+                if 'relRefStart' in one:
+                    cda['relRefStart'] = one['relRefStart']
+                if 'relRefEnd' in one:
+                    cda['relRefEnd'] = one['relRefEnd']
                 if 'windowSize' in one:
                     cda['windowSize'] = one['windowSize']
                 if 'minGapDistance' in one:
                     cda['minGapDistance'] = one['minGapDistance']
-                if 'gapPlacementScore' in one:
-                    cda['gapPlacementScore'] = one['gapPlacementScore']
+                if 'relGapPlacementScore' in one:
+                    cda['relGapPlacementScore'] = one['relGapPlacementScore']
                 codon_alignment.append(cda)
         elif codon_alignment_raw is False:
             codon_alignment = False
+
         if (
             isinstance(fromref, str) and
             (gene is None or isinstance(gene, str)) and
-            isinstance(refstart, int) and
-            isinstance(refend, int)
+            refranges
         ):
             ref_fragments[fromref]['fragments'].append({
                 'fragmentName': refname,
                 'fromFragment': fromref,
                 'geneName': gene,
-                'refStart': refstart,
-                'refEnd': refend,
+                'refRanges': refranges,
                 'codonAlignment': codon_alignment
             })
-            frag_size_lookup[refname] = (refend - refstart + 1) // 3
+            frag_size_lookup[refname] = sum(
+                (end - start + 1) for start, end in refranges
+            ) // 3
 
     # build frag_gene_lookup
     gene_offsets: Dict[GeneText, AAPos] = defaultdict(lambda: 0)

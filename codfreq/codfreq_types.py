@@ -12,6 +12,8 @@ CodonText = MultiNAText
 AAChar = int
 MultiAAText = bytes
 
+NAPosRange = Tuple[NAPos, NAPos]
+
 
 class PairedFASTQ(TypedDict):
     name: Header
@@ -30,11 +32,11 @@ class MainFragmentConfig(TypedDict):
 
 
 class CodonAlignmentConfig(TypedDict, total=False):
-    refStart: NAPos
-    refEnd: NAPos
+    relRefStart: NAPos
+    relRefEnd: NAPos
     windowSize: Optional[AAPos]
     minGapDistance: Optional[NAPos]
-    gapPlacementScore: Optional[str]
+    relGapPlacementScore: Optional[str]
 
 
 class DerivedFragmentConfig(TypedDict, total=False):
@@ -42,8 +44,7 @@ class DerivedFragmentConfig(TypedDict, total=False):
     fromFragment: Header
     refSequence: None
     geneName: Optional[GeneText]
-    refStart: NAPos
-    refEnd: NAPos
+    refRanges: List[NAPosRange]
     codonAlignment: Optional[Union[
         Literal[False], List[CodonAlignmentConfig]
     ]]
@@ -91,8 +92,8 @@ class CodFreqRow(TypedDict):
     total_quality_score: int
 
 
-#                      refStart refEnd
-#                          v      v
-FragmentInterval = Tuple[NAPos, NAPos, Header]
+#                                 refStart refEnd
+#                                     v      v
+FragmentInterval = Tuple[List[Tuple[NAPos, NAPos]], Header]
 
 RefAAs = Dict[AAPos, MultiAAText]

@@ -24,6 +24,7 @@ from .sam2codfreq_types import CodonCounterByFragPos
 from .codfreq_types import (
     AAPos,
     NAPos,
+    NAPosRange,
     CodonText,
     Header,
     CodFreqRow,
@@ -57,6 +58,24 @@ def get_sequence_obj(
 
 @cython.cfunc
 @cython.inline
+@cython.returns(int)
+def aapos_to_napos(
+    aapos: AAPos,
+    refranges: List[NAPosRange]
+) -> NAPos:
+    max_rel_napos = 0
+    for start, end in refranges:
+        max_rel_napos += end - start + 1
+        max_aapos = max_rel_napos // 3
+        if aapos <= max_aapos:
+            rel_napos = aapos * 3 - 2
+            napos_offset = max_rel_napos - rel_napos
+            return end - napos_offset
+    return -1
+
+
+@cython.cfunc
+@cython.inline
 @cython.returns(tuple)
 def assemble_alignment(
     codonstat_by_fragpos: CodonCounterByFragPos,
@@ -76,17 +95,19 @@ def assemble_alignment(
     cons_codon_size: int
     codons: Optional[Counter[CodonText]]
     fragment_name: Header = fragment['fragmentName']
-    frag_refstart: NAPos = fragment['refStart']
-    frag_refend: NAPos = fragment['refEnd']
+    frag_refranges: List[NAPosRange] = fragment['refRanges']
     frag_refseq: bytearray = bytearray()
     frag_queryseq: bytearray = bytearray()
-    refsize: int = frag_refend - frag_refstart + 1
+    refsize: int = sum(end - start + 1 for start, end in frag_refranges)
     first_aa: AAPos = refsize // 3
     last_aa: AAPos = 0
 
     for aapos in range(1, refsize // 3 + 1):
-        napos = frag_refstart + aapos * 3 - 4
-        ref_codon = refseq[napos:napos + 3]
+        napos = aapos_to_napos(aapos, frag_refranges)
+        if napos == -1:
+            # aapos is out of range, should we raise error?
+            continue
+        ref_codon = refseq[napos - 1:napos + 2]
         codons = codonstat_by_fragpos.get((fragment_name, aapos))
         if codons:
             ((cons_codon_bytes, _),) = codons.most_common(1)
@@ -139,7 +160,6 @@ def codonalign_consensus(
     aapos: AAPos
     refstart: NAPos
     refend: NAPos
-    ref_offset: NAPos
     refcodon: List[NAPosition]
     querycodon: List[NAPosition]
     codons: Optional[Counter[CodonText]]
@@ -159,10 +179,7 @@ def codonalign_consensus(
             continue
 
         if not codon_align_config:
-            codon_align_config = [{
-                'refStart': fragment['refStart'],
-                'refEnd': fragment['refEnd']
-            }]
+            codon_align_config = [{}]
 
         # assemble consensus codon reads into pairwise alignment
         (frag_refseq_obj,
@@ -184,19 +201,10 @@ def codonalign_consensus(
         seq_refstart = first_aa * 3 - 2
         seq_refend = last_aa * 3
 
-        # load gene reference absolute start position
-        ref_offset = fragment['refStart'] - 1
-
         # apply codon alignment (CDA) to pairwise alignment
         for cda_config in codon_align_config:
-
-            # The config defines CDA's refStart and refEnd based on the
-            # absolute reference positions (e.g. HXB2, Wuhan-Hu-1). This
-            # converts them to relative positions
-            refstart = cda_config.get(
-                'refStart', fragment['refStart']) - ref_offset
-            refend = cda_config.get(
-                'refEnd', fragment['refEnd']) - ref_offset
+            refstart = cda_config.get('relRefStart', seq_refstart)
+            refend = cda_config.get('relRefEnd', seq_refend)
 
             # Codon alignment shouldn't exceed query sequence boundary
             if refstart < seq_refend and refend > seq_refstart:
@@ -213,17 +221,7 @@ def codonalign_consensus(
             gap_placement_score: Dict[
                 int, Dict[Tuple[int, int], int]
             ] = parse_gap_placement_score(
-                cda_config.get('gapPlacementScore') or '')
-
-            # positions in gap_placement_score should also be converted to
-            # relative positions
-            gap_placement_score = {
-                indel: {
-                    (pos - ref_offset, size): score
-                    for (pos, size), score in scores.items()
-                }
-                for indel, scores in gap_placement_score.items()
-            }
+                cda_config.get('relGapPlacementScore') or '')
 
             # perform postalign's codon_align
             (frag_refseq_obj,

@@ -17,24 +17,24 @@ RUN wget -O /tmp/minimap2.tar.bz2 "https://github.com/lh3/minimap2/releases/down
 
 FROM builder as pysam_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
-RUN pip install 'cython==0.29.26'
-RUN pip install 'pysam==0.19.1'
+RUN pip install 'cython==0.29.32'
+RUN pip install 'pysam==0.20.0'
 
 FROM builder as orjson_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
 RUN apk add rust cargo patchelf
-RUN pip install 'orjson==3.6.6'
+RUN pip install 'orjson==3.8.0'
 
 FROM builder as cutadapt_builder
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
-RUN pip install 'cutadapt==4.1'
+RUN pip install 'cutadapt==4.2'
 
 FROM builder as pydep_builder
 COPY --from=pysam_builder /root/.cache/ /root/.cache/
 COPY --from=orjson_builder /root/.cache/ /root/.cache/
 COPY --from=cutadapt_builder /root/.cache/ /root/.cache/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
-RUN pip install 'cython==0.29.26'
+RUN pip install 'cython==0.29.32'
 COPY requirements.txt /codfreq/
 RUN pip install -r /codfreq/requirements.txt
 
@@ -42,7 +42,7 @@ RUN pip install -r /codfreq/requirements.txt
 FROM builder as py_builder
 COPY --from=pydep_builder /root/.cache/ /root/.cache/
 RUN echo 'manylinux2014_compatible = True' > /usr/local/lib/python3.9/site-packages/_manylinux.py
-RUN pip install 'cython==0.29.26'
+RUN pip install 'cython==0.29.32'
 COPY . /codfreq/
 RUN pip install --ignore-installed --target /python-packages /codfreq
 RUN mv /python-packages/bin /python-scripts

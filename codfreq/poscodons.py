@@ -10,6 +10,7 @@ from .codfreq_types import (
     NAChar,
     AAPos,
     NAPos,
+    NAPosRange,
     CodonText
 )
 from .posnas import iter_single_read_posnas, PosNA
@@ -49,8 +50,7 @@ def group_basepairs(
     napos: NAPos
     na_and_ins: List[PosNA]
     aapos: AAPos
-    frag_refstart: NAPos
-    frag_refend: NAPos
+    frag_refranges: List[NAPosRange]
     fragment_name: Header
 
     posnas_by_napos: List[
@@ -59,14 +59,16 @@ def group_basepairs(
     basepairs: Dict[Header, List[BasePair]] = defaultdict(list)
 
     for napos, na_and_ins in posnas_by_napos:
-        for frag_refstart, frag_refend, fragment_name in fragment_intervals:
-            if napos < frag_refstart or napos > frag_refend:
-                continue
-            aapos = (napos - frag_refstart) // 3 + 1
-            basepairs[fragment_name].append((
-                aapos,
-                na_and_ins
-            ))
+        for frag_refranges, fragment_name in fragment_intervals:
+            rel_napos0 = 0
+            for start, end in frag_refranges:
+                if napos >= start and napos <= end:
+                    aapos = (rel_napos0 + napos - start) // 3 + 1
+                    basepairs[fragment_name].append((
+                        aapos,
+                        na_and_ins
+                    ))
+                rel_napos0 += end - start + 1
     return list(basepairs.items())
 
 
@@ -78,16 +80,15 @@ def find_intersected_fragments(
     read_refstart: NAPos,
     read_refend: NAPos
 ) -> List[FragmentInterval]:
-    frag_refstart: NAPos
-    frag_refend: NAPos
+    frag_refranges: List[NAPosRange]
     fragment_name: Header
     filtered: List[FragmentInterval] = []
-    for frag_refstart, frag_refend, fragment_name in fragment_intervals:
-        if read_refend < frag_refstart:
-            break
-        if read_refstart > frag_refend:
+    for frag_refranges, fragment_name in fragment_intervals:
+        if all(read_refend < start for start, _ in frag_refranges):
             continue
-        filtered.append((frag_refstart, frag_refend, fragment_name))
+        if all(read_refstart > end for _, end in frag_refranges):
+            continue
+        filtered.append((frag_refranges, fragment_name))
     return filtered
 
 

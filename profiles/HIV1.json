@@ -8,8 +8,7 @@
       "fragmentName": "gag",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "gag",
-      "refStart": 790,
-      "refEnd": 2289,
+      "refRanges": [[790, 2289]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -20,8 +19,7 @@
       "fragmentName": "CA",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "CA",
-      "refStart": 1186,
-      "refEnd": 1878,
+      "refRanges": [[1186, 1878]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -32,12 +30,11 @@
       "fragmentName": "pol",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "pol",
-      "refStart": 2088,
-      "refEnd": 5093,
+      "refRanges": [[2088, 5093]],
       "codonAlignment": [
         {
           "minGapDistance": 15,
-          "gapPlacementScore": "2756/3ins:20,2756/6ins:30,2756/9ins:40,2756/12ins:50,4994/6ins:20"
+          "relGapPlacementScore": "669/3ins:20,669/6ins:30,669/9ins:40,669/12ins:50,2907/6ins:20"
         }
       ]
     },
@@ -45,8 +42,7 @@
       "fragmentName": "PR",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "PR",
-      "refStart": 2253,
-      "refEnd": 2549,
+      "refRanges": [[2253, 2549]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -57,12 +53,11 @@
       "fragmentName": "RT",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "RT",
-      "refStart": 2550,
-      "refEnd": 4229,
+      "refRanges": [[2550, 4229]],
       "codonAlignment": [
         {
           "minGapDistance": 15,
-          "gapPlacementScore": "2756/3ins:20,2756/6ins:30,2756/9ins:40,2756/12ins:50"
+          "relGapPlacementScore": "207/3ins:20,207/6ins:30,207/9ins:40,207/12ins:50"
         }
       ]
     },
@@ -70,12 +65,11 @@
       "fragmentName": "IN",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "IN",
-      "refStart": 4230,
-      "refEnd": 5093,
+      "refRanges": [[4230, 5093]],
       "codonAlignment": [
         {
           "minGapDistance": 15,
-          "gapPlacementScore": "4994/6ins:20"
+          "relGapPlacementScore": "765/6ins:20"
         }
       ]
     },
@@ -83,8 +77,7 @@
       "fragmentName": "vif",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "vif",
-      "refStart": 5041,
-      "refEnd": 5616,
+      "refRanges": [[5041, 5616]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -92,11 +85,10 @@
       ]
     },
     {
-      "fragmentName": "vpr-pre-fs",
+      "fragmentName": "vpr",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "vpr",
-      "refStart": 5559,
-      "refEnd": 5771,
+      "refRanges": [[5559, 5771], [5773, 5847]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -104,23 +96,10 @@
       ]
     },
     {
-      "fragmentName": "vpr-post-fs",
-      "fromFragment": "HXB2_x_ConsensusB",
-      "geneName": "vpr",
-      "refStart": 5773,
-      "refEnd": 5847,
-      "codonAlignment": [
-        {
-          "minGapDistance": 15
-        }
-      ]
-    },
-    {
-      "fragmentName": "tat-pre-intron",
+      "fragmentName": "tat",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "tat",
-      "refStart": 5831,
-      "refEnd": 6046,
+      "refRanges": [[5831, 6046], [8380, 8466]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -128,35 +107,10 @@
       ]
     },
     {
-      "fragmentName": "tat-post-intron",
-      "fromFragment": "HXB2_x_ConsensusB",
-      "geneName": "tat",
-      "refStart": 8380,
-      "refEnd": 8466,
-      "codonAlignment": [
-        {
-          "minGapDistance": 15
-        }
-      ]
-    },
-    {
-      "fragmentName": "rev-pre-intron",
+      "fragmentName": "rev",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "rev",
-      "refStart": 5970,
-      "refEnd": 6044,
-      "codonAlignment": [
-        {
-          "minGapDistance": 15
-        }
-      ]
-    },
-    {
-      "fragmentName": "rev-post-intron",
-      "fromFragment": "HXB2_x_ConsensusB",
-      "geneName": "rev",
-      "refStart": 8378,
-      "refEnd": 8650,
+      "refRanges": [[5970, 6044], [8378, 8650]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -167,8 +121,7 @@
       "fragmentName": "vpu",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "vpu",
-      "refStart": 6062,
-      "refEnd": 6307,
+      "refRanges": [[6062, 6307]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -179,8 +132,7 @@
       "fragmentName": "env",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "env",
-      "refStart": 6225,
-      "refEnd": 8792,
+      "refRanges": [[6225, 8792]],
       "codonAlignment": [
         {
           "minGapDistance": 15
@@ -191,8 +143,7 @@
       "fragmentName": "nef",
       "fromFragment": "HXB2_x_ConsensusB",
       "geneName": "nef",
-      "refStart": 8797,
-      "refEnd": 9414,
+      "refRanges": [[8797, 9414]],
       "codonAlignment": [
         {
           "minGapDistance": 15

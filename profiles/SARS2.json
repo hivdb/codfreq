@@ -8,130 +8,107 @@
       "fragmentName": "nsp1",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp1",
-      "refStart": 266,
-      "refEnd": 805
+      "refRanges": [[266, 805]]
     },
     {
       "fragmentName": "nsp2",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp2",
-      "refStart": 806,
-      "refEnd": 2719
+      "refRanges": [[806, 2719]]
     },
     {
       "fragmentName": "PLpro",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "PLpro",
-      "refStart": 2720,
-      "refEnd": 8554
+      "refRanges": [[2720, 8554]]
     },
     {
       "fragmentName": "nsp4",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp4",
-      "refStart": 8555,
-      "refEnd": 10054
+      "refRanges": [[8555, 10054]]
     },
     {
       "fragmentName": "_3CLpro",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "_3CLpro",
-      "refStart": 10055,
-      "refEnd": 10972
+      "refRanges": [[10055, 10972]]
     },
     {
       "fragmentName": "nsp6",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp6",
-      "refStart": 10973,
-      "refEnd": 11842
+      "refRanges": [[10973, 11842]]
     },
     {
       "fragmentName": "nsp7",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp7",
-      "refStart": 11843,
-      "refEnd": 12091
+      "refRanges": [[11843, 12091]]
     },
     {
       "fragmentName": "nsp8",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp8",
-      "refStart": 12092,
-      "refEnd": 12685
+      "refRanges": [[12092, 12685]]
     },
     {
       "fragmentName": "nsp9",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp9",
-      "refStart": 12686,
-      "refEnd": 13024
+      "refRanges": [[12686, 13024]]
     },
     {
       "fragmentName": "nsp10",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp10",
-      "refStart": 13025,
-      "refEnd": 13441
+      "refRanges": [[13025, 13441]]
     },
     {
-      "fragmentName": "nsp11",
+      "fragmentName": "RdRP",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "RdRP",
-      "refStart": 13442,
-      "refEnd": 13468
-    },
-    {
-      "fragmentName": "nsp12",
-      "fromFragment": "Wuhan-Hu-1::NC_045512.2",
-      "geneName": "RdRP",
-      "refStart": 13468,
-      "refEnd": 16236
+      "refRanges": [[13442, 13468], [13468, 16236]]
     },
     {
       "fragmentName": "nsp13",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp13",
-      "refStart": 16237,
-      "refEnd": 18039
+      "refRanges": [[16237, 18039]]
     },
     {
       "fragmentName": "nsp14",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp14",
-      "refStart": 18040,
-      "refEnd": 19620
+      "refRanges": [[18040, 19620]]
     },
     {
       "fragmentName": "nsp15",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp15",
-      "refStart": 19621,
-      "refEnd": 20658
+      "refRanges": [[19621, 20658]]
     },
     {
       "fragmentName": "nsp16",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "nsp16",
-      "refStart": 20659,
-      "refEnd": 21552
+      "refRanges": [[20659, 21552]]
     },
     {
       "fragmentName": "S",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "S",
-      "refStart": 21563,
-      "refEnd": 25381,
+      "refRanges": [[21563, 25381]],
       "codonAlignment": [
         {
-          "refStart": 21563,
-          "refEnd": 22201,
-          "gapPlacementScore": "21635/9del:4,22031/6del:1,22196/3del:6"
+          "relRefStart": 1,
+          "relRefEnd": 639,
+          "relGapPlacementScore": "73/9del:20,469/6del:15,634/3del:10"
         },
         {
-          "refStart": 22202,
-          "refEnd": 25384,
-          "gapPlacementScore": "23603/12del:8"
+          "relRefStart": 640,
+          "relRefEnd": 3819,
+          "relGapPlacementScore": "2041/12del:25"
         }
       ]
     },
@@ -139,64 +116,55 @@
       "fragmentName": "ORF3a",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF3a",
-      "refStart": 25393,
-      "refEnd": 26217
+      "refRanges": [[25393, 26217]]
     },
     {
       "fragmentName": "E",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "E",
-      "refStart": 26245,
-      "refEnd": 26469
+      "refRanges": [[26245, 26469]]
     },
     {
       "fragmentName": "M",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "M",
-      "refStart": 26523,
-      "refEnd": 27188
+      "refRanges": [[26523, 27188]]
     },
     {
       "fragmentName": "ORF6",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF6",
-      "refStart": 27202,
-      "refEnd": 27384
+      "refRanges": [[27202, 27384]]
     },
     {
       "fragmentName": "ORF7a",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF7a",
-      "refStart": 27394,
-      "refEnd": 27756
+      "refRanges": [[27394, 27756]]
     },
     {
       "fragmentName": "ORF7b",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF7b",
-      "refStart": 27756,
-      "refEnd": 27884
+      "refRanges": [[27756, 27884]]
     },
     {
       "fragmentName": "ORF8",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF8",
-      "refStart": 27894,
-      "refEnd": 28256
+      "refRanges": [[27894, 28256]]
     },
     {
       "fragmentName": "N",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "N",
-      "refStart": 28274,
-      "refEnd": 29530
+      "refRanges": [[28274, 29530]]
     },
     {
       "fragmentName": "ORF10",
       "fromFragment": "Wuhan-Hu-1::NC_045512.2",
       "geneName": "ORF10",
-      "refStart": 29558,
-      "refEnd": 29671
+      "refRanges": [[29558, 29671]]
     }
   ],
   "sequenceAssemblyConfig": [
