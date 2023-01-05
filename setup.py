@@ -49,6 +49,16 @@ extensions = [
         name='codfreq.sam2consensus',
         sources=['codfreq/sam2consensus.py'],
         # define_macros=[('CYTHON_TRACE', '1')]
+    ),
+    Extension(
+        name='codfreq.trifreq',
+        sources=['codfreq/trifreq.py'],
+        # define_macros=[('CYTHON_TRACE', '1')]
+    ),
+    Extension(
+        name='codfreq.sam2trifreq',
+        sources=['codfreq/sam2trifreq.py'],
+        # define_macros=[('CYTHON_TRACE', '1')]
     )
 ]
 

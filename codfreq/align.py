@@ -21,6 +21,7 @@ from typing import (
 
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
 
+from .sam2trifreq import sam2trifreq_all
 from .sam2codfreq import (
     sam2codfreq_all,
     CODFREQ_HEADER
@@ -471,26 +472,34 @@ def align(
             cutadapt_config=cutadapt_config,
             ivar_trim_config=ivar_trim_config
         )
-        codfreqfile = name_codfreq(pairobj['name'])
-        with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
-            writer = csv.DictWriter(fp, CODFREQ_HEADER)
-            writer.writeheader()
-            for row in sam2codfreq_all(
-                name=pairobj['name'],
-                fnpair=pairobj['pair'],
-                profile=profile_obj,
-                workers=workers,
-                log_format=log_format
-            ):
-                writer.writerow({
-                    **row,
-                    'codon': row['codon'].decode(ENCODING)
-                })
-
-        create_untrans_region_consensus(
-            pairobj['name'],
-            profile_obj
+        # codfreqfile = name_codfreq(pairobj['name'])
+        sam2trifreq_all(
+            name=pairobj['name'],
+            fnpair=pairobj['pair'],
+            profile=profile_obj,
+            workers=workers,
+            log_format=log_format
         )
+
+        # with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
+        #     writer = csv.DictWriter(fp, CODFREQ_HEADER)
+        #     writer.writeheader()
+        #     for row in sam2codfreq_all(
+        #         name=pairobj['name'],
+        #         fnpair=pairobj['pair'],
+        #         profile=profile_obj,
+        #         workers=workers,
+        #         log_format=log_format
+        #     ):
+        #         writer.writerow({
+        #             **row,
+        #             'codon': row['codon'].decode(ENCODING)
+        #         })
+
+        # create_untrans_region_consensus(
+        #     pairobj['name'],
+        #     profile_obj
+        # )
 
 
 @click.command()

@@ -56,6 +56,10 @@ def name_codfreq(name: str) -> str:
     return '{}.codfreq'.format(name)
 
 
+def name_trifreq(name: str, refname: Header) -> str:
+    return '{}.{}.trifreq'.format(name, refname)
+
+
 def replace_ext(
         filename: str,
         toext: str,
