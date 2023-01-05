@@ -13,3 +13,6 @@ build
 
 __pycache__
 .vscode/
+
+fastp.html
+fastp.json

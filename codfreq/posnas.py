@@ -1,7 +1,6 @@
 import pysam  # type: ignore
 import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
-from array import array
 from pysam import AlignedSegment  # type: ignore
 from typing import List, Tuple, Optional, Generator, Any, Union
 from concurrent.futures import ProcessPoolExecutor
@@ -11,14 +10,38 @@ from .samfile_helper import chunked_samfile
 from .codfreq_types import NAPos, NAChar, SeqText, Header
 
 ENCODING: str = 'UTF-8'
-GAP: int = ord(b'-')
+GAP: int = cython.declare(cython.char, ord(b'-'))
 
-PosNA = Tuple[
-    NAPos,   # refpos
-    int,     # insertion_index
-    NAChar,  # na
-    int      # qua
-]
+
+@cython.cclass
+class PosNA:
+    """A class to represent a nucleotide position (pos), insertion gap offset
+    (bp) and the nucleotide (na).
+
+    :var pos: The position of the nucleotide in the alignment.
+    :var bp: The insertion gap offset of the nucleotide relative to `pos`.
+    :var na: The single nucleotide ("ACGT") or a deletion gap ("-").
+    """
+
+    pos: NAPos = cython.declare(cython.ulong, visibility="public")
+    bp: int = cython.declare(cython.uint, visibility="public")
+    na: NAChar = cython.declare(cython.char, visibility="public")
+
+    def __init__(self: 'PosNA', pos: NAPos, bp: int, na: NAChar):
+        self.pos = pos
+        self.bp = bp
+        self.na = na
+
+    def __hash__(self: 'PosNA') -> int:
+        return hash((self.pos, self.bp, self.na))
+
+    def __eq__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            return False
+        return (self.pos, self.bp, self.na) == (other.pos, other.bp, other.na)
+
+    def __repr__(self: 'PosNA') -> str:
+        return f"PosNA({self.pos!r}, {self.bp!r}, {self.na!r})"
 
 
 @cython.ccall
@@ -26,23 +49,17 @@ PosNA = Tuple[
 @cython.returns(list)
 def iter_single_read_posnas(
     seq: SeqText,
-    qua: Optional[array],
     aligned_pairs: List[Tuple[Optional[NAPos], Optional[NAPos]]]
 ) -> List[PosNA]:
     seqpos0: Optional[NAPos]
     refpos0: Optional[NAPos]
-    refpos: NAPos
-    insidx: int = 0
-    n: NAChar
-    q: int
+    refpos: NAPos = cython.declare(cython.ulong)
 
+    insidx: int = cython.declare(cython.uint, 0)
+    n: NAChar = cython.declare(cython.char)
     seqchars: bytes = bytes(seq, ENCODING)
-
-    prev_refpos: int = 0
-    prev_seqpos0: int = 0
-
-    buffer_size: int = 0
-
+    prev_refpos: int = cython.declare(cython.ulong, 0)
+    buffer_size: int = cython.declare(cython.uint, 0)
     posnas: List[PosNA] = []
 
     for seqpos0, refpos0 in aligned_pairs:
@@ -58,16 +75,15 @@ def iter_single_read_posnas(
 
         if seqpos0 is None:
             # deletion
-            n, q = GAP, qua[prev_seqpos0] if qua else 1
+            n = GAP
         else:
-            n, q = seqchars[seqpos0], qua[seqpos0] if qua else 1
-            prev_seqpos0 = seqpos0
+            n = seqchars[seqpos0]
 
         if refpos == 0:
             # insertion before the first ref position
             continue
 
-        posnas.append((refpos, insidx, n, q))
+        posnas.append(PosNA(refpos, insidx, n))
 
         if insidx > 0:
             buffer_size += 1
@@ -78,18 +94,16 @@ def iter_single_read_posnas(
 
 
 @cython.ccall
+@cython.locals(
+    samfile_start=cython.ulong,
+    samfile_end=cython.ulong
+)
 @cython.returns(list)
 def get_posnas_between(
     samfile: str,
     samfile_start: int,
-    samfile_end: int,
-    site_quality_cutoff: int = 0
+    samfile_end: int
 ) -> List[Tuple[Optional[Header], List[PosNA]]]:
-
-    pos: NAPos
-    idx: int
-    na: NAChar
-    q: int
     read: AlignedSegment
     posnas: List[PosNA]
 
@@ -108,28 +122,24 @@ def get_posnas_between(
 
             posnas = iter_single_read_posnas(
                 read.query_sequence,
-                read.query_qualities,
                 read.get_aligned_pairs(False)
             )
-            if site_quality_cutoff > 0:
-                posnas = [
-                    (pos, idx, na, q)
-                    for pos, idx, na, q in posnas
-                    if q >= site_quality_cutoff
-                ]
             results.append((read.query_name, posnas))
 
     return results
 
 
 @cython.ccall
+@cython.locals(
+    ref_start=cython.ulong,
+    ref_end=cython.ulong
+)
 @cython.returns(list)
 def get_posnas_in_genome_region(
     samfile: str,
     ref_name: str,
     ref_start: NAPos,
-    ref_end: NAPos,
-    site_quality_cutoff: int = 0
+    ref_end: NAPos
 ) -> List[Tuple[Optional[Header], List[PosNA]]]:
 
     pos: NAPos
@@ -150,15 +160,8 @@ def get_posnas_in_genome_region(
 
             posnas = iter_single_read_posnas(
                 read.query_sequence,
-                read.query_qualities,
                 read.get_aligned_pairs(False)
             )
-            if site_quality_cutoff > 0:
-                posnas = [
-                    (pos, idx, na, q)
-                    for pos, idx, na, q in posnas
-                    if q >= site_quality_cutoff
-                ]
             results.append((read.query_name, posnas))
 
     return results
@@ -169,7 +172,6 @@ def iter_posnas(
     workers: int,
     description: str,
     jsonop: str = 'progress',
-    site_quality_cutoff: int = 0,
     chunk_size: int = 5000,
     log_format: str = 'text',
     **extras: Any
@@ -209,8 +211,7 @@ def iter_posnas(
                 (
                     samfile,
                     samfile_begin,
-                    samfile_end,
-                    site_quality_cutoff
+                    samfile_end
                 )
                 for samfile_begin, samfile_end in chunks
             ])
