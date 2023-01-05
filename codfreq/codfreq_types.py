@@ -29,6 +29,7 @@ class Sequence(TypedDict):
 class MainFragmentConfig(TypedDict):
     fragmentName: Header
     refSequence: SeqText
+    segmentSize: int
 
 
 class CodonAlignmentConfig(TypedDict, total=False):
@@ -80,8 +81,6 @@ class RegionalConsensus(TypedDict):
 
 class Profile(TypedDict):
     version: str
-    segmentSize: int
-    segmentStep: int
     fragmentConfig: List[FragmentConfig]
     sequenceAssemblyConfig: List[SequenceAssemblyConfig]
 

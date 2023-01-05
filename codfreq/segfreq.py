@@ -8,13 +8,24 @@ from more_itertools import pairwise
 
 from .posnas import PosNA
 
+DEFAULT_SEGMENT_SIZE: int = 3
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(cython.ulong)
+def get_segment_pos(segment: Tuple[Optional[PosNA], ...]) -> int:
+    for idx, node in enumerate(segment):
+        if node is not None:
+            return node.pos - idx
+    return 0
+
 
 @cython.cclass
 class SegFreq:
     """A class to represent an NGS alignment in digraph form."""
 
     segment_size: int = cython.declare(cython.uint, visibility="public")
-    segment_step: int = cython.declare(cython.uint, visibility="public")
     pending_segments: Set[
         Tuple[Optional[PosNA], ...]
     ] = cython.declare(set, visibility="private")
@@ -23,18 +34,61 @@ class SegFreq:
         PosNA,
         Set[PosNA]
     ] = cython.declare(dict, visibility="private")
-    segments: Dict[
-        Tuple[Optional[PosNA], ...],
-        int
-    ] = cython.declare(dict, visibility="public")
+    _segments: Dict[
+        int,
+        Dict[Tuple[Optional[PosNA], ...], int]
+    ] = cython.declare(dict, visibility="private")
 
-    def __init__(self: 'SegFreq', segment_size: int, segment_step: int):
+    def __init__(self: 'SegFreq', segment_size: int):
         self.segment_size = segment_size
-        self.segment_step = segment_step
         self._nodes = set()
         self._edges = {}
-        self.segments = {}
+        self._segments = {}
         self.pending_segments = set()
+
+    @cython.ccall
+    @cython.locals(
+        pos1=cython.ulong,
+        pos2=cython.ulong,
+        pos3=cython.ulong
+    )
+    @cython.returns(dict)
+    def get_pos_codons(
+        self: 'SegFreq',
+        pos1: int,
+        pos2: int = 0,
+        pos3: int = 0
+    ) -> Dict[bytes, int]:
+        """Get the codon counts for a given position."""
+        pos: int = cython.declare(cython.ulong)
+        accessed: bool = cython.declare(cython.bint)
+        codon: bytearray = cython.declare(bytearray)
+        codon_bytes: bytes = cython.declare(bytes)
+        if pos2 == 0:
+            pos2 = pos1 + 1
+        if pos3 == 0:
+            pos3 = pos1 + 2
+        if abs(pos2 - pos1) >= self.segment_size or \
+                abs(pos3 - pos2) >= self.segment_size or \
+                abs(pos3 - pos1) >= self.segment_size:
+            raise ValueError('Positions are too far apart')
+        codon_counts: Dict[bytes, int] = {}
+        for segment, count in self._segments.get(pos1, {}).items():
+            codon = bytearray()
+            for pos in (pos1, pos2, pos3):
+                accessed = False
+                for node in segment:
+                    if node and node.pos == pos:
+                        codon.append(node.na)
+                        accessed = True
+                if not accessed:
+                    break
+            else:
+                codon_bytes = bytes(codon)
+                if codon_bytes not in codon_counts:
+                    codon_counts[codon_bytes] = 0
+                codon_counts[codon_bytes] += count
+        return codon_counts
 
     @cython.ccall
     @cython.returns(set)
@@ -82,11 +136,13 @@ class SegFreq:
         :param segment: A tuple of nodes, where None represents a gap.
         :param count: The number of times to add the segment.
         """
+        pos: int = cython.declare(cython.ulong, get_segment_pos(segment))
         self.pending_segments.add(segment)
-
-        if segment not in self.segments:
-            self.segments[segment] = 0
-        self.segments[segment] += count
+        if pos not in self._segments:
+            self._segments[pos] = {}
+        if segment not in self._segments[pos]:
+            self._segments[pos][segment] = 0
+        self._segments[pos][segment] += count
 
     @cython.ccall
     @cython.returns(cython.void)
@@ -94,63 +150,54 @@ class SegFreq:
         """Update the graph with another graph."""
         if self.segment_size != other.segment_size:
             raise ValueError("Incompatible segment sizes")
-        if self.segment_step != other.segment_step:
-            raise ValueError("Incompatible segment steps")
-        for segment, count in other.segments.items():
-            self.add(segment, count)
+        for pos_segments in other._segments.values():
+            for segment, count in pos_segments.items():
+                self.add(segment, count)
 
     def dump(self: 'SegFreq', fp: TextIO) -> None:
         """Dump the graph to a file."""
-        fp.write(f'# segment_size={self.segment_size}\n')
-        fp.write(f'# segment_step={self.segment_step}\n')
+        fp.write(f'# segment_size={self.segment_size}\r\n')
         csv_writer = csv.writer(fp)
         csv_writer.writerow([
             'pos', 'segment', 'offsets', 'count'])
-        for segment, count in sorted(
-            self.segments.items(),
-            key=lambda item: (
-                *(node.pos for node in item[0] if node),
-                *(node.bp for node in item[0] if node),
-                *(node.na for node in item[0] if node)
-            )
-        ):
-            csv_writer.writerow([
-                next(
-                    node.pos - idx
-                    for idx, node in enumerate(segment)
-                    if node
-                ),
-                ''.join(chr(node.na) if node else '.' for node in segment),
-                ''.join(
-                    '.' if
-                    from_node is None or
-                    to_node is None or
-                    from_node.pos < to_node.pos
-                    else '+'
-                    for from_node, to_node in pairwise(segment)
-                ),
-                count
-            ])
+        for pos, pos_segments in sorted(self._segments.items()):
+            for segment, count in sorted(
+                pos_segments.items(),
+                key=lambda item: (
+                    *(node.bp for node in item[0] if node),
+                    *(node.na for node in item[0] if node)
+                )
+            ):
+                csv_writer.writerow([
+                    pos,
+                    ''.join(chr(node.na) if node else '.' for node in segment),
+                    ''.join(
+                        '.' if
+                        from_node is None or
+                        to_node is None or
+                        from_node.pos < to_node.pos
+                        else '+'
+                        for from_node, to_node in pairwise(segment)
+                    ),
+                    count
+                ])
 
     @classmethod
     def load(cls, fp: TextIO) -> 'SegFreq':
         """Load a graph from a file."""
         lines = fp.readlines()
-        segment_size: int = 6
-        segment_step: int = 1
+        segment_size: int = DEFAULT_SEGMENT_SIZE
         nocmt_lines: Deque = deque()
         for line in lines:
             if line.startswith('#'):
                 if re.match(r'^#\s*segment_size\s*=\s*\d+\s*$', line):
                     segment_size = int(line.split('=')[1].strip())
-                elif re.match(r'^#\s*segment_step\s*=\s*\d+\s*$', line):
-                    segment_step = int(line.split('=')[1].strip())
             else:
                 nocmt_lines.append(line)
 
         csv_reader = csv.reader(nocmt_lines)
         next(csv_reader)
-        self: 'SegFreq' = cls(segment_size, segment_step)
+        self: 'SegFreq' = cls(segment_size)
         for row in csv_reader:
             segment_list: List[Optional[PosNA]] = []
             prev_pos: int = int(row[0])
