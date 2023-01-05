@@ -51,13 +51,13 @@ extensions = [
         # define_macros=[('CYTHON_TRACE', '1')]
     ),
     Extension(
-        name='codfreq.trifreq',
-        sources=['codfreq/trifreq.py'],
+        name='codfreq.segfreq',
+        sources=['codfreq/segfreq.py'],
         # define_macros=[('CYTHON_TRACE', '1')]
     ),
     Extension(
-        name='codfreq.sam2trifreq',
-        sources=['codfreq/sam2trifreq.py'],
+        name='codfreq.sam2segfreq',
+        sources=['codfreq/sam2segfreq.py'],
         # define_macros=[('CYTHON_TRACE', '1')]
     )
 ]

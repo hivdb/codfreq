@@ -21,7 +21,7 @@ from typing import (
 
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
 
-from .sam2trifreq import sam2trifreq_all
+from .sam2segfreq import sam2segfreq_all
 from .sam2codfreq import (
     sam2codfreq_all,
     CODFREQ_HEADER
@@ -473,7 +473,7 @@ def align(
             ivar_trim_config=ivar_trim_config
         )
         # codfreqfile = name_codfreq(pairobj['name'])
-        sam2trifreq_all(
+        sam2segfreq_all(
             name=pairobj['name'],
             fnpair=pairobj['pair'],
             profile=profile_obj,

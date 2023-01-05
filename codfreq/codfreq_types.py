@@ -80,6 +80,8 @@ class RegionalConsensus(TypedDict):
 
 class Profile(TypedDict):
     version: str
+    segmentSize: int
+    segmentStep: int
     fragmentConfig: List[FragmentConfig]
     sequenceAssemblyConfig: List[SequenceAssemblyConfig]
 
