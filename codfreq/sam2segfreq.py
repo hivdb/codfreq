@@ -116,6 +116,7 @@ def sam2segfreq_between(
                     read.get_aligned_pairs(matches_only=False)
                 )
             ]
+            # add trailing None's to indicate missing of positions
             last_pos = posnas[-1][0]
             post_posnas: List[Tuple[int, Optional[PosNA]]] = [
                 (pos, None)

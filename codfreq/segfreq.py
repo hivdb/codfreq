@@ -1,9 +1,11 @@
 import cython  # type: ignore
 import re
 import csv
-from collections import deque
+from collections import deque, Counter
 
-from typing import Dict, Tuple, Set, TextIO, List, Optional, Deque
+from typing import (
+    Dict, Tuple, Set, TextIO, List, Optional, Deque, Counter as tCounter
+)
 from more_itertools import pairwise
 
 from .posnas import PosNA
@@ -15,10 +17,58 @@ DEFAULT_SEGMENT_SIZE: int = 3
 @cython.inline
 @cython.returns(cython.ulong)
 def get_segment_pos(segment: Tuple[Optional[PosNA], ...]) -> int:
+    try:
+        return segment[0].pos  # type: ignore
+    except AttributeError:
+        raise ValueError('Malformed segment: first node is None')
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(tuple)
+def get_first_pos_nodes(
+    segment: Tuple[Optional[PosNA], ...]
+) -> Tuple[PosNA, ...]:
+    first_pos: int = cython.declare(cython.ulong, get_segment_pos(segment))
+    nodes: List[PosNA] = []
+    try:
+        for node in segment:
+            if node.pos == first_pos:  # type: ignore
+                nodes.append(node)  # type: ignore
+            else:  # node.pos > first_pos
+                break
+    except AttributeError:
+        raise ValueError('Malformed segment: first_pos node cannot be None')
+    return tuple(nodes)
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(tuple)
+def remove_first_pos(
+    segment: Tuple[Optional[PosNA], ...]
+) -> Tuple[Optional[PosNA], ...]:
+    first_pos: int = cython.declare(cython.ulong, get_segment_pos(segment))
     for idx, node in enumerate(segment):
-        if node is not None:
-            return node.pos - idx
-    return 0
+        if node is None or node.pos > first_pos:
+            return segment[idx:]
+    raise ValueError("Segment is malformed")
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(tuple)
+def remove_last_pos(
+    segment: Tuple[Optional[PosNA], ...]
+) -> Tuple[Optional[PosNA], ...]:
+    if segment[-1] is None:
+        return segment[:-1]
+    else:
+        last_pos = segment[-1].pos
+        for idx, node in enumerate(reversed(segment)):
+            if node is None or node.pos < last_pos:
+                return segment[:len(segment) - idx]
+        raise ValueError("Segment is malformed")
 
 
 @cython.cclass
@@ -29,20 +79,23 @@ class SegFreq:
     pending_segments: Set[
         Tuple[Optional[PosNA], ...]
     ] = cython.declare(set, visibility="private")
-    _nodes: Set[PosNA] = cython.declare(set, visibility="private")
-    _edges: Dict[
-        PosNA,
-        Set[PosNA]
+    _left_segments: Dict[
+        Tuple[Optional[PosNA], ...],
+        Tuple[Optional[PosNA], ...]
+    ] = cython.declare(dict, visibility="private")
+    _right_segments: Dict[
+        Tuple[Optional[PosNA], ...],
+        Set[Tuple[Optional[PosNA], ...]]
     ] = cython.declare(dict, visibility="private")
     _segments: Dict[
         int,
-        Dict[Tuple[Optional[PosNA], ...], int]
+        tCounter[Tuple[Optional[PosNA], ...]]
     ] = cython.declare(dict, visibility="private")
 
     def __init__(self: 'SegFreq', segment_size: int):
         self.segment_size = segment_size
-        self._nodes = set()
-        self._edges = {}
+        self._left_segments = {}
+        self._right_segments = {}
         self._segments = {}
         self.pending_segments = set()
 
@@ -91,22 +144,100 @@ class SegFreq:
         return codon_counts
 
     @cython.ccall
-    @cython.returns(set)
-    def get_nodes(self: 'SegFreq') -> Set[PosNA]:
-        """Return the nodes in the graph."""
-        self.sync()
-        return self._nodes
+    @cython.locals(
+        pos_start=cython.ulong,
+        pos_end=cython.ulong
+    )
+    @cython.returns(list)
+    def get_consensus(
+        self: 'SegFreq',
+        pos_start: int,
+        pos_end: int
+    ) -> List[Optional[PosNA]]:
+        """Get consensus segment for a range of positions."""
+        pos: int = cython.declare(cython.ulong)
+        consensus: List[Optional[PosNA]] = cython.declare(list, [])
 
-    nodes = property(get_nodes)
+        for pos in range(pos_start, pos_end + 1):
+            if pos not in self._segments:
+                consensus.append(None)
+            else:
+                pos_segments = self._segments[pos]
+                ((segment, _), ) = pos_segments.most_common(1)
+                consensus.extend([node for node in segment
+                                  if node and node.pos == pos])
+        return consensus
+
+    @cython.cfunc
+    @cython.locals(
+        pos_start=cython.ulong,
+        pos_end=cython.ulong
+    )
+    @cython.returns(list)
+    def get_segments_until(
+        self: 'SegFreq',
+        segments: Set[Tuple[Optional[PosNA], ...]],
+        pos_start: int,
+        pos_end: int
+    ) -> List[Tuple[Tuple[PosNA, ...], int]]:
+        """Get segments between two positions."""
+        segment: Tuple[Optional[PosNA], ...]
+        result: tCounter[Tuple[PosNA, ...]] = Counter()
+
+        meet_end = pos_start + self.segment_size > pos_end
+
+        if meet_end:
+            for segment in segments:
+                for idx, node in enumerate(reversed(segment)):
+                    if node is None:
+                        continue
+                    elif node.pos == pos_end:
+                        result[
+                            segment[:len(segment) - idx]  # type: ignore
+                        ] += self._segments[pos_start][segment]
+                        break
+                    elif node.pos < pos_end:
+                        break
+        else:
+            for segment in segments:
+                first_pos_nodes = get_first_pos_nodes(segment)
+                count = self._segments[pos_start][segment]
+                common_nodes = self._left_segments[segment]
+                next_segments = self._right_segments.get(common_nodes)
+                if next_segments is None:
+                    continue
+                for next_segment, next_count in self.get_segments_until(
+                    next_segments,
+                    pos_start + 1,
+                    pos_end
+                ):
+                    result[
+                        first_pos_nodes + next_segment
+                    ] += count if count < next_count else next_count
+        return list(result.items())
 
     @cython.ccall
-    @cython.returns(dict)
-    def get_edges(self: 'SegFreq') -> Dict[PosNA, Set[PosNA]]:
-        """Return the edges in the graph."""
+    @cython.locals(
+        pos_start=cython.ulong,
+        pos_end=cython.ulong
+    )
+    @cython.returns(list)
+    def get_segments_between(
+        self: 'SegFreq',
+        pos_start: int,
+        pos_end: int
+    ) -> List[Tuple[Tuple[PosNA, ...], int]]:
+        """Get segments between two positions."""
         self.sync()
-        return self._edges
-
-    edges = property(get_edges)
+        init_segments = self._segments[pos_start]
+        if not init_segments:
+            return []
+        result: List[Tuple[Tuple[PosNA, ...], int]] = self.get_segments_until(
+            set(init_segments),
+            pos_start,
+            pos_end
+        )
+        return result
 
     @cython.ccall
     @cython.returns(cython.void)
@@ -114,13 +245,12 @@ class SegFreq:
         """Sync the graph with the pending segments."""
         if self.pending_segments:
             for segment in self.pending_segments:
-                for node_from, node_to in pairwise(segment):
-                    if node_from is None or node_to is None:
-                        continue
-                    self._nodes.add(node_from)
-                    if node_from not in self._edges:
-                        self._edges[node_from] = set()
-                    self._edges[node_from].add(node_to)
+                left_seg = remove_first_pos(segment)
+                right_seg = remove_last_pos(segment)
+                self._left_segments[segment] = left_seg
+                if right_seg not in self._right_segments:
+                    self._right_segments[right_seg] = set()
+                self._right_segments[right_seg].add(segment)
             self.pending_segments = set()
 
     @cython.ccall
@@ -139,9 +269,7 @@ class SegFreq:
         pos: int = cython.declare(cython.ulong, get_segment_pos(segment))
         self.pending_segments.add(segment)
         if pos not in self._segments:
-            self._segments[pos] = {}
-        if segment not in self._segments[pos]:
-            self._segments[pos][segment] = 0
+            self._segments[pos] = Counter()
         self._segments[pos][segment] += count
 
     @cython.ccall
