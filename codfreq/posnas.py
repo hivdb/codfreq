@@ -35,10 +35,39 @@ class PosNA:
     def __hash__(self: 'PosNA') -> int:
         return hash((self.pos, self.bp, self.na))
 
+    def __lt__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            raise TypeError(
+                "'<' not supported between instances of 'PosNA' and 'Any'")
+        return (self.pos, self.bp, self.na) < (other.pos, other.bp, other.na)
+
+    def __le__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            raise TypeError(
+                "'<=' not supported between instances of 'PosNA' and 'Any'")
+        return (self.pos, self.bp, self.na) <= (other.pos, other.bp, other.na)
+
     def __eq__(self: 'PosNA', other: Any) -> bool:
         if not isinstance(other, PosNA):
             return False
         return (self.pos, self.bp, self.na) == (other.pos, other.bp, other.na)
+
+    def __ne__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            return True
+        return (self.pos, self.bp, self.na) != (other.pos, other.bp, other.na)
+
+    def __gt__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            raise TypeError(
+                "'>' not supported between instances of 'PosNA' and 'Any'")
+        return (self.pos, self.bp, self.na) > (other.pos, other.bp, other.na)
+
+    def __ge__(self: 'PosNA', other: Any) -> bool:
+        if not isinstance(other, PosNA):
+            raise TypeError(
+                "'>=' not supported between instances of 'PosNA' and 'Any'")
+        return (self.pos, self.bp, self.na) >= (other.pos, other.bp, other.na)
 
     def __repr__(self: 'PosNA') -> str:
         return f"PosNA({self.pos!r}, {self.bp!r}, {self.na!r})"

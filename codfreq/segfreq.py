@@ -6,6 +6,7 @@ from collections import deque, Counter
 from typing import (
     Dict, Tuple, Set, TextIO, List, Optional, Deque, Counter as tCounter
 )
+
 from more_itertools import pairwise
 
 from .posnas import PosNA
@@ -69,6 +70,20 @@ def remove_last_pos(
             if node is None or node.pos < last_pos:
                 return segment[:len(segment) - idx]
         raise ValueError("Segment is malformed")
+
+
+@cython.cfunc
+@cython.inline
+@cython.returns(cython.bint)
+def is_continuous(
+    left_segment: Tuple[Optional[PosNA], ...],
+    right_segment: Tuple[Optional[PosNA], ...]
+) -> bool:
+    result: bool = (
+        remove_first_pos(left_segment) ==
+        remove_last_pos(right_segment)
+    )
+    return result
 
 
 @cython.cclass
@@ -168,76 +183,91 @@ class SegFreq:
                                   if node and node.pos == pos])
         return consensus
 
-    @cython.cfunc
-    @cython.locals(
-        pos_start=cython.ulong,
-        pos_end=cython.ulong
-    )
-    @cython.returns(list)
-    def get_segments_until(
-        self: 'SegFreq',
-        segments: Set[Tuple[Optional[PosNA], ...]],
-        pos_start: int,
-        pos_end: int
-    ) -> List[Tuple[Tuple[PosNA, ...], int]]:
-        """Get segments between two positions."""
-        segment: Tuple[Optional[PosNA], ...]
-        result: tCounter[Tuple[PosNA, ...]] = Counter()
-
-        meet_end = pos_start + self.segment_size > pos_end
-
-        if meet_end:
-            for segment in segments:
-                for idx, node in enumerate(reversed(segment)):
-                    if node is None:
-                        continue
-                    elif node.pos == pos_end:
-                        result[
-                            segment[:len(segment) - idx]  # type: ignore
-                        ] += self._segments[pos_start][segment]
-                        break
-                    elif node.pos < pos_end:
-                        break
-        else:
-            for segment in segments:
-                first_pos_nodes = get_first_pos_nodes(segment)
-                count = self._segments[pos_start][segment]
-                common_nodes = self._left_segments[segment]
-                next_segments = self._right_segments.get(common_nodes)
-                if next_segments is None:
-                    continue
-                for next_segment, next_count in self.get_segments_until(
-                    next_segments,
-                    pos_start + 1,
-                    pos_end
-                ):
-                    result[
-                        first_pos_nodes + next_segment
-                    ] += count if count < next_count else next_count
-        return list(result.items())
-
     @cython.ccall
     @cython.locals(
         pos_start=cython.ulong,
-        pos_end=cython.ulong
+        pos_end=cython.ulong,
+        min_count=cython.uint
     )
-    @cython.returns(list)
-    def get_segments_between(
+    @cython.returns(dict)
+    def get_patterns_between(
         self: 'SegFreq',
         pos_start: int,
-        pos_end: int
-    ) -> List[Tuple[Tuple[PosNA, ...], int]]:
+        pos_end: int,
+        top_n: int
+    ) -> Dict[Tuple[PosNA, ...], int]:
         """Get segments between two positions."""
-        self.sync()
-        init_segments = self._segments[pos_start]
-        if not init_segments:
-            return []
-        result: List[Tuple[Tuple[PosNA, ...], int]] = self.get_segments_until(
-            set(init_segments),
-            pos_start,
-            pos_end
-        )
-        return result
+        # self.sync()
+        real_pos_end = pos_end - self.segment_size
+        real_pos_end = pos_start if pos_start > real_pos_end else real_pos_end
+        segments_between: Dict[
+            int,
+            tCounter[Tuple[Optional[PosNA], ...]]
+        ] = {}
+        seed_segments: tCounter[Tuple[Optional[PosNA], ...]] = Counter()
+        for pos in range(pos_start, 1 + real_pos_end):
+            segments_between[pos] = Counter(
+                self._segments.get(pos, {}))
+            seed_segments.update(segments_between[pos])
+
+        patterns: Dict[Tuple[PosNA, ...], int] = {}
+        pattern_count: int
+        seed_segment: Tuple[Optional[PosNA], ...]
+        prev_segment: Tuple[Optional[PosNA], ...]
+        while seed_segments and len(patterns) < top_n:
+            seed_segment, pattern_count = seed_segments.most_common(1)[0]
+            # seed_segments.pop(seed_segment)
+
+            selected_segments = [seed_segment]
+            seed_pos = get_segment_pos(seed_segment)
+
+            prev_segment = seed_segment
+            for pos in range(seed_pos - 1, pos_start - 1, -1):
+                pos_segments = segments_between[pos]
+                for segment, count in pos_segments.most_common():
+                    if is_continuous(segment, prev_segment):
+                        selected_segments.append(segment)
+                        if count < pattern_count:
+                            pattern_count = count
+                        prev_segment = segment
+                        # seed_segments.pop(segment, None)
+                        # pos_segments.pop(segment)
+                        break
+                else:
+                    break
+
+            prev_segment = seed_segment
+            for pos in range(seed_pos, 1 + real_pos_end):
+                pos_segments = segments_between[pos]
+                for segment, count in pos_segments.most_common():
+                    if is_continuous(prev_segment, segment):
+                        selected_segments.append(segment)
+                        if count < pattern_count:
+                            pattern_count = count
+                        prev_segment = segment
+                        # seed_segments.pop(segment, None)
+                        # pos_segments.pop(segment)
+                        break
+                else:
+                    break
+
+            node_map: Dict[Tuple[int, int], PosNA] = {}
+            for segment in selected_segments:
+                for node in segment:
+                    if node is None:
+                        continue
+                    nodekey = (node.pos, node.bp)
+                    node_map[nodekey] = node
+                segpos = get_segment_pos(segment)
+                seed_segments[segment] -= pattern_count
+                segments_between[segpos][segment] -= pattern_count
+                if seed_segments[segment] == 0:
+                    del seed_segments[segment]
+                    del segments_between[segpos][segment]
+            pattern_nodes = tuple(sorted(node_map.values()))
+            if pattern_count is not None:
+                patterns[pattern_nodes] = pattern_count
+        return patterns
 
     @cython.ccall
     @cython.returns(cython.void)
