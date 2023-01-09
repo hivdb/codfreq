@@ -30,6 +30,7 @@ class MainFragmentConfig(TypedDict):
     fragmentName: Header
     refSequence: SeqText
     segmentSize: int
+    segmentStep: int
 
 
 class CodonAlignmentConfig(TypedDict, total=False):

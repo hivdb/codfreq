@@ -2,7 +2,7 @@ import pysam  # type: ignore
 import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Optional, Generator, Any, Union
+from typing import List, Tuple, Optional, Generator, Any, Union, Iterable
 from concurrent.futures import ProcessPoolExecutor
 
 from .json_progress import JsonProgress
@@ -23,8 +23,8 @@ class PosNA:
     :var na: The single nucleotide ("ACGT") or a deletion gap ("-").
     """
 
-    pos: NAPos = cython.declare(cython.ulong, visibility="public")
-    bp: int = cython.declare(cython.uint, visibility="public")
+    pos: NAPos = cython.declare(cython.long, visibility="public")
+    bp: int = cython.declare(cython.int, visibility="public")
     na: NAChar = cython.declare(cython.char, visibility="public")
 
     def __init__(self: 'PosNA', pos: NAPos, bp: int, na: NAChar):
@@ -74,6 +74,15 @@ class PosNA:
 
 
 @cython.ccall
+@cython.returns(str)
+def join_posnas(posnas: Iterable[Optional['PosNA']]) -> str:
+    dot: int = 46  # ord('.')
+    return bytes(
+        [p.na if p else dot for p in posnas]
+    ).decode('ASCII')
+
+
+@cython.ccall
 @cython.inline
 @cython.returns(list)
 def iter_single_read_posnas(
@@ -82,13 +91,13 @@ def iter_single_read_posnas(
 ) -> List[PosNA]:
     seqpos0: Optional[NAPos]
     refpos0: Optional[NAPos]
-    refpos: NAPos = cython.declare(cython.ulong)
+    refpos: NAPos = cython.declare(cython.long)
 
-    insidx: int = cython.declare(cython.uint, 0)
+    insidx: int = cython.declare(cython.int, 0)
     n: NAChar = cython.declare(cython.char)
     seqchars: bytes = bytes(seq, ENCODING)
-    prev_refpos: int = cython.declare(cython.ulong, 0)
-    buffer_size: int = cython.declare(cython.uint, 0)
+    prev_refpos: int = cython.declare(cython.long, 0)
+    buffer_size: int = cython.declare(cython.int, 0)
     posnas: List[PosNA] = []
 
     for seqpos0, refpos0 in aligned_pairs:
@@ -124,8 +133,8 @@ def iter_single_read_posnas(
 
 @cython.ccall
 @cython.locals(
-    samfile_start=cython.ulong,
-    samfile_end=cython.ulong
+    samfile_start=cython.long,
+    samfile_end=cython.long
 )
 @cython.returns(list)
 def get_posnas_between(
@@ -160,8 +169,8 @@ def get_posnas_between(
 
 @cython.ccall
 @cython.locals(
-    ref_start=cython.ulong,
-    ref_end=cython.ulong
+    ref_start=cython.long,
+    ref_end=cython.long
 )
 @cython.returns(list)
 def get_posnas_in_genome_region(

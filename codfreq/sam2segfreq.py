@@ -29,7 +29,7 @@ from .json_progress import JsonProgress
 from .posnas import PosNA, iter_single_read_posnas
 from .filename_helper import name_bamfile, name_segfreq
 
-from .segfreq import SegFreq, DEFAULT_SEGMENT_SIZE
+from .segfreq import SegFreq, DEFAULT_SEGMENT_SIZE, DEFAULT_SEGMENT_STEP
 
 BEGIN: Tuple[int, int, int, int] = (0, 0, ord('^'), 0)
 END: Tuple[int, int, int, int] = (0, 0, ord('$'), 0)
@@ -52,14 +52,18 @@ def get_ref_fragments(
         refname = config['fragmentName']
         refseq = config.get('refSequence')
         segment_size = config.get('segmentSize', DEFAULT_SEGMENT_SIZE)
+        segment_step = config.get('segmentStep', DEFAULT_SEGMENT_STEP)
         if not isinstance(segment_size, int):
             raise TypeError('segmentSize must be an integer')
+        if not isinstance(segment_step, int):
+            raise TypeError('segmentStep must be an integer')
         if isinstance(refseq, str):
             ref_fragments[refname] = {
                 'ref': {
                     'fragmentName': refname,
                     'refSequence': refseq,
-                    'segmentSize': segment_size
+                    'segmentSize': segment_size,
+                    'segmentStep': segment_step
                 },
                 'fragments': []
             }
@@ -73,16 +77,18 @@ def get_ref_fragments(
 @cython.ccall
 @cython.locals(
     samfile=str,
-    samfile_start=cython.ulong,
-    samfile_end=cython.ulong,
-    segment_size=cython.uint
+    samfile_start=cython.long,
+    samfile_end=cython.long,
+    segment_size=cython.int,
+    segment_step=cython.int
 )
 @cython.returns(tuple)
 def sam2segfreq_between(
     samfile: str,
     samfile_start: int,
     samfile_end: int,
-    segment_size: int
+    segment_size: int,
+    segment_step: int
 ) -> Tuple[SegFreq, int]:
     """subprocess function to count PosNA and edges
 
@@ -91,12 +97,13 @@ def sam2segfreq_between(
     """
     fragment_name: str
     segment_deque: Deque[Tuple[int, Optional[PosNA]]]
-    segment_pos: int = cython.declare(cython.ulong)
-    segfreq: SegFreq = SegFreq(segment_size)
-    idx: int = cython.declare(cython.uint)
-    pos: int = cython.declare(cython.ulong)
-    last_pos: int = cython.declare(cython.ulong)
-    num_row: int = cython.declare(cython.ulong, 0)
+    segment_pos: int = cython.declare(cython.long)
+    next_segment_pos: int = cython.declare(cython.long)
+    segfreq: SegFreq = SegFreq(segment_size, segment_step)
+    idx: int = cython.declare(cython.int)
+    pos: int = cython.declare(cython.long)
+    last_pos: int = cython.declare(cython.long)
+    num_row: int = cython.declare(cython.long, 0)
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
         samfp.seek(samfile_start)
@@ -136,11 +143,19 @@ def sam2segfreq_between(
                     elif size == segment_size:
                         segfreq.add(
                             tuple([posna for _, posna in segment_deque]))
-                        while segment_deque[0][0] == segment_pos:
+                        next_segment_pos = segment_pos + segment_step
+                        while segment_deque[0][0] < next_segment_pos:
                             segment_deque.popleft()
-                        segment_pos = segment_deque[0][0]
+                        segment_pos = next_segment_pos
                 elif segment_pos == 0:
-                    segment_pos = pos
+                    remainder = (pos - 1) % segment_step
+                    if remainder == 0:
+                        segment_pos = pos
+                    else:
+                        segment_pos = pos - remainder
+                        segment_deque.extend([
+                            (p, None) for p in range(segment_pos, pos)
+                        ])
 
                 segment_deque.append((pos, posna))
             else:
@@ -160,6 +175,7 @@ def sam2segfreq(
     ref: MainFragmentConfig,
     workers: int,
     segment_size: int = DEFAULT_SEGMENT_SIZE,
+    segment_step: int = DEFAULT_SEGMENT_STEP,
     log_format: str = 'text',
     chunk_size: int = 25000,
     **extras: Any
@@ -174,6 +190,7 @@ def sam2segfreq(
     :param ref: dict of the reference configuration
     :param workers: int of the number of subprocesses
     :param segment_size: int of the segment size, default 3
+    :param segment_step: int of the segment step, default 1
     :param log_format: 'json' or 'text', default to 'text'
     :param **extras: any other variables to pass to the log method
     :return: a SegFreq object
@@ -192,7 +209,7 @@ def sam2segfreq(
             pbar.set_description('Processing {}'.format(samfile))
 
     chunks: List[Tuple[int, int]] = chunked_samfile(samfile, chunk_size)
-    segfreq: SegFreq = SegFreq(segment_size)
+    segfreq: SegFreq = SegFreq(segment_size, segment_step)
 
     with ProcessPoolExecutor(workers) as executor:
 
@@ -203,7 +220,8 @@ def sam2segfreq(
                     samfile,
                     samfile_begin,
                     samfile_end,
-                    segment_size
+                    segment_size,
+                    segment_step
                 )
                 for samfile_begin, samfile_end in chunks
             ])
@@ -235,6 +253,7 @@ def sam2segfreq_all(
             ref,
             workers=workers,
             segment_size=ref['segmentSize'],
+            segment_step=ref['segmentStep'],
             log_format=log_format,
             fastqs=fnpair
         )

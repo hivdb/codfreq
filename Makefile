@@ -29,6 +29,10 @@ deploy-controller: build-controller
 syncrefs:
 	@pipenv run aws s3 sync refs s3://codfreq-assets.hivdb.org/refs
 
+tests:
+	@pipenv run python setup.py build_ext --inplace
+	@pipenv run python -m unittest discover -v
+
 debug-runner:
 	@docker run -it --rm \
 		--volume $(PWD)/local:/local:rw \
@@ -38,4 +42,4 @@ debug-runner:
 deploy-profiles:
 	@aws s3 sync profiles s3://codfreq-assets.hivdb.org/profiles --delete
 
-.PHONY: login-ecr *-runner *-controller deploy-profiles
+.PHONY: login-ecr *-runner *-controller deploy-profiles tests
