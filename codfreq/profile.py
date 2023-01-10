@@ -11,7 +11,6 @@ from typing import (
 )
 
 from .codfreq_types import (
-    AAPos,
     Header,
     Profile,
     NAPosRange,
@@ -55,7 +54,6 @@ def get_ref_fragments(
     refname: str
     config: FragmentConfig
     ref_fragments: Dict[Header, TypedRefFragment] = {}
-    frag_size_lookup: Dict[Header, AAPos] = {}
     for config in profile['fragmentConfig']:
         refname = config['fragmentName']
         refseq = config.get('refSequence')
@@ -81,11 +79,37 @@ def get_ref_fragments(
         fromref = config.get('fromFragment')
         gene = config.get('geneName')
         outputs = config.get('outputs', ['codfreq'])
+        output_options = config.get('outputOptions', {})
         refranges = get_ref_ranges(config)
         codon_alignment_raw: Any = config.get('codonAlignment')
         codon_alignment: Optional[Union[
             Literal[False], List[CodonAlignmentConfig]
         ]] = None
+
+        if not isinstance(outputs, list):
+            raise TypeError('outputs must be a list')
+        for output in outputs:
+            if output != 'codfreq' and \
+                    output != 'nucfreq' and \
+                    output != 'consensus' and \
+                    output != 'patterns':
+                raise ValueError(
+                    f'Invalid output type {output} in fragment {refname}'
+                )
+
+        if not isinstance(output_options, dict):
+            raise TypeError('outputOptions must be a dict')
+
+        if 'patternsTopNSeeds' in output_options and \
+                not isinstance(output_options['patternsTopNSeeds'], int):
+            raise TypeError('patternsTopNSeeds must be an integer')
+
+        if 'consensusLevels' in output_options and \
+                not isinstance(output_options['consensusLevels'], list) and \
+                not all([isinstance(x, float)
+                         for x in output_options['consensusLevels']]):
+            raise TypeError('consensusLevels must be a list of floats')
+
         if isinstance(codon_alignment_raw, list):
             codon_alignment = []
             for one in codon_alignment_raw:
@@ -104,17 +128,6 @@ def get_ref_fragments(
         elif codon_alignment_raw is False:
             codon_alignment = False
 
-        if not isinstance(outputs, list):
-            raise TypeError('outputs must be a list')
-        for output in outputs:
-            if output != 'codfreq' and \
-                    output != 'nucfreq' and \
-                    output != 'consensus' and \
-                    output != 'patterns':
-                raise ValueError(
-                    f'Invalid output type {output} in fragment {refname}'
-                )
-
         if (
             isinstance(fromref, str) and
             (gene is None or isinstance(gene, str)) and
@@ -125,13 +138,11 @@ def get_ref_fragments(
                 'fragmentName': refname,
                 'fromFragment': fromref,
                 'outputs': outputs,
+                'outputOptions': output_options,
                 'geneName': gene,
                 'refRanges': refranges,
                 'codonAlignment': codon_alignment
             })
-            frag_size_lookup[refname] = sum(
-                (end - start + 1) for start, end in refranges
-            ) // 3
 
     return [
         (refname, pair['ref'], pair['fragments'])

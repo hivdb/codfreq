@@ -8,9 +8,10 @@ from concurrent.futures import ProcessPoolExecutor
 from .json_progress import JsonProgress
 from .samfile_helper import chunked_samfile
 from .codfreq_types import NAPos, NAChar, SeqText, Header
+from .codonutils import AMBIGUOUS_NAS, REVERSED_AMBIGUOUS_NAS
 
 ENCODING: str = 'UTF-8'
-GAP: int = cython.declare(cython.char, ord(b'-'))
+GAP: int = ord(b'-')
 
 
 @cython.cclass
@@ -80,6 +81,33 @@ def join_posnas(posnas: Iterable[Optional['PosNA']]) -> str:
     return bytes(
         [p.na if p else dot for p in posnas]
     ).decode('ASCII')
+
+
+def merge_posnas(posna1: PosNA, posna2: PosNA) -> PosNA:
+    """Merge two PosNA objects.
+
+    :param posna1: The first PosNA object.
+    :param posna2: The second PosNA object.
+
+    :return: The merged PosNA object.
+    """
+    if posna1.pos != posna2.pos:
+        raise ValueError(
+            "Cannot merge PosNA objects with different positions: "
+            f"{posna1.pos} != {posna2.pos}")
+    if posna1.bp != posna2.bp:
+        raise ValueError(
+            "Cannot merge PosNA objects with different insertion gap offsets: "
+            f"{posna1.bp} != {posna2.bp}")
+    if posna1.na == GAP or posna2.na == GAP:
+        return PosNA(posna1.pos, posna1.bp, GAP)
+    if posna1.na == posna2.na:
+        return posna1
+    amb = bytes(sorted(
+        set(AMBIGUOUS_NAS.get(posna1.na, bytes([posna1.na])) +
+            AMBIGUOUS_NAS.get(posna2.na, bytes([posna2.na])))
+    ))
+    return PosNA(posna1.pos, posna1.bp, REVERSED_AMBIGUOUS_NAS[amb])
 
 
 @cython.ccall

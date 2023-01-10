@@ -9,10 +9,12 @@ from typing import (
 
 from more_itertools import pairwise
 
-from .posnas import PosNA
+from .posnas import PosNA, merge_posnas
 
 DEFAULT_SEGMENT_SIZE: int = 3
 DEFAULT_SEGMENT_STEP: int = 1
+DEFAULT_TOP_N_SEEDS: int = 10
+DEFAULT_CONSENSUS_LEVEL: float = 1.
 
 
 @cython.ccall
@@ -186,31 +188,46 @@ class SegFreq:
     def get_consensus(
         self: 'SegFreq',
         pos_start: int,
-        pos_end: int
+        pos_end: int,
+        level: float = DEFAULT_CONSENSUS_LEVEL
     ) -> Tuple[Optional[PosNA], ...]:
         """Get consensus segment for a range of positions."""
         pos: int = cython.declare(cython.long)
-        consensus: Deque[Optional[PosNA]] = deque()
+        consensus: Dict[Tuple[int, int], PosNA] = {}
         real_pos_start: int = pos_start - (pos_start - 1) % self.segment_step
         real_pos_end: int = pos_end - (pos_end - 1) % self.segment_step
 
         for pos in range(real_pos_start, real_pos_end + 1, self.segment_step):
-            if pos not in self._segments:
-                consensus.extend([None] * self.segment_step)
-            else:
+            pos_until: int = pos + self.segment_step
+            if pos in self._segments:
                 pos_segments = self._segments[pos]
-                ((segment, _), ) = pos_segments.most_common(1)
-                consensus.extend([
-                    node for node in segment
-                    if node and node.pos < pos + self.segment_step
-                ])
-        trim_left: int = pos_start - real_pos_start
-        trim_right: int = real_pos_end + self.segment_step - 1 - pos_end
-        result: Tuple[Optional[PosNA], ...] = remove_first_n_pos(
-            remove_last_n_pos(tuple(consensus), trim_right),
-            trim_left
-        )
-        return result
+                min_count: float = sum(pos_segments.values()) * level
+                for segment, count in pos_segments.most_common():
+                    if level < 1. and count < min_count:
+                        break
+                    for node in segment:
+                        if node is None or \
+                                node.pos >= pos_until or \
+                                node.pos < pos_start or node.pos > pos_end:
+                            continue
+                        nodekey = (node.pos, node.bp)
+                        if nodekey not in consensus:
+                            consensus[nodekey] = node
+                        else:
+                            consensus[nodekey] = merge_posnas(
+                                consensus[nodekey], node
+                            )
+                    if level >= 1.:
+                        # only record the most common NA's for 100%
+                        break
+        result: List[Optional[PosNA]] = []
+        for pos in range(pos_start, pos_end + 1):
+            result.append(consensus.get((pos, 0)))
+            bp = 1
+            while (pos, bp) in consensus:
+                result.append(consensus.get((pos, bp)))
+                bp += 1
+        return tuple(result)
 
     @cython.ccall
     @cython.locals(
@@ -223,7 +240,7 @@ class SegFreq:
         self: 'SegFreq',
         pos_start: int,
         pos_end: int,
-        top_n_seeds: int
+        top_n_seeds: int = DEFAULT_TOP_N_SEEDS
     ) -> Dict[Tuple[PosNA, ...], Tuple[int, float]]:
         """Get segments between two positions."""
         real_pos_start = pos_start - (pos_start - 1) % self.segment_step
@@ -265,7 +282,11 @@ class SegFreq:
         pattern_count: int
         seed_segment: Tuple[Optional[PosNA], ...]
         prev_segment: Tuple[Optional[PosNA], ...]
-        while seed_segments_pcnt and len(patterns_pcnt) < top_n_seeds:
+
+        while seed_segments_pcnt and (
+            top_n_seeds < 1 or
+            len(patterns_pcnt) < top_n_seeds
+        ):
             (
                 seed_pos,
                 seed_segment

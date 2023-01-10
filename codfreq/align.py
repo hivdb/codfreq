@@ -28,6 +28,7 @@ from .sam2codfreq import (
 )
 from .nucfreq import save_nucfreq
 from .patterns import save_patterns
+from .consensus import save_consensus
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
     fastp, cutadapt, ivar, get_programs, get_refinit, get_align
@@ -438,7 +439,8 @@ def align(
     profile: TextIO,
     workers: int,
     log_format: str,
-    autopairing: bool
+    autopairing: bool,
+    post_segfreq_only: bool
 ) -> None:
     row: CodFreqRow
     profile_obj: Profile = json.load(profile)
@@ -464,24 +466,28 @@ def align(
         os.path.join(workdir, 'primers.bed')
     )
 
+    names = []
     for pairobj in paired_fastqs:
-        align_with_profile(
-            pairobj,
-            program,
-            profile_obj,
-            log_format,
-            fastp_config=fastp_config,
-            cutadapt_config=cutadapt_config,
-            ivar_trim_config=ivar_trim_config
-        )
-        # codfreqfile = name_codfreq(pairobj['name'])
-        sam2segfreq_all(
-            name=pairobj['name'],
-            fnpair=pairobj['pair'],
-            profile=profile_obj,
-            workers=workers,
-            log_format=log_format
-        )
+        names.append(pairobj['name'])
+
+        if not post_segfreq_only:
+            align_with_profile(
+                pairobj,
+                program,
+                profile_obj,
+                log_format,
+                fastp_config=fastp_config,
+                cutadapt_config=cutadapt_config,
+                ivar_trim_config=ivar_trim_config
+            )
+
+            sam2segfreq_all(
+                name=pairobj['name'],
+                fnpair=pairobj['pair'],
+                profile=profile_obj,
+                workers=workers,
+                log_format=log_format
+            )
 
         save_nucfreq(
             pairobj['name'],
@@ -515,6 +521,8 @@ def align(
         #     profile_obj
         # )
 
+    save_consensus(names, profile_obj, log_format)
+
 
 @click.command()
 @click.argument(
@@ -547,6 +555,10 @@ def align(
     default=multiprocessing.cpu_count(),
     show_default=True,
     help='Number of sub-process workers to be used')
+@click.option(
+    '--post-segfreq-only',
+    is_flag=True,
+    help='Start processing at generated segfreq files')
 def align_cmd(
     workdir: str,
     program: str,
@@ -554,7 +566,8 @@ def align_cmd(
     log_format: str,
     enable_profiling: bool,
     autopairing: bool,
-    workers: int
+    workers: int,
+    post_segfreq_only: bool
 ) -> None:
     if enable_profiling:
         import cProfile
@@ -563,13 +576,14 @@ def align_cmd(
         try:
             with cProfile.Profile() as profile_obj:
                 align(workdir, program, profile, workers,
-                      log_format, autopairing)
+                      log_format, autopairing, post_segfreq_only)
         finally:
             if profile_obj is not None:
                 ps = pstats.Stats(profile_obj)
                 ps.print_stats()
     else:
-        align(workdir, program, profile, workers, log_format, autopairing)
+        align(workdir, program, profile, workers,
+              log_format, autopairing, post_segfreq_only)
 
 
 if __name__ == '__main__':

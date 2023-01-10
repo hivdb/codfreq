@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict, Tuple, List, Dict, Union, Literal
+from typing import Optional, TypedDict, Tuple, List, Dict, Union, Literal, Any
 
 FASTQFileName = str
 Header = str
@@ -41,11 +41,17 @@ class CodonAlignmentConfig(TypedDict, total=False):
     relGapPlacementScore: Optional[str]
 
 
+class OutputOptions(TypedDict, total=False):
+    patternsTopNSeeds: Optional[int]
+    consensusLevels: Optional[List[float]]
+
+
 class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
     refSequence: None
     outputs: List[Literal['codfreq', 'nucfreq', 'patterns', 'consensus']]
+    outputOptions: Dict[str, Any]
     geneName: Optional[GeneText]
     refRanges: List[NAPosRange]
     codonAlignment: Optional[Union[

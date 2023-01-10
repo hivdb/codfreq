@@ -64,8 +64,15 @@ def name_nucfreq(name: str) -> str:
     return '{}.nucfreq'.format(name)
 
 
-def name_patterns(name: str) -> str:
-    return '{}.patterns.csv'.format(name)
+def name_patterns(name: str, frag_name: str) -> str:
+    return '{}.{}-patterns.fasta'.format(name, frag_name)
+
+
+def name_consensus(dirname: str, gene: str, level: float) -> str:
+    return os.path.join(
+        dirname,
+        'consensus-{}-{:g}.fasta'.format(gene, level * 100)
+    )
 
 
 def replace_ext(

@@ -51,6 +51,11 @@ extensions = [
         # define_macros=[('CYTHON_TRACE', '1')]
     ),
     Extension(
+        name='codfreq.profile',
+        sources=['codfreq/profile.py'],
+        # define_macros=[('CYTHON_TRACE', '1')]
+    ),
+    Extension(
         name='codfreq.segfreq',
         sources=['codfreq/segfreq.py'],
         # define_macros=[('CYTHON_TRACE', '1')]

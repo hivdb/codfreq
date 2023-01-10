@@ -109,6 +109,11 @@ AMBIGUOUS_NAS: Dict[NAChar, MultiNAText] = {
 }
 
 
+REVERSED_AMBIGUOUS_NAS: Dict[MultiNAText, NAChar] = {}
+for na, amb in AMBIGUOUS_NAS.items():
+    REVERSED_AMBIGUOUS_NAS[amb] = na
+
+
 def expand_ambiguous_na(na: NAChar) -> MultiNAText:
     return AMBIGUOUS_NAS.get(na, bytes([na]))
 
