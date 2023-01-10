@@ -26,6 +26,7 @@ from .sam2codfreq import (
     sam2codfreq_all,
     CODFREQ_HEADER
 )
+from .nucfreq import save_nucfreq
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
     fastp, cutadapt, ivar, get_programs, get_refinit, get_align
@@ -480,6 +481,12 @@ def align(
             workers=workers,
             log_format=log_format
         )
+
+        save_nucfreq(
+            pairobj['name'],
+            pairobj['pair'],
+            profile_obj,
+            log_format)
 
         # with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
         #     writer = csv.DictWriter(fp, CODFREQ_HEADER)

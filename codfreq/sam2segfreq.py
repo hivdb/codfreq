@@ -5,7 +5,6 @@ from tqdm import tqdm  # type: ignore
 from typing import (
     Tuple,
     List,
-    Dict,
     Optional,
     Any,
     Union,
@@ -15,63 +14,21 @@ from concurrent.futures import ProcessPoolExecutor
 from collections import deque
 
 from .codfreq_types import (
-    Header,
     Profile,
     FASTQFileName,
-    FragmentConfig,
     MainFragmentConfig
-)
-from .sam2codfreq_types import (
-    TypedRefFragment
 )
 from .samfile_helper import chunked_samfile
 from .json_progress import JsonProgress
 from .posnas import PosNA, iter_single_read_posnas
 from .filename_helper import name_bamfile, name_segfreq
+from .profile import get_ref_fragments
 
 from .segfreq import SegFreq, DEFAULT_SEGMENT_SIZE, DEFAULT_SEGMENT_STEP
 
 BEGIN: Tuple[int, int, int, int] = (0, 0, ord('^'), 0)
 END: Tuple[int, int, int, int] = (0, 0, ord('$'), 0)
 ENCODING: str = 'UTF-8-sig'
-
-
-@cython.cfunc
-@cython.inline
-@cython.returns(list)
-def get_ref_fragments(
-    profile: Profile
-) -> List[Tuple[
-    Header,
-    MainFragmentConfig
-]]:
-    refname: str
-    config: FragmentConfig
-    ref_fragments: Dict[Header, TypedRefFragment] = {}
-    for config in profile['fragmentConfig']:
-        refname = config['fragmentName']
-        refseq = config.get('refSequence')
-        segment_size = config.get('segmentSize', DEFAULT_SEGMENT_SIZE)
-        segment_step = config.get('segmentStep', DEFAULT_SEGMENT_STEP)
-        if not isinstance(segment_size, int):
-            raise TypeError('segmentSize must be an integer')
-        if not isinstance(segment_step, int):
-            raise TypeError('segmentStep must be an integer')
-        if isinstance(refseq, str):
-            ref_fragments[refname] = {
-                'ref': {
-                    'fragmentName': refname,
-                    'refSequence': refseq,
-                    'segmentSize': segment_size,
-                    'segmentStep': segment_step
-                },
-                'fragments': []
-            }
-
-    return [
-        (refname, pair['ref'])
-        for refname, pair in ref_fragments.items()
-    ]
 
 
 @cython.ccall
@@ -240,13 +197,12 @@ def sam2segfreq_all(
     fnpair: Tuple[Optional[FASTQFileName], ...],
     profile: Profile,
     workers: int,
-    log_format: str = 'text',
-    include_partial_codons: bool = False
+    log_format: str = 'text'
 ) -> None:
     refname: str
     ref: MainFragmentConfig
     ref_fragments = get_ref_fragments(profile)
-    for refname, ref in ref_fragments:
+    for refname, ref, _ in ref_fragments:
         samfile: str = name_bamfile(name, refname, is_trimmed=True)
         segfreq: SegFreq = sam2segfreq(
             samfile,

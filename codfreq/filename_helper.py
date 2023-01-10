@@ -60,6 +60,10 @@ def name_segfreq(name: str, refname: Header) -> str:
     return '{}.{}.segfreq'.format(name, refname)
 
 
+def name_nucfreq(name: str) -> str:
+    return '{}.nucfreq'.format(name)
+
+
 def replace_ext(
         filename: str,
         toext: str,

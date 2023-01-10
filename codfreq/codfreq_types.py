@@ -45,6 +45,7 @@ class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
     refSequence: None
+    frequencyType: Literal['codon', 'nucleotide']
     geneName: Optional[GeneText]
     refRanges: List[NAPosRange]
     codonAlignment: Optional[Union[
