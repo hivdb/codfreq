@@ -28,6 +28,8 @@ def iter_nucfreq(
     with open(segfreq_file, encoding=ENCODING) as fh:
         segfreq = SegFreq.load(fh)
         for fragment in fragments:
+            if 'nucfreq' not in fragment['outputs']:
+                continue
             offset = 1
             for pos_start, pos_end in fragment['refRanges']:
                 for pos in range(pos_start, pos_end + 1):
@@ -51,7 +53,7 @@ def save_nucfreq(
 ) -> None:
     ref_fragments = get_ref_fragments(profile)
     if not any(
-        frag['frequencyType'] == 'nucleotide'
+        'nucfreq' in frag['outputs']
         for _, _, fragments in ref_fragments
         for frag in fragments
     ):
@@ -74,7 +76,7 @@ def save_nucfreq(
         )
     else:
         click.echo(json.dumps({
-            'op': 'save-nucleotide',
+            'op': 'save-nucfreq',
             'status': 'done',
             'query': name,
             'target': nucfreq_file

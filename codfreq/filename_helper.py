@@ -64,6 +64,10 @@ def name_nucfreq(name: str) -> str:
     return '{}.nucfreq'.format(name)
 
 
+def name_patterns(name: str) -> str:
+    return '{}.patterns.csv'.format(name)
+
+
 def replace_ext(
         filename: str,
         toext: str,

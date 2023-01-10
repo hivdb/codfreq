@@ -27,6 +27,7 @@ from .sam2codfreq import (
     CODFREQ_HEADER
 )
 from .nucfreq import save_nucfreq
+from .patterns import save_patterns
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
     fastp, cutadapt, ivar, get_programs, get_refinit, get_align
@@ -483,6 +484,12 @@ def align(
         )
 
         save_nucfreq(
+            pairobj['name'],
+            pairobj['pair'],
+            profile_obj,
+            log_format)
+
+        save_patterns(
             pairobj['name'],
             pairobj['pair'],
             profile_obj,

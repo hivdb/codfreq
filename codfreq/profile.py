@@ -80,7 +80,7 @@ def get_ref_fragments(
         refname = config['fragmentName']
         fromref = config.get('fromFragment')
         gene = config.get('geneName')
-        frequency_type = config.get('frequencyType', 'codon')
+        outputs = config.get('outputs', ['codfreq'])
         refranges = get_ref_ranges(config)
         codon_alignment_raw: Any = config.get('codonAlignment')
         codon_alignment: Optional[Union[
@@ -104,10 +104,16 @@ def get_ref_fragments(
         elif codon_alignment_raw is False:
             codon_alignment = False
 
-        if frequency_type != 'codon' and \
-                frequency_type != 'nucleotide':
-            raise ValueError(
-                'frequencyType must be "codon" or "nucleotide"')
+        if not isinstance(outputs, list):
+            raise TypeError('outputs must be a list')
+        for output in outputs:
+            if output != 'codfreq' and \
+                    output != 'nucfreq' and \
+                    output != 'consensus' and \
+                    output != 'patterns':
+                raise ValueError(
+                    f'Invalid output type {output} in fragment {refname}'
+                )
 
         if (
             isinstance(fromref, str) and
@@ -118,7 +124,7 @@ def get_ref_fragments(
             ref_fragments[fromref]['fragments'].append({
                 'fragmentName': refname,
                 'fromFragment': fromref,
-                'frequencyType': frequency_type,
+                'outputs': outputs,
                 'geneName': gene,
                 'refRanges': refranges,
                 'codonAlignment': codon_alignment
