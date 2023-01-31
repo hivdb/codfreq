@@ -193,39 +193,43 @@ class SegFreq:
     ) -> Tuple[Optional[PosNA], ...]:
         """Get consensus segment for a range of positions."""
         pos: int = cython.declare(cython.long)
-        consensus: Dict[Tuple[int, int], PosNA] = {}
+        consensus: Dict[Tuple[int, int], tCounter[PosNA]] = {}
         real_pos_start: int = pos_start - (pos_start - 1) % self.segment_step
         real_pos_end: int = pos_end - (pos_end - 1) % self.segment_step
+        pos_total: Dict[int, int] = {}
 
         for pos in range(real_pos_start, real_pos_end + 1, self.segment_step):
             pos_until: int = pos + self.segment_step
             if pos in self._segments:
                 pos_segments = self._segments[pos]
-                min_count: float = sum(pos_segments.values()) * level
+                total = sum(pos_segments.values())
                 for segment, count in pos_segments.most_common():
-                    if level < 1. and count < min_count:
-                        break
                     for node in segment:
                         if node is None or \
                                 node.pos >= pos_until or \
                                 node.pos < pos_start or node.pos > pos_end:
                             continue
+                        pos_total[node.pos] = total
                         nodekey = (node.pos, node.bp)
                         if nodekey not in consensus:
-                            consensus[nodekey] = node
-                        else:
-                            consensus[nodekey] = merge_posnas(
-                                consensus[nodekey], node
-                            )
+                            consensus[nodekey] = Counter()
+                        consensus[nodekey][node] += count
                     if level >= 1.:
                         # only record the most common NA's for 100%
                         break
         result: List[Optional[PosNA]] = []
         for pos in range(pos_start, pos_end + 1):
-            result.append(consensus.get((pos, 0)))
-            bp = 1
+            bp = 0
             while (pos, bp) in consensus:
-                result.append(consensus.get((pos, bp)))
+                posnas: tCounter[PosNA] = consensus.get((pos, bp), Counter())
+                min_count: float = pos_total[pos] * level
+                qualified: List[PosNA] = [
+                    posna
+                    for posna, count in posnas.most_common()
+                    if level >= 1. or count >= min_count
+                ]
+                if qualified:
+                    result.append(merge_posnas(*qualified))
                 bp += 1
         return tuple(result)
 

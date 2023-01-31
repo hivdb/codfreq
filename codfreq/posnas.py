@@ -83,31 +83,35 @@ def join_posnas(posnas: Iterable[Optional['PosNA']]) -> str:
     ).decode('ASCII')
 
 
-def merge_posnas(posna1: PosNA, posna2: PosNA) -> PosNA:
-    """Merge two PosNA objects.
+def merge_posnas(*posnas: PosNA) -> PosNA:
+    """Merge multiple PosNA objects.
 
-    :param posna1: The first PosNA object.
-    :param posna2: The second PosNA object.
+    :param posnas: The PosNA objects to be merged.
 
     :return: The merged PosNA object.
     """
-    if posna1.pos != posna2.pos:
-        raise ValueError(
-            "Cannot merge PosNA objects with different positions: "
-            f"{posna1.pos} != {posna2.pos}")
-    if posna1.bp != posna2.bp:
-        raise ValueError(
-            "Cannot merge PosNA objects with different insertion gap offsets: "
-            f"{posna1.bp} != {posna2.bp}")
-    if posna1.na == GAP or posna2.na == GAP:
-        return PosNA(posna1.pos, posna1.bp, GAP)
-    if posna1.na == posna2.na:
-        return posna1
-    amb = bytes(sorted(
-        set(AMBIGUOUS_NAS.get(posna1.na, bytes([posna1.na])) +
-            AMBIGUOUS_NAS.get(posna2.na, bytes([posna2.na])))
-    ))
-    return PosNA(posna1.pos, posna1.bp, REVERSED_AMBIGUOUS_NAS[amb])
+    posna = posnas[0]
+    for posna2 in posnas[1:]:
+        if posna.pos != posna2.pos:
+            raise ValueError(
+                "Cannot merge PosNA objects with different positions: "
+                f"{posna.pos} != {posna2.pos}")
+        if posna.bp != posna2.bp:
+            raise ValueError(
+                "Cannot merge PosNA objects with different insertion gap "
+                f"offset: {posna.bp} != {posna2.bp}")
+        if posna.na == GAP or posna2.na == GAP:
+            posna = PosNA(posna.pos, posna.bp, GAP)
+        elif posna.na == posna2.na:
+            continue
+        else:
+            amb = bytes(sorted(
+                set(AMBIGUOUS_NAS.get(posna.na, bytes([posna.na])) +
+                    AMBIGUOUS_NAS.get(posna2.na, bytes([posna2.na])))
+            ))
+            posna = PosNA(posna.pos, posna.bp,
+                          REVERSED_AMBIGUOUS_NAS[amb])
+    return posna
 
 
 @cython.ccall
