@@ -215,6 +215,11 @@ codon frequency table (.codfreq or .codfreq.gz file) into an amino acid
 frequency table (.aafreq.csv file). The script merges rows of codons that can be
 translated into the same amino acid.
 
+This script requires Python 3.9 or higher version to be installed. This required
+Python runtime is included in the latest version of MacOS and most Linux
+releases. To install the latest Python version, please follow the [official
+website](https://www.python.org/downloads/).
+
 To use this script:
 
 1. Download the script:
