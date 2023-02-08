@@ -205,3 +205,27 @@ for the Docker software. Please check these general answers from Stackoverflow:
 - Windows: https://stackoverflow.com/a/56583203/2644759
 - MacOS: https://stackoverflow.com/a/39720010/2644759
 -->
+
+## Other tools
+
+### Consolidate codon frequency table to amino acid freqency table
+
+A script using only the standard Python library is provided to consolidate a
+codon frequency table (.codfreq or .codfreq.gz file) into an amino acid
+frequency table (.aafreq.csv file). The script merges rows of codons that can be
+translated into the same amino acid.
+
+To use this script:
+
+1. Download the script:
+
+   ```bash
+   sudo curl -sL https://raw.githubusercontent.com/hivdb/codfreq/main/scripts/codfreq2aafreq.py -o /usr/local/bin/codfreq2aafreq
+   sudo chmod +x /usr/local/bin/codfreq2aafreq
+   ```
+
+2. Run the script:
+
+   ```bash
+   codfreq2aafreq dir/to/read/codfreqs dir/to/write/aafreqs
+   ```
