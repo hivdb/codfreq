@@ -64,6 +64,10 @@ def name_nucfreq(name: str) -> str:
     return '{}.nucfreq'.format(name)
 
 
+def name_binucfreq(name: str) -> str:
+    return '{}.binucfreq'.format(name)
+
+
 def name_patterns(name: str, frag_name: str) -> str:
     return '{}.{}-patterns.fasta'.format(name, frag_name)
 

@@ -16,14 +16,14 @@ class TestSegFreq(unittest.TestCase):
         with open(SARS2_SEGFREQ, encoding='UTF-8-sig') as fh:
             self.segfreq = SegFreq.load(fh)
 
-    def test_get_pos_codons(self) -> None:
+    def test_get_frequency(self) -> None:
         self.assertEqual(
-            self.segfreq.get_pos_codons(21563),
+            self.segfreq.get_frequency([21563]),
             {b'ATG': 1377, b'ACG': 2, b'GTG': 2}
         )
 
         self.assertEqual(
-            self.segfreq.get_pos_codons(21563 + 569 * 3),
+            self.segfreq.get_frequency([21563 + 569 * 3]),
             {b'GAT': 2833, b'GCT': 122, b'GGT': 13, b'GTT': 1,
              b'TAT': 1, b'AAT': 2, b'CAA': 1, b'GAA': 1, b'GAC': 7}
         )

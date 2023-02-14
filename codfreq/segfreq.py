@@ -4,7 +4,8 @@ import csv
 from collections import deque, Counter
 
 from typing import (
-    Dict, Tuple, TextIO, List, Optional, Deque, Counter as tCounter
+    Sequence, Dict, Tuple, TextIO, List,
+    Optional, Deque, Counter as tCounter
 )
 
 from more_itertools import pairwise
@@ -114,48 +115,44 @@ class SegFreq:
 
     @cython.ccall
     @cython.locals(
-        pos1=cython.long,
-        pos2=cython.long,
-        pos3=cython.long
+        na_size=cython.long
     )
     @cython.returns(dict)
-    def get_pos_codons(
+    def get_frequency(
         self: 'SegFreq',
-        pos1: int,
-        pos2: int = 0,
-        pos3: int = 0
+        positions: Sequence[int],
+        na_size: int = 3
     ) -> Dict[bytes, int]:
-        """Get the codon counts for a given position."""
+        """Get the NAs combination counts for given positions."""
         pos: int = cython.declare(cython.long)
         accessed: bool = cython.declare(cython.bint)
-        codon: bytearray = cython.declare(bytearray)
-        codon_bytes: bytes = cython.declare(bytes)
-        if pos2 == 0:
-            pos2 = pos1 + 1
-        if pos3 == 0:
-            pos3 = pos1 + 2
-        segpos: int = min(pos1, pos2, pos3)
+        nas: bytearray = cython.declare(bytearray)
+        nas_bytes: bytes = cython.declare(bytes)
+        positions = list(positions)
+        while len(positions) < na_size:
+            positions.append(positions[-1] + 1)
+        segpos: int = min(positions)
         segpos = segpos - (segpos - 1) % self.segment_step
-        for pos in (pos1, pos2, pos3):
+        for pos in positions:
             if pos < segpos or pos >= segpos + self.segment_size:
                 raise ValueError('Positions are too far apart')
-        codon_counts: tCounter[bytes] = Counter()
+        nas_counts: tCounter[bytes] = Counter()
         for segment, count in self._segments.get(segpos, {}).items():
-            codon = bytearray()
-            for pos in (pos1, pos2, pos3):
+            nas = bytearray()
+            for pos in positions:
                 accessed = False
                 for node in segment:
                     if node and node.pos == pos:
-                        codon.append(node.na)
+                        nas.append(node.na)
                         accessed = True
                     elif node and node.pos > pos:
                         break
                 if not accessed:
                     break
             else:
-                codon_bytes = bytes(codon)
-                codon_counts[codon_bytes] += count
-        return dict(codon_counts)
+                nas_bytes = bytes(nas)
+                nas_counts[nas_bytes] += count
+        return dict(nas_counts)
 
     @cython.ccall
     @cython.locals(
@@ -237,7 +234,7 @@ class SegFreq:
     @cython.locals(
         pos_start=cython.long,
         pos_end=cython.long,
-        min_count=cython.int
+        top_n_seeds=cython.int
     )
     @cython.returns(dict)
     def get_patterns(

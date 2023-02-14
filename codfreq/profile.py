@@ -91,6 +91,7 @@ def get_ref_fragments(
         for output in outputs:
             if output != 'codfreq' and \
                     output != 'nucfreq' and \
+                    output != 'binucfreq' and \
                     output != 'consensus' and \
                     output != 'patterns':
                 raise ValueError(

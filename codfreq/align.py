@@ -27,6 +27,7 @@ from .sam2codfreq import (
     CODFREQ_HEADER
 )
 from .nucfreq import save_nucfreq
+from .binucfreq import save_binucfreq
 from .patterns import save_patterns
 from .consensus import save_consensus
 from .sam2consensus import create_untrans_region_consensus
@@ -490,6 +491,12 @@ def align(
             )
 
         save_nucfreq(
+            pairobj['name'],
+            pairobj['pair'],
+            profile_obj,
+            log_format)
+
+        save_binucfreq(
             pairobj['name'],
             pairobj['pair'],
             profile_obj,
