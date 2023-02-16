@@ -40,7 +40,6 @@ def minimap2_align(
     command: List[str] = [
         'minimap2',
         *MINIMAP2_ARGS,
-        '--sam-hit-only',
         '--split-prefix', '/tmp/.minimap-tmp',
         '-a', refseq, fastq1
     ]
