@@ -50,7 +50,8 @@ class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
     refSequence: None
-    outputs: List[Literal['codfreq', 'nucfreq', 'patterns', 'consensus']]
+    outputs: List[Literal['codfreq', 'nucfreq', 'binucfreq',
+                          'patterns', 'consensus']]
     outputOptions: Dict[str, Any]
     geneName: Optional[GeneText]
     refRanges: List[NAPosRange]

@@ -2,7 +2,6 @@
 
 import os
 import re
-import csv
 import json
 import click  # type: ignore
 import tempfile
@@ -22,26 +21,21 @@ from typing import (
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
 
 from .sam2segfreq import sam2segfreq_all
-from .sam2codfreq import (
-    sam2codfreq_all,
-    CODFREQ_HEADER
-)
 from .nucfreq import save_nucfreq
 from .binucfreq import save_binucfreq
+from .codfreq import save_codfreq
 from .patterns import save_patterns
-from .consensus import save_consensus
-from .sam2consensus import create_untrans_region_consensus
+from .consensus import save_consensus, save_untrans_region_consensus
 from .cmdwrappers import (
     fastp, cutadapt, ivar, get_programs, get_refinit, get_align
 )
 from .filename_helper import (
     suggest_pair_name,
-    name_bamfile,
-    name_codfreq
+    name_bamfile
 )
 
 ENCODING = 'UTF-8'
-REQUIRED_PROFILE_VERSION = '20221213'
+REQUIRED_PROFILE_VERSION = '20230221'
 FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
 INVALID_PAIRED_FASTQ_MARKER = re.compile(r'[1-9]0*[12]|[^0]00+[12]|[12]\d')
@@ -490,6 +484,12 @@ def align(
                 log_format=log_format
             )
 
+        save_codfreq(
+            pairobj['name'],
+            pairobj['pair'],
+            profile_obj,
+            log_format)
+
         save_nucfreq(
             pairobj['name'],
             pairobj['pair'],
@@ -508,25 +508,10 @@ def align(
             profile_obj,
             log_format)
 
-        # with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
-        #     writer = csv.DictWriter(fp, CODFREQ_HEADER)
-        #     writer.writeheader()
-        #     for row in sam2codfreq_all(
-        #         name=pairobj['name'],
-        #         fnpair=pairobj['pair'],
-        #         profile=profile_obj,
-        #         workers=workers,
-        #         log_format=log_format
-        #     ):
-        #         writer.writerow({
-        #             **row,
-        #             'codon': row['codon'].decode(ENCODING)
-        #         })
-
-        # create_untrans_region_consensus(
-        #     pairobj['name'],
-        #     profile_obj
-        # )
+        save_untrans_region_consensus(
+            pairobj['name'],
+            profile_obj,
+            log_format)
 
     save_consensus(names, profile_obj, log_format)
 

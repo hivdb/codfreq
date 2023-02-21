@@ -7,6 +7,7 @@ from codfreq.segfreq import SegFreq, remove_first_n_pos, remove_last_n_pos
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 SARS2_SEGFREQ = os.path.join(DATA_DIR, 'sars2-test.segfreq')
+FIVEPRIME_SEGFREQ = os.path.join(DATA_DIR, 'SRR8670581.five-prime.segfreq')
 SARS2_FASTA = os.path.join(DATA_DIR, 'sars2-test.fasta')
 
 
@@ -15,6 +16,8 @@ class TestSegFreq(unittest.TestCase):
     def setUp(self) -> None:
         with open(SARS2_SEGFREQ, encoding='UTF-8-sig') as fh:
             self.segfreq = SegFreq.load(fh)
+        with open(FIVEPRIME_SEGFREQ, encoding='UTF-8-sig') as fh:
+            self.segfreq_5prime = SegFreq.load(fh)
 
     def test_get_frequency(self) -> None:
         self.assertEqual(
@@ -32,6 +35,16 @@ class TestSegFreq(unittest.TestCase):
         self.assertEqual(
             self.segfreq.get_pos_nas(21563),
             {b'A': 1411, b'G': 2}
+        )
+
+    def test_get_pos_nas_5prime(self) -> None:
+        self.assertEqual(
+            self.segfreq_5prime.get_pos_nas(355),
+            {b'T': 2}
+        )
+        self.assertEqual(
+            self.segfreq_5prime.get_pos_nas(356),
+            {b'A': 2}
         )
 
     def test_get_consensus(self) -> None:

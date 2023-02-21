@@ -93,7 +93,7 @@ def mask_segment(
 
 @cython.cclass
 class SegFreq:
-    """A class to represent an NGS alignment in digraph form."""
+    """SegFreq class to represent an NGS alignment."""
 
     segment_size: int = cython.declare(cython.int, visibility="public")
     segment_step: int = cython.declare(cython.int, visibility="public")
@@ -101,6 +101,7 @@ class SegFreq:
         int,
         tCounter[Tuple[Optional[PosNA], ...]]
     ] = cython.declare(dict, visibility="private")
+    _max_segpos: int = cython.declare(cython.int, visibility='private')
 
     def __init__(self: 'SegFreq', segment_size: int, segment_step: int):
         if segment_step < 1:
@@ -112,6 +113,7 @@ class SegFreq:
         self.segment_size = segment_size
         self.segment_step = segment_step
         self._segments = {}
+        self._max_segpos = 0
 
     @cython.ccall
     @cython.locals(
@@ -133,7 +135,12 @@ class SegFreq:
             positions.append(positions[-1] + 1)
         segpos: int = min(positions)
         segpos = segpos - (segpos - 1) % self.segment_step
+        if segpos > self._max_segpos:
+            segpos = self._max_segpos
         for pos in positions:
+            if pos >= self._max_segpos + self.segment_size:
+                # current segment doesn't contain the position, skip
+                continue
             if pos < segpos or pos >= segpos + self.segment_size:
                 raise ValueError('Positions are too far apart')
         nas_counts: tCounter[bytes] = Counter()
@@ -165,6 +172,9 @@ class SegFreq:
     ) -> Dict[bytes, int]:
         """Get the nucleotide counts for a given position."""
         segpos: int = pos - (pos - 1) % self.segment_step
+        if segpos > self._max_segpos:
+            # handle the case where the position is beyond the last segment
+            segpos = self._max_segpos
         na_counts: tCounter[bytes] = Counter()
         nas: bytearray = cython.declare(bytearray)
         for segment, count in self._segments.get(segpos, {}).items():
@@ -376,7 +386,7 @@ class SegFreq:
         segment: Tuple[Optional[PosNA], ...],
         count: int = 1
     ) -> None:
-        """Add a segment to the graph.
+        """Add a segment to this object.
 
         :param segment: A tuple of nodes, where None represents a gap.
         :param count: The number of times to add the segment.
@@ -385,11 +395,12 @@ class SegFreq:
         if pos not in self._segments:
             self._segments[pos] = Counter()
         self._segments[pos][segment] += count
+        self._max_segpos = self._max_segpos if self._max_segpos > pos else pos
 
     @cython.ccall
     @cython.returns(cython.void)
     def update(self: 'SegFreq', other: 'SegFreq') -> None:
-        """Update the graph with another graph."""
+        """Update this SegFreq with another SegFreq."""
         if self.segment_size != other.segment_size:
             raise ValueError("Incompatible segment sizes")
         for pos_segments in other._segments.values():
@@ -397,7 +408,7 @@ class SegFreq:
                 self.add(segment, count)
 
     def dump(self: 'SegFreq', fp: TextIO) -> None:
-        """Dump the graph to a file."""
+        """Dump to a segfreq file."""
         csv_writer = csv.writer(fp)
         csv_writer.writerow([f'# segment_size={self.segment_size}'])
         csv_writer.writerow([f'# segment_step={self.segment_step}'])
@@ -427,7 +438,7 @@ class SegFreq:
 
     @classmethod
     def load(cls, fp: TextIO) -> 'SegFreq':
-        """Load a graph from a file."""
+        """Load from a segfreq file."""
         lines = fp.readlines()
         segment_size: int = DEFAULT_SEGMENT_SIZE
         segment_step: int = DEFAULT_SEGMENT_STEP

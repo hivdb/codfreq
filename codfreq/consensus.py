@@ -1,11 +1,16 @@
 import os
+import json
 from tqdm import tqdm  # type: ignore
-from typing import List, Tuple, Optional, Dict, Iterable, Union
+from typing import List, Tuple, Optional, Dict, Iterable, Union, TextIO
 
 from .codfreq_types import (
-    Profile, DerivedFragmentConfig, MainFragmentConfig
+    DerivedFragmentConfig, MainFragmentConfig,
+    Profile,
+    FragmentConfig,
+    SequenceAssemblyConfig,
+    RegionalConsensus
 )
-from .posnas import PosNA
+from .posnas import PosNA, join_posnas
 from .json_progress import JsonProgress
 from .segfreq import SegFreq, DEFAULT_CONSENSUS_LEVEL
 from .filename_helper import name_segfreq, name_consensus
@@ -111,3 +116,50 @@ def save_consensus(
         consensus_file: str = name_consensus(dirname, gene, level)
         with open(consensus_file, 'w', encoding='UTF-8') as fh:
             write_multi_alignment(fh, seqs)
+
+
+def save_untrans_region_consensus(
+    name: str,
+    profile: Profile,
+    log_format: str = 'text'
+) -> None:
+    refname: str
+    samfile: str
+    segfreq_file: str
+    fragment: FragmentConfig
+    region: SequenceAssemblyConfig
+
+    fh: Optional[TextIO] = None
+    results: List[RegionalConsensus] = []
+
+    for fragment in profile['fragmentConfig']:
+        if 'fromFragment' in fragment:
+            continue
+        refname = fragment['fragmentName']
+
+        segfreq_file = name_segfreq(name, refname)
+        try:
+            fh = open(segfreq_file, encoding=ENCODING)
+            segfreq = SegFreq.load(fh)
+
+            for region in profile['sequenceAssemblyConfig']:
+                if region.get('fromFragment') != refname:
+                    continue
+                if 'name' not in region or region['name'] is None:
+                    continue
+                if 'fromFragment' not in region or \
+                        region['fromFragment'] is None:
+                    continue
+                if 'refStart' not in region or region['refStart'] is None:
+                    continue
+                if 'refEnd' not in region or region['refEnd'] is None:
+                    continue
+                cons: Tuple[Optional[PosNA]] = segfreq.get_consensus(
+                    region['refStart'], region['refEnd'], level=1.)
+
+                results.append(join_posnas(cons))
+        finally:
+            if fh is not None:
+                fh.close()
+        with open('{}.untrans.json'.format(name), 'w') as fp:
+            json.dump(results, fp)
