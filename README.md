@@ -15,17 +15,16 @@ columns:
 
 ## Examples
 
-Following listed 3 CodFreq files selected from studies with Illumina FASTQ
-sequence read files that are available online.  Due to browser restriction,
-please **right click** the link and select "**Save Link As...**" to download the
-file. Left click the link will open the file in your browser and you have to
-save it through the "File" menu. Once you downloaded one or more CodFreq files,
-you can submit it/them to [HIVDB Interpretation Program](/hivdb/by-reads/) for
+[This repository](https://github.com/hivdb/codfreq-sra-hiv) contains CodFreq files
+generated from publicly available SRA sequences. We have also included three
+selected files from studies that utilize Illumina sequencing. To analyze these
+files, first download one or more CodFreq example files. Then, submit them to the
+[HIVDB Interpretation Program](https://hivdb.stanford.edu/hivdb/by-reads/) for
 analysis.
 
-- [SRR4071760]($$CMS_PREFIX$$downloads/codfreq-examples/SRR4071760.codfreq.txt)
-- [SRX3881674]($$CMS_PREFIX$$downloads/codfreq-examples/SRX3881674.codfreq.txt)
-- [DRR030302]($$CMS_PREFIX$$downloads/codfreq-examples/DRR030302.codfreq.txt)
+- [SRR4071760](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/SRR4071760.codfreq.gz)
+- [SRX3881674](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/SRR6937100.codfreq.gz)
+- [DRR030302](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/DRR030302.codfreq.gz)
 
 <!--
 ## Create `.codfreq` file from `.sam`/`.bam` file
