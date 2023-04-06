@@ -23,7 +23,7 @@ files, first download one or more CodFreq example files. Then, submit them to th
 analysis.
 
 - [SRR4071760](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/SRR4071760.codfreq.gz)
-- [SRX3881674](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/SRR6937100.codfreq.gz)
+- [SRR6937100](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/SRR6937100.codfreq.gz)
 - [DRR030302](https://github.com/hivdb/codfreq-sra-hiv/blob/main/codfreqs/DRR030302.codfreq.gz)
 
 <!--
