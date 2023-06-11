@@ -1,6 +1,5 @@
 requirements.txt: Pipfile Pipfile.lock
-	@pipenv lock --requirements > requirements.txt
-	# @sed -i '' -E 's/; (sys_platform|python_(full_)?version).*$$//' requirements.txt
+	@pipenv requirements > requirements.txt
 
 login-ecr:
 	@aws ecr get-login-password --region us-west-2 | docker login \

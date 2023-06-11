@@ -8,8 +8,8 @@ verify_ssl = true
 boto3 = "*"
 
 [packages]
-cython = "*"
-pysam = ">=0.19.1"
+cython = ">=0.29.35"
+pysam = ">=0.21.0"
 click = "*"
 tqdm = "*"
 more-itertools = "*"
@@ -17,9 +17,9 @@ awscli = "*"
 urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
 PyYAML = ">=5.4"
-post-align = {file = "https://github.com/hivdb/post-align/archive/59e7285942a8b42b4b0f1b91a3902f1ac8c7bea4.zip"}
+post-align = {file = "https://github.com/hivdb/post-align/archive/cb28b83e2d9639960533f805f7dc2612ea63ddc6.zip"}
 typing-extensions = "*"
-cutadapt = ">=4.1"
+cutadapt = ">=4.4"
 
 [requires]
-python_version = "3.9"
+python_version = "3.11"

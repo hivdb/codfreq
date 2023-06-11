@@ -62,9 +62,9 @@ def pep508(line: str) -> str:
         return ''
     if not line:
         return line
-    if '://' in line:
-        url, package_name = line.split('#egg=', 1)
-        return '{} @ {}'.format(package_name.strip(), url.strip())
+    if '://' in line and 'post-align' in line:
+        url = line.split('#egg=', 1)
+        return 'post-align @ {}'.format(url[0].strip())
     return line
 
 
