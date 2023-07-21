@@ -77,10 +77,17 @@ RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/htslib/lib && \
     ./configure --prefix=/usr/local/ivar && \
     make && make install
 
+FROM builder as awscli_installer
+RUN apk add unzip
+RUN wget -O /tmp/awscli.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+RUN unzip /tmp/awscli.zip -d /tmp
+RUN /tmp/aws/install
+
 FROM python:3.11-alpine
 ENV LANG="C.UTF-8" \
-    HTSLIB_CONFIGURE_OPTIONS="--enable-plugins"
-RUN apk add --no-cache bash libc6-compat libcurl jq zip pigz
+    HTSLIB_CONFIGURE_OPTIONS="--enable-plugins" \
+    LD_LIBRARY_PATH=/usr/local/lib
+RUN apk add --no-cache bash libc6-compat libcurl jq zip pigz gcompat
 COPY --from=py_builder /python-scripts/ /usr/local/bin/
 COPY --from=py_builder /python-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=orjson_builder /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
@@ -89,6 +96,9 @@ COPY --from=minimap2_installer /usr/local/minimap2/ /usr/local/minimap2/
 COPY --from=fastp_installer /usr/local/bin/fastp /usr/local/bin/fastp
 COPY --from=htslib_builder /usr/local/htslib/lib/libhts.so.3 /usr/lib/libstdc++.so.6 /usr/lib/
 COPY --from=ivar_builder /usr/local/ivar/ /usr/local/ivar/
+COPY --from=awscli_installer /usr/local/aws-cli/ /usr/local/aws-cli/
+COPY --from=awscli_installer /usr/local/bin/aws /usr/local/bin/aws
+COPY --from=awscli_installer /usr/local/bin/aws_completer /usr/local/bin/aws_completer
 RUN ln -s ../minimap2/minimap2 /usr/local/bin/minimap2 && \
     ln -s ../samtools/bin/samtools /usr/local/bin/samtools && \
     ln -s ../ivar/bin/ivar /usr/local/bin/ivar
