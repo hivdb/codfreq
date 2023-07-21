@@ -1,7 +1,7 @@
 import pysam  # type: ignore
 import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
-from collections import defaultdict, Counter
+from collections import Counter
 from more_itertools import unique_everseen
 
 from typing import (
@@ -11,7 +11,6 @@ from typing import (
     Optional,
     Any,
     Union,
-    DefaultDict,
     Literal,
     Counter as tCounter
 )
@@ -156,14 +155,20 @@ def get_ref_fragments(
             ) // 3
 
     # build frag_gene_lookup
-    gene_offsets: Dict[GeneText, AAPos] = defaultdict(lambda: 0)
-    frag_gene_lookup: FragmentGeneLookup = defaultdict(list)
+    gene_offsets: Dict[GeneText, AAPos] = {}
+    frag_gene_lookup: FragmentGeneLookup = {}
     for config in profile['fragmentConfig']:
         refname = config['fragmentName']
         gene = config.get('geneName')
 
         if not isinstance(gene, str):
             continue
+
+        if gene not in gene_offsets:
+            gene_offsets[gene] = 0
+
+        if refname not in frag_gene_lookup:
+            frag_gene_lookup[refname] = []
 
         frag_gene_lookup[refname].append((gene, gene_offsets[gene]))
         gene_offsets[gene] += frag_size_lookup[refname]
@@ -184,13 +189,16 @@ def to_codon_counter_by_fragpos(
     refpos: AAPos
     codons: tCounter[CodonText]
     codon: CodonText
-    reformed: DefaultDict[
+    reformed: Dict[
         Tuple[Header, AAPos],
         Counter[CodonText]
-    ] = defaultdict(Counter)
+    ] = {}
 
     for (fragment_name, refpos, codon), count in codon_counter.items():
-        reformed[(fragment_name, refpos)][codon] = count
+        key = (fragment_name, refpos)
+        if key not in reformed:
+            reformed[key] = Counter()
+        reformed[key][codon] = count
 
     return dict(reformed)
 

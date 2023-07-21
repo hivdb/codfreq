@@ -11,6 +11,7 @@ from itertools import combinations
 from collections import defaultdict
 from typing import (
     TextIO,
+    Iterable,
     Generator,
     List,
     Tuple,
@@ -143,6 +144,9 @@ def find_paired_fastq_patterns(
                         diffoffset = n
                         diffcount += 1
                     if not invalid:
+                        if fn1 > fn2:
+                            # sort by filename
+                            fn1, fn2 = fn2, fn1
                         patterns[(
                             delimiter,
                             diffoffset,
@@ -189,7 +193,7 @@ def find_paired_fastq_patterns(
 
 
 def complete_paired_fastqs(
-    paired_fastqs: Generator[PairedFASTQ, None, None],
+    paired_fastqs: Iterable[PairedFASTQ],
     dirpath: str
 ) -> Generator[PairedFASTQ, None, None]:
     for pairobj in paired_fastqs:
@@ -216,6 +220,7 @@ def find_paired_fastqs(
                 workdir
             )
     else:
+        pairinfo_list: List[PairedFASTQ] = []
         for dirpath, _, filenames in os.walk(workdir, followlinks=True):
             filenames = [
                 fn for fn in filenames
@@ -227,10 +232,14 @@ def find_paired_fastqs(
                     or fn[-15:].lower() == 'merged.fastq.gz'
                 )
             ]
-            yield from complete_paired_fastqs(
+            rel_dirpath = os.path.relpath(dirpath, workdir)
+            pairinfo_list.extend(complete_paired_fastqs(
                 find_paired_fastq_patterns(filenames, autopairing),
-                dirpath
-            )
+                rel_dirpath
+            ))
+        with open(pairinfo, 'w') as fp:
+            json.dump(pairinfo_list, fp, indent=2)
+        yield from complete_paired_fastqs(pairinfo_list, workdir)
 
 
 def fastp_preprocess(

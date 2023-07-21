@@ -77,10 +77,21 @@ RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/htslib/lib && \
     ./configure --prefix=/usr/local/ivar && \
     make && make install
 
+FROM builder as awscli_builder
+RUN apk add --no-cache unzip groff build-base libffi-dev cmake
+ARG AWS_CLI_VERSION=2.13.2
+RUN wget -O /aws-cli-${AWS_CLI_VERSION}.zip https://github.com/aws/aws-cli/archive/refs/tags/${AWS_CLI_VERSION}.zip
+RUN unzip /aws-cli-${AWS_CLI_VERSION}.zip && mv /aws-cli-${AWS_CLI_VERSION} /aws-cli
+WORKDIR /aws-cli
+RUN scripts/installers/make-exe
+RUN unzip -q dist/awscli-exe.zip
+RUN aws/install
+
 FROM python:3.11-alpine
 ENV LANG="C.UTF-8" \
-    HTSLIB_CONFIGURE_OPTIONS="--enable-plugins"
-RUN apk add --no-cache bash libc6-compat libcurl jq zip pigz
+    HTSLIB_CONFIGURE_OPTIONS="--enable-plugins" \
+    LD_LIBRARY_PATH=/usr/local/lib
+RUN apk add --no-cache bash libc6-compat libcurl jq zip pigz gcompat
 COPY --from=py_builder /python-scripts/ /usr/local/bin/
 COPY --from=py_builder /python-packages/ /usr/local/lib/python3.11/site-packages/
 COPY --from=orjson_builder /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
@@ -89,8 +100,11 @@ COPY --from=minimap2_installer /usr/local/minimap2/ /usr/local/minimap2/
 COPY --from=fastp_installer /usr/local/bin/fastp /usr/local/bin/fastp
 COPY --from=htslib_builder /usr/local/htslib/lib/libhts.so.3 /usr/lib/libstdc++.so.6 /usr/lib/
 COPY --from=ivar_builder /usr/local/ivar/ /usr/local/ivar/
+COPY --from=awscli_builder /usr/local/aws-cli/ /usr/local/aws-cli/
 RUN ln -s ../minimap2/minimap2 /usr/local/bin/minimap2 && \
     ln -s ../samtools/bin/samtools /usr/local/bin/samtools && \
-    ln -s ../ivar/bin/ivar /usr/local/bin/ivar
+    ln -s ../ivar/bin/ivar /usr/local/bin/ivar && \
+    ln -s ../aws-cli/v2/current/bin/aws /usr/local/bin/aws && \
+    ln -s ../aws-cli/v2/current/bin/aws_completer /usr/local/bin/aws_completer
 WORKDIR /app
 COPY bin/align-all-s3 bin/align-all-local /app/bin/

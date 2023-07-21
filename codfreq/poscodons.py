@@ -1,7 +1,7 @@
 import cython  # type: ignore
 import pysam  # type: ignore
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Dict, Tuple, Generator, Optional
+from typing import List, DefaultDict, Tuple, Generator, Optional
 from collections import defaultdict
 
 from .codfreq_types import (
@@ -56,7 +56,7 @@ def group_basepairs(
     posnas_by_napos: List[
         Tuple[NAPos, List[PosNA]]
     ] = group_posnas_by_napos(posnas)
-    basepairs: Dict[Header, List[BasePair]] = defaultdict(list)
+    basepairs: DefaultDict[Header, List[BasePair]] = defaultdict(list)
 
     for napos, na_and_ins in posnas_by_napos:
         for frag_refranges, fragment_name in fragment_intervals:
