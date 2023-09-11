@@ -9,7 +9,7 @@ LAMBDA_ARGS=$(get_lambda_args ${FUNCTION_PREFIX} ${ROLE} $1)
 set -e
 
 aws lambda create-function \
-  --runtime python3.7 \
+  --runtime python3.8 \
   --tags Category=${FUNCTION_PREFIX} \
   --role ${ROLE} \
   --publish \
