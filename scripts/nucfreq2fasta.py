@@ -1,7 +1,5 @@
 #! /usr/bin/env python
 
-from __future__ import print_function
-from __future__ import division
 import os
 import re
 import sys
@@ -44,7 +42,7 @@ def main():
                 continue
             fname = os.path.join(inputdir, fname)
             cons = []
-            with open(fname, 'r') as fp:
+            with open(fname) as fp:
                 all_nas = defaultdict(set)
                 reader = csv.reader(fp, delimiter='\t')
                 for napos, total, na, read, insdetail, *_ in reader:
@@ -93,7 +91,7 @@ def main():
                         cons.append(single_nas)
             cons = ''.join(cons).strip('N')
             header = fname.rsplit('/', 1)[-1].rsplit('.', 1)[0]
-            out.write('>{}\n{}\n'.format(header, cons))
+            out.write(f'>{header}\n{cons}\n')
 
 
 if __name__ == '__main__':

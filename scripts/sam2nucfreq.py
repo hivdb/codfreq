@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-from __future__ import print_function
 import os
 import sys
 import csv
@@ -127,7 +126,7 @@ def reads_producer(filename, offset):
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: {} <SAMFILE> <OUTPUT>".format(sys.argv[0]),
+        print(f"Usage: {sys.argv[0]} <SAMFILE> <OUTPUT>",
               file=sys.stderr)
         exit(1)
     samfile_path = sys.argv[1]
@@ -137,7 +136,7 @@ def main():
     reffilepath = samfile_path[:-4] + '.lastref.fas'
     profile = []
     if os.path.isfile(reffilepath):
-        with open(reffilepath, 'r') as reffile:
+        with open(reffilepath) as reffile:
             profile_tmp = [
                 s['sequence']
                 for s in fastareader.load(reffile)
@@ -196,7 +195,7 @@ def main():
                 ins = ''
                 if na == 'i':
                     ins = ', '.join(
-                        '{} ({})'.format(insna, insread)
+                        f'{insna} ({insread})'
                         for insna, insread in
                         insdetail[refpos].most_common()
                     )
@@ -214,13 +213,13 @@ def main():
                     refpos, total,
                     na.replace('i', 'ins').replace('d', 'del'),
                     read, ins,
-                    '{}%'.format(read / total * 100),
+                    f'{read / total * 100}%',
                     *poprows
                 ])
-    print('{} reads processed. Of them:'.format(num_finished))
-    print('  Length of {} were too short'.format(num_tooshort))
-    print('  Quality of {} were too low'.format(num_lowqual))
-    print("{} done.".format(sys.argv[2]))
+    print(f'{num_finished} reads processed. Of them:')
+    print(f'  Length of {num_tooshort} were too short')
+    print(f'  Quality of {num_lowqual} were too low')
+    print(f"{sys.argv[2]} done.")
 
 
 if __name__ == '__main__':

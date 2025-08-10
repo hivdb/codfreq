@@ -12,15 +12,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import (
     TextIO,
-    Iterable,
-    Generator,
-    List,
-    Tuple,
-    DefaultDict,
-    Set,
-    Optional,
     Annotated,
 )
+from collections.abc import Iterable, Generator
 
 import rich
 import typer
@@ -76,7 +70,7 @@ def find_paired_marker(text1: str, text2: str) -> int:
 
 
 def find_paired_fastq_patterns(
-    filenames: List[str],
+    filenames: list[str],
     autopairing: bool
 ) -> Generator[PairedFASTQ, None, None]:
     """Smartly find paired FASTQ file patterns
@@ -104,21 +98,21 @@ def find_paired_fastq_patterns(
     diffcount: int
     diffoffset: int
     reverse: int
-    pattern: Tuple[
+    pattern: tuple[
         str,  # delimiter
         int,  # diffoffset
         int,  # pos_paired_marker
         int,  # reverse
     ]
-    pairs: List[Tuple[str, str]]
-    patterns: DefaultDict[
-        Tuple[
+    pairs: list[tuple[str, str]]
+    patterns: defaultdict[
+        tuple[
             str,  # delimiter
             int,  # diffoffset
             int,  # pos_paired_marker
             int,  # reverse
         ],
-        List[Tuple[str, str]]
+        list[tuple[str, str]]
     ] = defaultdict(list)
     if autopairing:
         for fn1, fn2 in combinations(filenames, 2):
@@ -127,8 +121,8 @@ def find_paired_fastq_patterns(
             for delimiter in FILENAME_DELIMITERS:
                 if delimiter not in fn1 or delimiter not in fn2:
                     continue
-                chunks1: List[str] = fn1.split(delimiter)
-                chunks2: List[str] = fn2.split(delimiter)
+                chunks1: list[str] = fn1.split(delimiter)
+                chunks2: list[str] = fn2.split(delimiter)
                 if len(chunks1) != len(chunks2):
                     continue
                 for reverse in range(2):
@@ -161,11 +155,11 @@ def find_paired_fastq_patterns(
                             pos_paired_marker,
                             reverse
                         )].append((fn1, fn2))
-    covered: Set[str] = set()
+    covered: set[str] = set()
     if autopairing:
         for pattern, pairs in sorted(
                 patterns.items(), key=lambda p: (-len(p[1]), -p[0][3])):
-            known: Set[str] = set()
+            known: set[str] = set()
             invalid = False
             for left, right in pairs:
                 if left in covered or right in covered:
@@ -190,7 +184,7 @@ def find_paired_fastq_patterns(
                         'n': 2
                     }
     if len(filenames) > len(covered):
-        remains: List[str] = sorted(set(filenames) - covered)
+        remains: list[str] = sorted(set(filenames) - covered)
         pattern = ('', -1, -1, -1)
         for left in remains:
             yield {
@@ -228,7 +222,7 @@ def find_paired_fastqs(
                 workdir
             )
     else:
-        pairinfo_list: List[PairedFASTQ] = []
+        pairinfo_list: list[PairedFASTQ] = []
         for dirpath, _, filenames in os.walk(workdir, followlinks=True):
             filenames = [
                 fn for fn in filenames
@@ -406,8 +400,8 @@ def align_with_profile(
     profile: Profile,
     log_format: LogFormat,
     fastp_config: fastp.FASTPConfig,
-    cutadapt_config: Optional[cutadapt.CutadaptConfig],
-    ivar_trim_config: Optional[ivar.TrimConfig]
+    cutadapt_config: cutadapt.CutadaptConfig | None,
+    ivar_trim_config: ivar.TrimConfig | None
 ) -> None:
     """Align reads to references defined in the profile.
 
@@ -438,7 +432,7 @@ def align_with_profile(
             refname = config['fragmentName']
             refseq = config['refSequence']
             with open(refpath, 'w') as fp:
-                fp.write('>{}\n{}\n\n'.format(refname, refseq))
+                fp.write(f'>{refname}\n{refseq}\n\n')
 
             orig_bamfile = name_bamfile(
                 paired_fastq['name'],
@@ -519,13 +513,13 @@ def align(
     fastp_config: fastp.FASTPConfig = fastp.load_config(
         str(workdir / 'fastp-config.json')
     )
-    cutadapt_config: Optional[cutadapt.CutadaptConfig] = cutadapt.load_config(
+    cutadapt_config: cutadapt.CutadaptConfig | None = cutadapt.load_config(
         str(workdir / 'cutadapt-config.json'),
         adapter3_path=str(workdir / 'primers3.fa'),
         adapter5_path=str(workdir / 'primers5.fa'),
         adapter53_path=str(workdir / 'primers53.fa')
     )
-    ivar_trim_config: Optional[ivar.TrimConfig] = ivar.load_trim_config(
+    ivar_trim_config: ivar.TrimConfig | None = ivar.load_trim_config(
         str(workdir / 'ivar-trim-config.json'),
         str(workdir / 'primers.bed')
     )

@@ -1,19 +1,19 @@
 import os
 import json
 from subprocess import Popen, PIPE
-from typing import List, Optional, TypedDict
+from typing import TypedDict
 
 from .base import raise_on_proc_error
 
 
 class CutadaptConfig(TypedDict, total=False):
-    adapter3: Optional[str]
-    adapter5: Optional[str]
-    adapter53: Optional[str]
-    error_rate: Optional[float]
-    no_indels: Optional[bool]
-    times: Optional[int]
-    min_overlap: Optional[int]
+    adapter3: str | None
+    adapter5: str | None
+    adapter53: str | None
+    error_rate: float | None
+    no_indels: bool | None
+    times: int | None
+    min_overlap: int | None
 
 
 def load_config(
@@ -21,7 +21,7 @@ def load_config(
     adapter3_path: str,
     adapter5_path: str,
     adapter53_path: str
-) -> Optional[CutadaptConfig]:
+) -> CutadaptConfig | None:
     if os.path.isfile(config_path):
         config: CutadaptConfig
         with open(config_path) as fp:
@@ -40,15 +40,15 @@ def load_config(
 def cutadapt(
     merged_fastq_in: str,
     merged_fastq_out: str,
-    adapter3: Optional[str] = None,
-    adapter5: Optional[str] = None,
-    adapter53: Optional[str] = None,
-    error_rate: Optional[float] = None,
-    no_indels: Optional[bool] = None,
-    times: Optional[int] = None,
-    min_overlap: Optional[int] = None
+    adapter3: str | None = None,
+    adapter5: str | None = None,
+    adapter53: str | None = None,
+    error_rate: float | None = None,
+    no_indels: bool | None = None,
+    times: int | None = None,
+    min_overlap: int | None = None
 ) -> None:
-    command: List[str] = ['cutadapt', '-j', '0']
+    command: list[str] = ['cutadapt', '-j', '0']
     if adapter3 is not None:
         command.extend(['-a', adapter3])
     if adapter5 is not None:

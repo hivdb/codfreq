@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-# -*- coding: UTF-8 -*-
 
 import os
 # import re
@@ -64,17 +63,17 @@ def pep508(line: str) -> str:
         return line
     if '://' in line and 'post-align' in line:
         url = line.split('#egg=', 1)
-        return 'post-align @ {}'.format(url[0].strip())
+        return f'post-align @ {url[0].strip()}'
     return line
 
 
 def req(filename: str) -> list[str]:
     with open(os.path.join(os.getcwd(), filename)) as fp:
-        requires = set(
+        requires = {
             strip_comments(pep508(ln))
             for ln in fp.readlines()
-        )
-        requires -= set([''])
+        }
+        requires -= {''}
     return list(requires)
 
 

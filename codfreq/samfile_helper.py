@@ -1,6 +1,5 @@
 import pysam  # type: ignore
 import cython  # type: ignore
-from typing import List, Tuple
 
 
 @cython.ccall
@@ -9,10 +8,10 @@ from typing import List, Tuple
 def chunked_samfile(
     samfile: str,
     chunk_size: int = 50000
-) -> List[Tuple[int, int]]:
+) -> list[tuple[int, int]]:
     """Find out positions in sam/bam file for given chunk_size"""
 
-    chunks: List[Tuple[int, int]] = []
+    chunks: list[tuple[int, int]] = []
     cur_chunk_size: int
     cur_begin: int
     cur_end: int

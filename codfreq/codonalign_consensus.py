@@ -10,15 +10,9 @@ from postalign.models.sequence import (
 )
 from operator import itemgetter
 from typing import (
-    Optional,
-    List,
-    Dict,
-    Tuple,
-    Iterator,
-    Union,
-    Literal,
-    Counter
+    Literal
 )
+from collections import Counter
 
 from .sam2codfreq_types import CodonCounterByFragPos
 from .codfreq_types import (
@@ -27,7 +21,6 @@ from .codfreq_types import (
     NAPosRange,
     CodonText,
     Header,
-    CodFreqRow,
     MainFragmentConfig,
     DerivedFragmentConfig,
     CodonAlignmentConfig
@@ -46,7 +39,7 @@ def get_sequence_obj(
     seqid: int
 ) -> Sequence:
     return Sequence(
-        header='seq{}'.format(seqid),
+        header=f'seq{seqid}',
         description='',
         seqtext=NAPosition.init_from_bytes(seq_bytearray),
         seqid=seqid,
@@ -61,7 +54,7 @@ def get_sequence_obj(
 @cython.returns(int)
 def aapos_to_napos(
     aapos: AAPos,
-    refranges: List[NAPosRange]
+    refranges: list[NAPosRange]
 ) -> NAPos:
     max_rel_napos = 0
     for start, end in refranges:
@@ -81,11 +74,11 @@ def assemble_alignment(
     codonstat_by_fragpos: CodonCounterByFragPos,
     refseq: bytearray,
     fragment: DerivedFragmentConfig
-) -> Tuple[
-    Optional[Sequence],
-    Optional[Sequence],
-    Optional[AAPos],
-    Optional[AAPos]
+) -> tuple[
+    Sequence | None,
+    Sequence | None,
+    AAPos | None,
+    AAPos | None
 ]:
     aapos: AAPos
     napos: NAPos
@@ -93,9 +86,9 @@ def assemble_alignment(
     cons_codon: bytearray
     cons_codon_bytes: bytes
     cons_codon_size: int
-    codons: Optional[Counter[CodonText]]
+    codons: Counter[CodonText] | None
     fragment_name: Header = fragment['fragmentName']
-    frag_refranges: List[NAPosRange] = fragment['refRanges']
+    frag_refranges: list[NAPosRange] = fragment['refRanges']
     frag_refseq: bytearray = bytearray()
     frag_queryseq: bytearray = bytearray()
     refsize: int = sum(end - start + 1 for start, end in frag_refranges)
@@ -147,32 +140,30 @@ def codonalign_consensus(
     codonstat_by_fragpos: CodonCounterByFragPos,
     qualities_by_fragpos: CodonCounterByFragPos,
     ref: MainFragmentConfig,
-    fragments: List[DerivedFragmentConfig],
-) -> Tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
+    fragments: list[DerivedFragmentConfig],
+) -> tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
+    """Derive codon consensus for aligned fragments."""
+
     fragment_name: Header
     fragment: DerivedFragmentConfig
-    frag_refseq_obj: Optional[Sequence]
-    frag_queryseq_obj: Optional[Sequence]
-    first_aa: Optional[AAPos]
-    last_aa: Optional[AAPos]
-    seq_ref_start: NAPos
+    frag_refseq_obj: Sequence | None
+    frag_queryseq_obj: Sequence | None
+    first_aa: AAPos | None
+    last_aa: AAPos | None
     aapos0: AAPos
     aapos: AAPos
     refstart: NAPos
     refend: NAPos
-    refcodon: List[NAPosition]
-    querycodon: List[NAPosition]
-    codons: Optional[Counter[CodonText]]
-    cdfs: Iterator[CodFreqRow]
-    cdf_list: List[CodFreqRow]
-    codon: CodonText
+    refcodon: list[NAPosition]
+    querycodon: list[NAPosition]
+    codons: Counter[CodonText] | None
 
     refseq: bytearray = bytearray(ref['refSequence'], ENCODING)
     for fragment in fragments:
         fragment_name = fragment['fragmentName']
-        codon_align_config: Optional[
-            Union[Literal[False], List[CodonAlignmentConfig]]
-        ] = fragment.get('codonAlignment')
+        codon_align_config: None | (
+            Literal[False] | list[CodonAlignmentConfig]
+        ) = fragment.get('codonAlignment')
 
         if codon_align_config is False:
             # skip this gene if explicitly defined codonAlignment=False
@@ -218,8 +209,8 @@ def codonalign_consensus(
             window_size = cda_config.get(
                 'windowSize'
             ) or CODON_ALIGN_WINDOW_SIZE
-            gap_placement_score: Dict[
-                int, Dict[Tuple[int, int], int]
+            gap_placement_score: dict[
+                int, dict[tuple[int, int], int]
             ] = parse_gap_placement_score(
                 cda_config.get('relGapPlacementScore') or '')
 

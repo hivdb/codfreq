@@ -129,7 +129,7 @@ def translate_codons(nas, ambiguous_x=True):
             if ambiguous_x:
                 aas = 'X'
             else:
-                aas = '[{}]'.format(aas)
+                aas = f'[{aas}]'
         all_aas.append(aas)
     return ''.join(all_aas)
 

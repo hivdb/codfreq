@@ -3,7 +3,8 @@ import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple, Annotated
+from typing import Any, Annotated
+from collections.abc import Iterator
 
 import typer
 
@@ -16,7 +17,7 @@ def utcnow_text() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
-def yield_codfreqs(workdir: Path) -> Iterator[Tuple[str, csv.DictReader]]:
+def yield_codfreqs(workdir: Path) -> Iterator[tuple[str, csv.DictReader]]:
     """Yield codfreq name and row iterator pairs from a directory.
 
     :param workdir: Directory containing CodFreq files.
@@ -31,7 +32,7 @@ def yield_codfreqs(workdir: Path) -> Iterator[Tuple[str, csv.DictReader]]:
             yield name, csv.DictReader(fp)
 
 
-def yield_untrans(workdir: Path) -> Iterator[Tuple[str, Any]]:
+def yield_untrans(workdir: Path) -> Iterator[tuple[str, Any]]:
     """Yield untranslated region data from a directory.
 
     :param workdir: Directory containing untranslated region files.
@@ -63,10 +64,10 @@ def make_response(
     :returns: None
     """
     uniqkey = path_prefix.split('/', 1)[-1]
-    codfreqs: Dict[str, List[Dict[str, Any]]] = {}
+    codfreqs: dict[str, list[dict[str, Any]]] = {}
     for name, rows in yield_codfreqs(workdir):
-        name = '{}.codfreq'.format(name)
-        gpmap: Dict[Tuple[str, int], Dict[str, Any]] = {}
+        name = f'{name}.codfreq'
+        gpmap: dict[tuple[str, int], dict[str, Any]] = {}
         for row in rows:
             gene = row['gene']
             pos = int(row['position'])

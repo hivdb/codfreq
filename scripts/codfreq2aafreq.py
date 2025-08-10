@@ -6,12 +6,10 @@ import gzip
 import argparse
 from collections import Counter, defaultdict
 
-from typing import (
-    Dict, TextIO, Tuple, Counter as tCounter,
-    Optional, List, DefaultDict
-)
+from typing import TextIO
+from collections import Counter as tCounter
 
-CODON_TABLE: Dict[str, str] = {
+CODON_TABLE: dict[str, str] = {
     'TTT': 'F',
     'TTC': 'F',
     'TTA': 'L',
@@ -95,7 +93,9 @@ CODON_TABLE: Dict[str, str] = {
 }
 
 
-def codon_to_aa(codon: str) -> Tuple[str, str]:
+def codon_to_aa(codon: str) -> tuple[str, str]:
+    """Translate a codon into an amino acid and insertions."""
+
     nogap = codon.replace('-', '')
     nogap_len = len(nogap)
     if codon in ('', '---'):
@@ -114,6 +114,8 @@ def codon_to_aa(codon: str) -> Tuple[str, str]:
 
 
 def directory(path: str) -> str:
+    """Validate that a command-line argument is an existing directory."""
+
     if os.path.isdir(path):
         return path
     else:
@@ -121,6 +123,8 @@ def directory(path: str) -> str:
 
 
 def main() -> None:
+    """CLI entry point for converting CodFreq files to AA frequencies."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'codfreq_dir',
@@ -135,8 +139,8 @@ def main() -> None:
     args = parser.parse_args()
     os.makedirs(args.aafreq_dir, exist_ok=True)
     for filename in os.listdir(args.codfreq_dir):
-        fpin: Optional[TextIO] = None
-        fpout: Optional[TextIO] = None
+        fpin: TextIO | None = None
+        fpout: TextIO | None = None
         name: str
         lower = filename.lower()
         filepath = os.path.join(args.codfreq_dir, filename)
@@ -151,19 +155,18 @@ def main() -> None:
                 name = filename[:-8]
                 fpin = open(
                     filepath,
-                    'r',
                     encoding='utf-8-sig')
             if fpin is None:
                 continue
-            aacounter: DefaultDict[
-                Tuple[str, str],
-                tCounter[Tuple[str, str]]
+            aacounter: defaultdict[
+                tuple[str, str],
+                tCounter[tuple[str, str]]
             ] = defaultdict(Counter)
-            codons: DefaultDict[
-                Tuple[str, str, str, str],
-                List[str]
+            codons: defaultdict[
+                tuple[str, str, str, str],
+                list[str]
             ] = defaultdict(list)
-            totals: Dict[Tuple[str, str], int] = {}
+            totals: dict[tuple[str, str], int] = {}
             for row in csv.reader(fpin):
                 if not row:
                     continue

@@ -1,15 +1,11 @@
 import os
 import json
 from typing import (
-    Dict,
-    List,
-    Tuple,
     TextIO,
     BinaryIO,
-    Optional,
-    ByteString,
     Annotated,
 )
+from collections.abc import ByteString
 
 from pathlib import Path
 
@@ -27,17 +23,17 @@ app = typer.Typer(pretty_exceptions_enable=False)
 
 def find_codfreq_untrans_pairs(
     workdir: Path
-) -> List[Tuple[str, Optional[str]]]:
+) -> list[tuple[str, str | None]]:
     """Find paired CodFreq and untranslated JSON files.
 
     :param workdir: Directory to search.
     :returns: List of tuples mapping CodFreq paths to untranslated JSON paths.
     """
     key: str
-    untrans_json: Optional[str]
-    codfreq: Optional[str]
-    pair: Tuple[Optional[str], Optional[str]]
-    pairs: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    untrans_json: str | None
+    codfreq: str | None
+    pair: tuple[str | None, str | None]
+    pairs: dict[str, tuple[str | None, str | None]] = {}
     for dirpath, _, filenames in os.walk(workdir, followlinks=True):
         for filename in filenames:
             untrans_json = codfreq = None
@@ -91,12 +87,12 @@ def compress_codfreq(
     :returns: None
     """
     codfreq: str
-    untrans: Optional[str]
+    untrans: str | None
     fp: BinaryIO
     text_fp: TextIO
     payload: ByteString
-    pairs: List[Tuple[
-        str, Optional[str]
+    pairs: list[tuple[
+        str, str | None
     ]] = find_codfreq_untrans_pairs(workdir)
     for codfreq, untrans in pairs:
         payload = bytearray(b'\xef\xbb\xbf')  # UTF-8 bom
@@ -110,7 +106,7 @@ def compress_codfreq(
                         .encode('UTF-8')
                     )
                 payload.extend(b'# --- untranslated regions end ---\n')
-        with open(codfreq, 'r', encoding='UTF-8-sig') as text_fp:
+        with open(codfreq, encoding='UTF-8-sig') as text_fp:
             payload.extend(text_fp.read().encode('UTF-8'))
         payload = pigz.compress(payload)
         with open(codfreq + '.gz', 'wb') as fp:
