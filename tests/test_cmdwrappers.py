@@ -38,6 +38,25 @@ def test_find_codfreq_untrans_pairs_untrans_first(
     assert pairs == [(str(cf), str(ut))]
 
 
+def test_find_codfreq_untrans_pairs_codfreq_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CodFreq files preceding untranslated files are paired."""
+
+    filenames = ["sample.codfreq", "sample.untrans.json"]
+
+    def fake_walk(
+        _path: Path, followlinks: bool = True
+    ) -> Iterator[tuple[str, list[str], list[str]]]:
+        yield (str(tmp_path), [], filenames)
+
+    monkeypatch.setattr(cc.os, "walk", fake_walk)
+    pairs = cc.find_codfreq_untrans_pairs(tmp_path)
+    cf = tmp_path / "sample.codfreq"
+    ut = tmp_path / "sample.untrans.json"
+    assert pairs == [(str(cf), str(ut))]
+
+
 def test_compress_codfreq_logs_and_writes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
