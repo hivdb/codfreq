@@ -11,12 +11,10 @@ from typing import (
 )
 
 from pathlib import Path
-from typing import Literal
 
 from .cmdwrappers import pigz
-from .codfreq_types import RegionalConsensus
 
-import typer  # type: ignore[import-not-found]
+import typer
 
 EXT_UNTRANS_JSON = '.untrans.json'
 EXT_CODFREQ = '.codfreq'
@@ -64,12 +62,13 @@ def find_codfreq_untrans_pairs(
         if codfreq is not None
     ]
 
+
 @app.command()
 def compress_codfreq(
     workdir: Path = typer.Argument(
         ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
     ),
-    log_format: Literal['text', 'json'] = typer.Option(
+    log_format: str = typer.Option(
         'text', '--log-format', show_default=True, help='Output log format'
     ),
 ) -> None:
@@ -78,16 +77,19 @@ def compress_codfreq(
     :param workdir: Directory containing CodFreq files.
     :param log_format: Format for logging output.
     :returns: None
+    :raises typer.Abort: If an unsupported log format is provided.
     """
     codfreq: str
     untrans: Optional[str]
     fp: BinaryIO
     text_fp: TextIO
-    untrans_objs: RegionalConsensus
     payload: ByteString
     pairs: List[Tuple[
         str, Optional[str]
     ]] = find_codfreq_untrans_pairs(workdir)
+    if log_format not in ('text', 'json'):
+        typer.echo(f'Unsupported log format: {log_format}', err=True)
+        raise typer.Abort()
     for codfreq, untrans in pairs:
         payload = bytearray(b'\xef\xbb\xbf')  # UTF-8 bom
         if untrans:

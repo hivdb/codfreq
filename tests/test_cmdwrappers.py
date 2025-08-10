@@ -1,12 +1,6 @@
 from pathlib import Path
-import sys
 
 import pytest
-
-# Use shimmed typer for tests when real package is unavailable
-shims_path = Path(__file__).resolve().parent / "shims"
-sys.path.insert(0, str(shims_path))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from codfreq.compress_codfreq import find_codfreq_untrans_pairs
 from codfreq.cmdwrappers.base import execute

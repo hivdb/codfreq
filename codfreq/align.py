@@ -17,11 +17,10 @@ from typing import (
     Tuple,
     DefaultDict,
     Set,
-    Optional,
-    Literal
+    Optional
 )
 
-import typer  # type: ignore[import-not-found]
+import typer
 
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
 
@@ -46,6 +45,7 @@ PAIRED_FASTQ_MARKER = ('1', '2')
 INVALID_PAIRED_FASTQ_MARKER = re.compile(r'[1-9]0*[12]|[^0]00+[12]|[12]\d')
 
 app = typer.Typer()
+
 
 def find_paired_marker(text1: str, text2: str) -> int:
     pos: int
@@ -523,15 +523,14 @@ def align_cmd(
         ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
     ),
     program: str = typer.Option(
-        ..., '--program', '-p', typer.Choice(get_programs()),
+        ..., '--program', '-p',
         help='Alignment program'
     ),
     profile: typer.FileText = typer.Option(
         ..., '--profile', '-r', encoding=ENCODING, help='Profile JSON file'
     ),
-    log_format: Literal['text', 'json'] = typer.Option(
-        'text', '--log-format', typer.Choice(['text', 'json']),
-        show_default=True, help='Log output format'
+    log_format: str = typer.Option(
+        'text', '--log-format', show_default=True, help='Log output format'
     ),
     enable_profiling: bool = typer.Option(
         False, '--enable-profiling/--disable-profiling',
@@ -557,7 +556,14 @@ def align_cmd(
     :param autopairing: Automatically pair FASTQ files if ``True``.
     :param workers: Number of worker processes.
     :returns: None
+    :raises typer.Abort: If an unsupported program or log format is provided.
     """
+    if program not in get_programs():
+        typer.echo(f'Unsupported program: {program}', err=True)
+        raise typer.Abort()
+    if log_format not in ('text', 'json'):
+        typer.echo(f'Unsupported log format: {log_format}', err=True)
+        raise typer.Abort()
     if enable_profiling:
         import cProfile
         import pstats

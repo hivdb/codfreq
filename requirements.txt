@@ -1,8 +1,11 @@
 -i https://pypi.org/simple
+click==8.1.3; python_version >= '3.7'
 cutadapt==5.1; python_version >= '3.9'
-cython==0.29.35; python_version >= '2.6' and python_version not in '3.0, 3.1, 3.2, 3.3'
+cython==0.29.35; python_version >= '2.6' and python_version not in '3.0, 3.1, 3.2'
 dnaio==1.2.3; python_version >= '3.9'
-isal==1.7.2; platform_machine == 'x86_64' or platform_machine == 'AMD64' or platform_machine == 'aarch64'
+isal==1.7.2; python_version >= '3.8'
+markdown-it-py==3.0.0; python_version >= '3.8'
+mdurl==0.1.2; python_version >= '3.7'
 more-itertools==9.1.0; python_version >= '3.7'
 orjson==3.9.1; python_version >= '3.7'
 pafpy==0.2.0; python_version >= '3.6' and python_version < '4.0'
@@ -10,10 +13,12 @@ https://github.com/hivdb/post-align/archive/cb28b83e2d9639960533f805f7dc2612ea63
 pygments==2.19.2; python_version >= '3.8'
 pysam==0.23.3; python_version >= '3.8'
 pyyaml==6.0.2; python_version >= '3.8'
+rich==14.1.0; python_full_version >= '3.8.0'
+shellingham==1.5.4; python_version >= '3.7'
 tqdm==4.67.1; python_version >= '3.7'
+typer>=0.16.0; python_version >= '3.7'
 types-setuptools==67.8.0.0
-typer>=0.16.0
 typing-extensions==4.14.1; python_version >= '3.9'
 urllib3==2.5.0; python_version >= '3.9'
 xopen==2.0.2; python_version >= '3.8'
-zlib-ng==0.5.1; platform_machine == 'x86_64' or platform_machine == 'AMD64' or platform_machine == 'aarch64'
+zlib-ng==0.5.1; python_version >= '3.8'

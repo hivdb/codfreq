@@ -1,7 +1,7 @@
 import sys
 import time
 import json
-import typer  # type: ignore[import-not-found]
+import typer
 
 from typing import Dict, Any
 

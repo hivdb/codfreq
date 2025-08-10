@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Tuple
 
-import typer  # type: ignore[import-not-found]
+import typer
 
 
 app = typer.Typer()

@@ -1,4 +1,4 @@
-import typer  # type: ignore[import-not-found]
+import typer
 from subprocess import Popen, PIPE
 from typing import List, Tuple, Callable
 
