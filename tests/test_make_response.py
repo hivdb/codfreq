@@ -11,7 +11,8 @@ def test_make_response_helpers_and_cli(tmp_path: Path) -> None:
     cf = tmp_path / "sample.codfreq"
     cf.write_text(
         "gene,position,total,codon,count,total_quality_score\n"
-        "S,1,100,AAA,10,1000\n",
+        "S,1,100,AAA,10,1000\n"
+        "S,2,100,AA,5,500\n",
         encoding="utf-8",
     )
     ut = tmp_path / "sample.untrans.json"
@@ -35,3 +36,5 @@ def test_make_response_helpers_and_cli(tmp_path: Path) -> None:
     datetime.fromisoformat(response["lastUpdatedAt"])
     assert response["codfreqs"][0]["name"] == "sample.codfreq"
     assert response["codfreqs"][0]["untranslatedRegions"] == ut_data
+    assert response["codfreqs"][0]["allReads"][0]["position"] == 1
+    assert len(response["codfreqs"][0]["allReads"]) == 1
