@@ -30,7 +30,21 @@ def iter_single_read_posnas(
     qua: array | None,
     aligned_pairs: list[tuple[NAPos | None, NAPos | None]]
 ) -> list[PosNA]:
-    """Yield positional nucleotides with optional quality scores."""
+    """Yield positional nucleotides with optional quality scores.
+
+    Insertions that occur before the first reference position are ignored and
+    any trailing insertions are trimmed from the returned list. Deletions emit
+    the gap character and reuse the last observed quality score.
+
+    :param seq: Read nucleotide sequence.
+    :type seq: SeqText
+    :param qua: Per-base quality scores.
+    :type qua: array | None
+    :param aligned_pairs: Sequence/reference index pairs from an alignment.
+    :type aligned_pairs: list[tuple[NAPos | None, NAPos | None]]
+    :returns: List of ``(refpos, insertion_index, nucleotide, quality)``.
+    :rtype: list[PosNA]
+    """
 
     seqpos0: NAPos | None
     refpos0: NAPos | None

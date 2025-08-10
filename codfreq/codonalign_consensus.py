@@ -56,6 +56,16 @@ def aapos_to_napos(
     aapos: AAPos,
     refranges: list[NAPosRange]
 ) -> NAPos:
+    """Translate an amino-acid position into a nucleotide position.
+
+    :param aapos: 1-based amino-acid position.
+    :type aapos: AAPos
+    :param refranges: Reference nucleotide ranges for the fragment.
+    :type refranges: list[NAPosRange]
+    :returns: 1-based nucleotide position or ``-1`` if ``aapos`` falls outside
+              the provided ranges.
+    :rtype: NAPos
+    """
     max_rel_napos = 0
     for start, end in refranges:
         max_rel_napos += end - start + 1
@@ -80,6 +90,20 @@ def assemble_alignment(
     AAPos | None,
     AAPos | None
 ]:
+    """Build consensus fragment alignment from codon statistics.
+
+    :param codonstat_by_fragpos: Consensus codon counts by fragment and
+        amino-acid position.
+    :type codonstat_by_fragpos: CodonCounterByFragPos
+    :param refseq: Reference nucleotide sequence for the main fragment.
+    :type refseq: bytearray
+    :param fragment: Fragment configuration including reference ranges.
+    :type fragment: DerivedFragmentConfig
+    :returns: Tuple of reference sequence, query sequence and the first and
+        last amino-acid positions represented. ``None`` values indicate that no
+        codons were found for the fragment.
+    :rtype: tuple[Sequence | None, Sequence | None, AAPos | None, AAPos | None]
+    """
     aapos: AAPos
     napos: NAPos
     ref_codon: bytearray

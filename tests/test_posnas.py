@@ -42,3 +42,26 @@ def test_iter_single_read_posnas_trims_trailing_insertions() -> None:
         (1, 0, ord("A"), 10),
         (2, 0, ord("C"), 20),
     ]
+
+
+def test_iter_single_read_posnas_skips_leading_insertions() -> None:
+    """Insertions before the first reference base are ignored."""
+
+    seq = "AC"
+    qual = array("B", [10, 20])
+    pairs = [(0, None), (1, 0)]
+    assert iter_single_read_posnas(seq, qual, pairs) == [
+        (1, 0, ord("C"), 20),
+    ]
+
+
+def test_iter_single_read_posnas_trims_multiple_trailing_insertions() -> None:
+    """Multiple trailing insertions are removed from the output."""
+
+    seq = "ACGT"
+    qual = array("B", [10, 20, 30, 40])
+    pairs = [(0, 0), (1, 1), (2, None), (3, None)]
+    assert iter_single_read_posnas(seq, qual, pairs) == [
+        (1, 0, ord("A"), 10),
+        (2, 0, ord("C"), 20),
+    ]
