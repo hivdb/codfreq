@@ -80,6 +80,8 @@ def _decorator(*dargs: Any, **dkwargs: Any) -> Any:  # pragma: no cover
 cython_stub.ccall = _decorator  # type: ignore[attr-defined]
 cython_stub.inline = _decorator  # type: ignore[attr-defined]
 cython_stub.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
+cython_stub.void = None  # type: ignore[attr-defined]
+cython_stub.cfunc = _decorator  # type: ignore[attr-defined]
 sys.modules["cython"] = cython_stub
 
 import codfreq.posnas as posnas  # noqa: E402
@@ -114,6 +116,16 @@ def test_get_posnas_between_skips_empty_reads() -> None:
     ]
     result = get_posnas_between("sample.sam", 0, 2)
     assert result == [("r1", [(1, 0, ord("A"), 10), (2, 0, ord("C"), 20)])]
+
+
+def test_get_posnas_between_stops_at_end() -> None:
+    """Processing halts once the file offset exceeds the end marker."""
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "A", [10], [(0, 0)]),
+        AlignedSegment("r2", "C", [20], [(0, 1)]),
+    ]
+    result = get_posnas_between("sample.sam", 0, 1)
+    assert result == [("r1", [(1, 0, ord("A"), 10)])]
 
 
 def test_get_posnas_in_genome_region_skips_empty_reads() -> None:

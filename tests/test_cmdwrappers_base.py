@@ -39,6 +39,14 @@ def test_raise_on_proc_error_raises() -> None:
     rich_print.assert_called_once()
 
 
+def test_raise_on_proc_error_noop() -> None:
+    """Zero return codes result in no output or exception."""
+    proc = MagicMock(returncode=0)
+    with patch("rich.print") as rich_print:
+        base.raise_on_proc_error(proc, "")
+    rich_print.assert_not_called()
+
+
 def test_decorator_registration() -> None:
     """Decorator helpers register functions for later lookup."""
     def func() -> None:
