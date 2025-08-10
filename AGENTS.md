@@ -4,7 +4,7 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 
 ## Targets (what agents must ensure)
 - **Package management**: use `pipenv` for environment and dependency management, but maintain `pyproject.toml` (preferred) and keep `setup.py` / `setup.cfg` in sync if present.
-- **Python**: use **Python 3.13.6**. If the project is not yet on 3.13.6, upgrade it and CI accordingly.
+- **Python**: use **Python 3.13**. If the project is not yet on 3.13, upgrade it and CI accordingly.
 - **Static checks**: enforce `mypy` and `flake8` on all tracked Python files.
 - **Tests**: run `pytest` with `pytest-cov`; fail if coverage drops below the configured threshold.
 - **Docs**: use **Sphinx docstring style**. When you touch a file, add/refresh docstrings.
@@ -17,16 +17,16 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 - **Env manager**: use **pipenv** for local workflow and CI execution.
 - **Project metadata**: prefer a single **pyproject.toml** as the source of truth.
 - **Legacy files**: if `setup.py`/`setup.cfg` exist, keep them minimal and synchronized with `pyproject.toml`, or remove them once migration is complete.
-- **Locking**: commit `Pipfile` and `Pipfile.lock`.
+- **Locking**: commit `Pipfile`, `Pipfile.lock` and `requirements.txt`.
 
 ## Quickstart (local)
 ```bash
-# Python 3.13.6 environment
-pyenv install -s 3.13.6
-pyenv local 3.13.6
+# Python 3.13 environment
+pyenv install -s 3.13
+pyenv local 3.13
 
 # Create and use pipenv environment
-pipenv --python 3.13.6
+pipenv --python 3.13
 pipenv install --dev    # dev deps include: mypy, flake8, pytest, pytest-cov
 
 # Static analysis
@@ -35,10 +35,13 @@ pipenv run mypy .
 
 # Tests + coverage
 pipenv run pytest --cov=codfreq --cov-report=term-missing
+
+# Generate requirements.txt
+make requirements.txt
 ```
 
 ## CI expectations (example)
-- Use Python 3.13.6 runner.
+- Use Python 3.13 runner.
 - Steps:
   1. `pip install -e .[dev]`
   2. `flake8 .`
@@ -74,7 +77,7 @@ pre-commit install
 ```
 
 ## Pull request checklist
-- [ ] Code runs on Python 3.13.6.
+- [ ] Code runs on Python 3.13.
 - [ ] Added/updated tests for all touched code.
 - [ ] `flake8` and `mypy` pass.
 - [ ] `pytest --cov` meets coverage threshold.
