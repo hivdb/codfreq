@@ -5,7 +5,7 @@ import types
 import importlib
 from array import array
 from typing import Any, Iterator
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 # Stub pysam module
 pysam_stub = types.ModuleType("pysam")
@@ -158,3 +158,48 @@ def test_iter_posnas_reports_progress() -> None:
     ]
     assert mock_bar.update.call_count == 2
     mock_bar.close.assert_called_once()
+
+
+def test_iter_posnas_text_progress() -> None:
+    """Text progress uses ``tqdm`` and sets the description."""
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "AC", [10, 20], [(0, 0), (1, 1)]),
+        AlignedSegment("r2", "GT", [30, 40], [(0, 2), (1, 3)]),
+    ]
+
+    class DummyExecutor:
+        def __init__(self, _workers: int) -> None:
+            pass
+
+        def __enter__(self) -> "DummyExecutor":
+            return self
+
+        def __exit__(self, *exc: Any) -> None:
+            return None
+
+        def map(self, func: Any, *iterables: Any) -> Any:
+            return map(func, *iterables)
+
+    bar = MagicMock()
+    with (
+        patch("codfreq.posnas.ProcessPoolExecutor", DummyExecutor),
+        patch("codfreq.posnas.tqdm", return_value=bar) as mock_tqdm,
+        patch("codfreq.posnas.chunked_samfile", return_value=[(0, 1), (1, 2)]),
+    ):
+        results = list(
+            iter_posnas(
+                "sample.sam",
+                workers=1,
+                description="reads",
+                log_format="text",
+                chunk_size=1,
+            )
+        )
+    mock_tqdm.assert_called_once_with(total=2)
+    bar.set_description.assert_called_once_with("Processing reads")
+    assert bar.update.call_count == 2
+    bar.close.assert_called_once()
+    assert results == [
+        ("r1", [(1, 0, ord("A"), 10), (2, 0, ord("C"), 20)]),
+        ("r2", [(3, 0, ord("G"), 30), (4, 0, ord("T"), 40)]),
+    ]
