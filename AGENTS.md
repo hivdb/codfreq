@@ -25,6 +25,9 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 pyenv install -s 3.13
 pyenv local 3.13
 
+# Install pipenv
+pip install pipenv
+
 # Create and use pipenv environment
 pipenv --python 3.13
 pipenv install --dev    # dev deps include: mypy, flake8, pytest, pytest-cov
@@ -35,6 +38,9 @@ pipenv run mypy .
 
 # Tests + coverage
 pipenv run pytest --cov=codfreq --cov-report=term-missing
+
+# Update Pipfile.lock
+pipenv lock --dev --clear
 
 # Generate requirements.txt
 make requirements.txt
