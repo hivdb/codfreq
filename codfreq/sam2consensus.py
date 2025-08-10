@@ -26,7 +26,16 @@ def make_consensus(
     nacons_lookup: dict[tuple[NAPos, int], NAChar],
     region: NARegionConfig
 ) -> RegionalConsensus:
-    """Build consensus sequence for a region from nucleotide counts."""
+    """Build consensus sequence for a region from nucleotide counts.
+
+    :param nacons_lookup: Mapping of ``(refpos, insertion_index)`` to the
+        nucleotide's ordinal value.
+    :type nacons_lookup: dict[tuple[NAPos, int], NAChar]
+    :param region: Region definition including name and coordinate range.
+    :type region: NARegionConfig
+    :returns: Consensus record for the region.
+    :rtype: RegionalConsensus
+    """
 
     refpos: NAPos
     idx: int
@@ -59,7 +68,15 @@ def sam2consensus(
     sampath: str,
     region: NARegionConfig,
 ) -> RegionalConsensus:
-    """Generate consensus sequence for a region from a SAM file."""
+    """Generate a consensus sequence for a region from a SAM file.
+
+    :param sampath: Path to the SAM/BAM file.
+    :type sampath: str
+    :param region: Region configuration describing fragment and coordinates.
+    :type region: NARegionConfig
+    :returns: Consensus nucleotides covering the region.
+    :rtype: RegionalConsensus
+    """
 
     nafreqs: defaultdict[
         tuple[NAPos, int],
@@ -98,7 +115,18 @@ def create_untrans_region_consensus(
     seqname: str,
     profile: Profile
 ) -> None:
+    """Write consensus sequences for untranslated regions.
 
+    Fragments lacking a ``fromFragment`` source are scanned for regions in the
+    profile's ``sequenceAssemblyConfig``. Consensus strings are written to a
+    ``<seqname>.untrans.json`` file.
+
+    :param seqname: Base name used to resolve SAM files and the output path.
+    :type seqname: str
+    :param profile: Profile describing fragments and assembly regions.
+    :type profile: Profile
+    :rtype: None
+    """
     refname: str
     samfile: str
     fragment: FragmentConfig
