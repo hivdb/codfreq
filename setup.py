@@ -102,9 +102,9 @@ setup_params = dict(
     # tests_require=reqs('test-requirements.txt'),
     # include_package_data=True,
     entry_points={'console_scripts': [
-        'fastq2codfreq = codfreq.align:align_cmd',
-        'compress-codfreq = codfreq.compress_codfreq:compress_codfreq',
-        'make-response = codfreq.make_response:make_response'
+        'fastq2codfreq = codfreq.align:app',
+        'compress-codfreq = codfreq.compress_codfreq:app',
+        'make-response = codfreq.make_response:app'
     ]},
     classifiers=[
         'Development Status :: 3 - Alpha',
@@ -113,9 +113,11 @@ setup_params = dict(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
         'Topic :: Scientific/Engineering :: Bio-Informatics'],
     # test_suite="nose.collector",
     zip_safe=True)

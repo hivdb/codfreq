@@ -7,21 +7,32 @@ from typing import (
     TextIO,
     BinaryIO,
     Optional,
-    ByteString
+    ByteString,
+    Annotated,
 )
 
-from .cmdwrappers import pigz
-from .codfreq_types import RegionalConsensus
+from pathlib import Path
 
-import click  # type: ignore
+from .cmdwrappers import pigz
+from .enums import LogFormat
+
+import rich
+import typer
 
 EXT_UNTRANS_JSON = '.untrans.json'
 EXT_CODFREQ = '.codfreq'
 
+app = typer.Typer(pretty_exceptions_enable=False)
+
 
 def find_codfreq_untrans_pairs(
-    workdir: str
+    workdir: Path
 ) -> List[Tuple[str, Optional[str]]]:
+    """Find paired CodFreq and untranslated JSON files.
+
+    :param workdir: Directory to search.
+    :returns: List of tuples mapping CodFreq paths to untranslated JSON paths.
+    """
     key: str
     untrans_json: Optional[str]
     codfreq: Optional[str]
@@ -55,21 +66,34 @@ def find_codfreq_untrans_pairs(
     ]
 
 
-@click.command()
-@click.argument(
-    'workdir',
-    type=click.Path(exists=True, file_okay=False,
-                    dir_okay=True, resolve_path=True))
-@click.option(
-    '--log-format',
-    type=click.Choice(['text', 'json']),
-    default='text', show_default=True)
-def compress_codfreq(workdir: str, log_format: str) -> None:
+@app.command()
+def compress_codfreq(
+    workdir: Annotated[
+        Path,
+        typer.Argument(
+            ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
+        ),
+    ],
+    log_format: Annotated[
+        LogFormat,
+        typer.Option(
+            '--log-format',
+            show_default=True,
+            help='Output log format',
+        ),
+    ] = LogFormat.text,
+) -> None:
+    """Compress CodFreq files and optionally log the operation.
+
+    :param workdir: Directory containing CodFreq files.
+    :param log_format: Format for logging output.
+    :type log_format: LogFormat
+    :returns: None
+    """
     codfreq: str
     untrans: Optional[str]
     fp: BinaryIO
     text_fp: TextIO
-    untrans_objs: RegionalConsensus
     payload: ByteString
     pairs: List[Tuple[
         str, Optional[str]
@@ -91,14 +115,14 @@ def compress_codfreq(workdir: str, log_format: str) -> None:
         payload = pigz.compress(payload)
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
-        if log_format == 'json':
-            click.echo(json.dumps({
+        if log_format == LogFormat.json:
+            print(json.dumps({
                 'op': 'compress-codfreq',
                 'to': f'{codfreq}.gz'
             }))
         else:
-            click.echo(f'Create {codfreq}.gz')
+            rich.print(f'Create {codfreq}.gz')
 
 
 if __name__ == '__main__':
-    compress_codfreq()
+    app()
