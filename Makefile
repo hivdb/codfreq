@@ -37,4 +37,7 @@ debug-runner:
 deploy-profiles:
 	@aws s3 sync profiles s3://codfreq-assets.hivdb.org/profiles --delete
 
-.PHONY: login-ecr *-runner *-controller deploy-profiles
+test:
+	@pipenv run pytest -v --cov=postalign --cov-report=term-missing
+
+.PHONY: login-ecr *-runner *-controller deploy-profiles test
