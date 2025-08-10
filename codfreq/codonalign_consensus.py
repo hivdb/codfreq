@@ -123,7 +123,7 @@ def assemble_alignment(
         napos = aapos_to_napos(aapos, frag_refranges)
         if napos == -1:  # pragma: no cover - defensive check
             # aapos is out of range, should we raise error?
-            continue  # pragma: no cover
+            continue  # pragma: no cover - unreachable
         ref_codon = refseq[napos - 1:napos + 2]
         codons = codonstat_by_fragpos.get((fragment_name, aapos))
         if codons:

@@ -1,4 +1,4 @@
-# pragma: no cover
+"""Alignment utilities for preparing CodFreq inputs."""
 
 import os
 import re
