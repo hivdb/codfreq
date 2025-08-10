@@ -73,8 +73,8 @@ def replace_ext(
 
     :param filename: Original file name.
     :param toext: New extension including leading dot.
-    :param fromext: Expected original extension; if provided the last
-        characters are replaced without removing the existing extension.
+    :param fromext: Expected original extension; if provided the suffix
+        ``fromext`` is removed before appending ``toext``.
     :param name_only: If ``True`` only the base name is processed.
     :returns: File name with the new extension.
     """
@@ -82,6 +82,5 @@ def replace_ext(
     if name_only:
         filename = os.path.split(filename)[-1]
     if fromext:
-        return filename[-len(fromext):] + toext
-    else:
-        return os.path.splitext(filename)[0] + toext
+        return filename[:-len(fromext)] + toext
+    return os.path.splitext(filename)[0] + toext

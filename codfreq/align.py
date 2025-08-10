@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+"""Alignment utilities for preparing CodFreq inputs."""
 
 import os
 import re
