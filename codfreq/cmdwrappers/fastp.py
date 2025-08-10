@@ -1,28 +1,28 @@
 import os
 import json
 from subprocess import Popen, PIPE
-from typing import List, Optional, TypedDict
+from typing import TypedDict
 import multiprocessing
 
 from .base import raise_on_proc_error
 
-THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
+THREADS = f'{multiprocessing.cpu_count() // 2 + 1}'
 
 
 class FASTPConfig(TypedDict, total=False):
-    include_unmerged: Optional[bool]
-    qualified_quality_phred: Optional[int]
-    unqualified_percent_limit: Optional[int]
-    n_base_limit: Optional[int]
-    average_qual: Optional[int]
-    length_required: Optional[int]
-    length_limit: Optional[int]
-    adapter_sequence: Optional[str]
-    adapter_sequence_r2: Optional[str]
-    disable_adapter_trimming: Optional[bool]
-    disable_trim_poly_g: Optional[bool]
-    disable_quality_filtering: Optional[bool]
-    disable_length_filtering: Optional[bool]
+    include_unmerged: bool | None
+    qualified_quality_phred: int | None
+    unqualified_percent_limit: int | None
+    n_base_limit: int | None
+    average_qual: int | None
+    length_required: int | None
+    length_limit: int | None
+    adapter_sequence: str | None
+    adapter_sequence_r2: str | None
+    disable_adapter_trimming: bool | None
+    disable_trim_poly_g: bool | None
+    disable_quality_filtering: bool | None
+    disable_length_filtering: bool | None
 
 
 def load_config(config_path: str) -> FASTPConfig:
@@ -36,23 +36,23 @@ def load_config(config_path: str) -> FASTPConfig:
 
 def fastp(
     fastq1in: str,
-    fastq2in: Optional[str],
+    fastq2in: str | None,
     fastq_merged_out: str,
-    include_unmerged: Optional[bool] = False,
-    qualified_quality_phred: Optional[int] = None,
-    unqualified_percent_limit: Optional[int] = None,
-    n_base_limit: Optional[int] = None,
-    average_qual: Optional[int] = None,
-    length_required: Optional[int] = None,
-    length_limit: Optional[int] = None,
-    disable_adapter_trimming: Optional[bool] = False,
-    disable_trim_poly_g: Optional[bool] = False,
-    disable_quality_filtering: Optional[bool] = False,
-    disable_length_filtering: Optional[bool] = False,
-    adapter_sequence: Optional[str] = None,
-    adapter_sequence_r2: Optional[str] = None
+    include_unmerged: bool | None = False,
+    qualified_quality_phred: int | None = None,
+    unqualified_percent_limit: int | None = None,
+    n_base_limit: int | None = None,
+    average_qual: int | None = None,
+    length_required: int | None = None,
+    length_limit: int | None = None,
+    disable_adapter_trimming: bool | None = False,
+    disable_trim_poly_g: bool | None = False,
+    disable_quality_filtering: bool | None = False,
+    disable_length_filtering: bool | None = False,
+    adapter_sequence: str | None = None,
+    adapter_sequence_r2: str | None = None
 ) -> None:
-    command: List[str] = [
+    command: list[str] = [
         'fastp',
         '-w', str(THREADS),
         '-i', fastq1in

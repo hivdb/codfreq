@@ -1,12 +1,11 @@
 from subprocess import Popen, PIPE
-from typing import List, Dict
 import multiprocessing
 
 from .base import execute, raise_on_proc_error, refinit_func, align_func
 
-THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
+THREADS = f'{multiprocessing.cpu_count() // 2 + 1}'
 
-MINIMAP2_ARGS: List[str] = [
+MINIMAP2_ARGS: list[str] = [
     '-A', '2',        # matching score [2]
     '-B', '4',        # mismatch penalty [4]
     '-O', '4,24',     # gap open penalty [4,24]
@@ -32,12 +31,12 @@ def minimap2_align(
     fastq1: str,
     fastq2: str,
     bam: str
-) -> Dict[str, float]:
+) -> dict[str, float]:
     out_sam2bam: str
     err_sam2bam: str
     out_samidx: str
     err_samidx: str
-    command: List[str] = [
+    command: list[str] = [
         'minimap2',
         *MINIMAP2_ARGS,
         '-a', refseq, fastq1

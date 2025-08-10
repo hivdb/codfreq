@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict, Tuple, List, Dict, Union, Literal
+from typing import TypedDict, Literal
 
 FASTQFileName = str
 Header = str
@@ -12,12 +12,12 @@ CodonText = MultiNAText
 AAChar = int
 MultiAAText = bytes
 
-NAPosRange = Tuple[NAPos, NAPos]
+NAPosRange = tuple[NAPos, NAPos]
 
 
 class PairedFASTQ(TypedDict):
     name: Header
-    pair: Tuple[FASTQFileName, Optional[FASTQFileName]]
+    pair: tuple[FASTQFileName, FASTQFileName | None]
     n: int
 
 
@@ -34,34 +34,31 @@ class MainFragmentConfig(TypedDict):
 class CodonAlignmentConfig(TypedDict, total=False):
     relRefStart: NAPos
     relRefEnd: NAPos
-    windowSize: Optional[AAPos]
-    minGapDistance: Optional[NAPos]
-    relGapPlacementScore: Optional[str]
+    windowSize: AAPos | None
+    minGapDistance: NAPos | None
+    relGapPlacementScore: str | None
 
 
 class DerivedFragmentConfig(TypedDict, total=False):
     fragmentName: Header
     fromFragment: Header
     refSequence: None
-    geneName: Optional[GeneText]
-    refRanges: List[NAPosRange]
-    codonAlignment: Optional[Union[
-        Literal[False], List[CodonAlignmentConfig]
-    ]]
+    geneName: GeneText | None
+    refRanges: list[NAPosRange]
+    codonAlignment: None | (
+        Literal[False] | list[CodonAlignmentConfig]
+    )
 
 
-FragmentConfig = Union[
-    MainFragmentConfig,
-    DerivedFragmentConfig
-]
+FragmentConfig = MainFragmentConfig | DerivedFragmentConfig
 
 
 class SequenceAssemblyConfig(TypedDict):
-    name: Optional[str]
-    geneName: Optional[str]
-    fromFragment: Optional[str]
-    refStart: Optional[int]
-    refEnd: Optional[int]
+    name: str | None
+    geneName: str | None
+    fromFragment: str | None
+    refStart: int | None
+    refEnd: int | None
 
 
 class NARegionConfig(TypedDict):
@@ -80,8 +77,8 @@ class RegionalConsensus(TypedDict):
 
 class Profile(TypedDict):
     version: str
-    fragmentConfig: List[FragmentConfig]
-    sequenceAssemblyConfig: List[SequenceAssemblyConfig]
+    fragmentConfig: list[FragmentConfig]
+    sequenceAssemblyConfig: list[SequenceAssemblyConfig]
 
 
 class CodFreqRow(TypedDict):
@@ -95,6 +92,6 @@ class CodFreqRow(TypedDict):
 
 #                                 refStart refEnd
 #                                     v      v
-FragmentInterval = Tuple[List[Tuple[NAPos, NAPos]], Header]
+FragmentInterval = tuple[list[tuple[NAPos, NAPos]], Header]
 
-RefAAs = Dict[AAPos, MultiAAText]
+RefAAs = dict[AAPos, MultiAAText]

@@ -2,26 +2,26 @@ import os
 import json
 from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile
-from typing import List, Optional, TypedDict
+from typing import TypedDict
 import multiprocessing
 
 from .base import execute, raise_on_proc_error
 
-THREADS = '{}'.format(multiprocessing.cpu_count() // 2 + 1)
+THREADS = f'{multiprocessing.cpu_count() // 2 + 1}'
 
 
 class TrimConfig(TypedDict, total=False):
-    primers_bed: Optional[str]
-    min_length: Optional[int]
-    min_quality: Optional[int]
-    sliding_window_width: Optional[int]
-    include_reads_with_no_primers: Optional[bool]
+    primers_bed: str | None
+    min_length: int | None
+    min_quality: int | None
+    sliding_window_width: int | None
+    include_reads_with_no_primers: bool | None
 
 
 def load_trim_config(
     config_path: str,
     primers_bed: str
-) -> Optional[TrimConfig]:
+) -> TrimConfig | None:
     if os.path.isfile(config_path):
         config: TrimConfig
         with open(config_path) as fp:
@@ -36,15 +36,15 @@ def load_trim_config(
 def trim(
     input_bam: str,
     output_bam: str,
-    primers_bed: Optional[str] = None,
-    min_length: Optional[int] = None,
-    min_quality: Optional[int] = None,
-    sliding_window_width: Optional[int] = None,
-    include_reads_with_no_primers: Optional[bool] = False
+    primers_bed: str | None = None,
+    min_length: int | None = None,
+    min_quality: int | None = None,
+    sliding_window_width: int | None = None,
+    include_reads_with_no_primers: bool | None = False
 ) -> None:
     basedir, filename = os.path.split(input_bam)
 
-    command: List[str] = [
+    command: list[str] = [
         'ivar', 'trim',
         '-i', input_bam
     ]

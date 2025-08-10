@@ -1,4 +1,4 @@
-from typing import List, Optional, ByteString
+from collections.abc import ByteString
 from subprocess import Popen, PIPE
 
 
@@ -6,11 +6,11 @@ def compress(
     data: ByteString,
     compresslevel: int = 9,
     *,
-    mtime: Optional[float] = None
+    mtime: float | None = None
 ) -> bytes:
     out: bytes
     error: bytes
-    cmd: List[str] = ['pigz', f'-{compresslevel}', '-c']
+    cmd: list[str] = ['pigz', f'-{compresslevel}', '-c']
     if mtime:
         cmd.extend(['-M', f'{mtime}'])
     proc: Popen = Popen(
@@ -29,7 +29,7 @@ def compress(
 def decompress(data: ByteString) -> bytes:
     out: bytes
     error: bytes
-    cmd: List[str] = ['pigz', '-d', '-c']
+    cmd: list[str] = ['pigz', '-d', '-c']
     proc: Popen = Popen(
         cmd,
         stdin=PIPE,

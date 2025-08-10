@@ -3,7 +3,8 @@ import cython  # type: ignore
 from tqdm import tqdm  # type: ignore
 from array import array
 from pysam import AlignedSegment  # type: ignore
-from typing import List, Tuple, Optional, Generator, Any, Union
+from typing import Any
+from collections.abc import Generator
 from concurrent.futures import ProcessPoolExecutor
 
 from .json_progress import JsonProgress
@@ -13,7 +14,7 @@ from .codfreq_types import NAPos, NAChar, SeqText, Header
 ENCODING: str = 'UTF-8'
 GAP: int = ord(b'-')
 
-PosNA = Tuple[
+PosNA = tuple[
     NAPos,   # refpos
     int,     # insertion_index
     NAChar,  # na
@@ -26,11 +27,13 @@ PosNA = Tuple[
 @cython.returns(list)
 def iter_single_read_posnas(
     seq: SeqText,
-    qua: Optional[array],
-    aligned_pairs: List[Tuple[Optional[NAPos], Optional[NAPos]]]
-) -> List[PosNA]:
-    seqpos0: Optional[NAPos]
-    refpos0: Optional[NAPos]
+    qua: array | None,
+    aligned_pairs: list[tuple[NAPos | None, NAPos | None]]
+) -> list[PosNA]:
+    """Yield positional nucleotides with optional quality scores."""
+
+    seqpos0: NAPos | None
+    refpos0: NAPos | None
     refpos: NAPos
     insidx: int = 0
     n: NAChar
@@ -43,7 +46,7 @@ def iter_single_read_posnas(
 
     buffer_size: int = 0
 
-    posnas: List[PosNA] = []
+    posnas: list[PosNA] = []
 
     for seqpos0, refpos0 in aligned_pairs:
 
@@ -84,16 +87,13 @@ def get_posnas_between(
     samfile_start: int,
     samfile_end: int,
     site_quality_cutoff: int = 0
-) -> List[Tuple[Optional[Header], List[PosNA]]]:
+) -> list[tuple[Header | None, list[PosNA]]]:
+    """Extract positional nucleotides from a SAM file region."""
 
-    pos: NAPos
-    idx: int
-    na: NAChar
-    q: int
     read: AlignedSegment
-    posnas: List[PosNA]
+    posnas: list[PosNA]
 
-    results: List[Tuple[Optional[Header], List[PosNA]]] = []
+    results: list[tuple[Header | None, list[PosNA]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
 
@@ -130,16 +130,13 @@ def get_posnas_in_genome_region(
     ref_start: NAPos,
     ref_end: NAPos,
     site_quality_cutoff: int = 0
-) -> List[Tuple[Optional[Header], List[PosNA]]]:
+) -> list[tuple[Header | None, list[PosNA]]]:
+    """Retrieve positional nucleotides for a genomic range."""
 
-    pos: NAPos
-    idx: int
-    na: NAChar
-    q: int
     read: AlignedSegment
-    posnas: List[PosNA]
+    posnas: list[PosNA]
 
-    results: List[Tuple[Optional[Header], List[PosNA]]] = []
+    results: list[tuple[Header | None, list[PosNA]]] = []
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
 
@@ -174,18 +171,14 @@ def iter_posnas(
     log_format: str = 'text',
     **extras: Any
 ) -> Generator[
-    Tuple[Header, List[PosNA]],
+    tuple[Header, list[PosNA]],
     None,
     None
 ]:
+    """Iterate positional nucleotides across a SAM file with progress."""
+
     total: int
-    header: Header
-    chunks: List[Tuple[int, int]]
-    samfile_begin: int
-    samfile_end: int
-    one: Tuple[Header, List[PosNA]]
-    posnas: List[Tuple[Header, List[PosNA]]]
-    pbar: Optional[Union[JsonProgress, tqdm]] = None
+    pbar: JsonProgress | tqdm | None = None
 
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
         total = samfp.mapped
@@ -197,7 +190,7 @@ def iter_posnas(
                 **extras)
         elif log_format == 'text':
             pbar = tqdm(total=total)
-            pbar.set_description('Processing {}'.format(description))
+            pbar.set_description(f'Processing {description}')
 
     chunks = chunked_samfile(samfile, chunk_size)
 

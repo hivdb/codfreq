@@ -2,7 +2,7 @@ import sys
 import time
 import json
 
-from typing import Dict, Any
+from typing import Any
 
 
 class JsonProgress:
@@ -14,7 +14,7 @@ class JsonProgress:
     prev_ts: int
     ts_interval: int
     op: str
-    extras: Dict[str, Any]
+    extras: dict[str, Any]
 
     def __init__(
         self,

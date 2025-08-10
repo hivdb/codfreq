@@ -2,11 +2,10 @@
 
 import os
 import re
-from typing import List, Dict, Optional, Tuple
 
 from .base import execute, refinit_func, align_func
 
-BOWTIE2_ARGS: List[str] = [
+BOWTIE2_ARGS: list[str] = [
     '--local',
     '--threads', '3',
     '--rdg', '15,3',  # read gap open, extend penalties
@@ -21,11 +20,10 @@ BOWTIE2_ARGS: List[str] = [
 def bowtie2_refinit(refseq: str) -> None:
     refpath: str
     ext: str
-    suffix: str
     refdir: str
     refname: str
     refpath, ext = os.path.splitext(refseq)
-    suffixes: Tuple[str, ...] = (
+    suffixes: tuple[str, ...] = (
         '1.bt2',
         '2.bt2',
         '3.bt2',
@@ -51,14 +49,14 @@ def bowtie2_align(
     fastq1: str,
     fastq2: str,
     sam: str
-) -> Dict[str, float]:
+) -> dict[str, float]:
     refpath: str
     refdir: str
     refname: str
     logs: str
     refpath, _ = os.path.splitext(refseq)
     refdir, refname = os.path.split(refpath)
-    command: List[str] = [
+    command: list[str] = [
         'bowtie2',
         *BOWTIE2_ARGS,
         '-x', refpath,
@@ -69,7 +67,7 @@ def bowtie2_align(
         command.extend(['-U', fastq2])
     logs, _ = execute(command)
     overall_rate: float = -1.
-    overall_rate_match: Optional[re.Match] = re.search(
+    overall_rate_match: re.Match | None = re.search(
         r'\n(\d+\.\d+)% overall alignment rate',
         logs)
     if overall_rate_match:

@@ -1,13 +1,13 @@
-from typing import Tuple, List, Counter as tCounter, Optional
+from collections import Counter as tCounter
 from collections import Counter
 
 from pysam import AlignmentFile
 
 
 def squash_gaps(
-    cigartuples: Tuple[Tuple[int, int], ...],
+    cigartuples: tuple[tuple[int, int], ...],
     max_squashing_distance: int = 10
-) -> Tuple[Tuple[int, int], ...]:
+) -> tuple[tuple[int, int], ...]:
     """Squash gaps in cigar tuples.
 
     This function squashs neighboring deletions and insertions (the distance of
@@ -16,7 +16,7 @@ def squash_gaps(
     """
     # Squash neighboring deletions and insertions
     tmp_cigartuples = list(cigartuples)
-    prev_indel_idx: Optional[int] = None
+    prev_indel_idx: int | None = None
     prev_indel_dist: int = 0
     for idx, (op, length) in enumerate(tmp_cigartuples):
         if op in (1, 2):
@@ -43,7 +43,7 @@ def squash_gaps(
             prev_indel_dist += length
 
     # Remove zero-length operations and merge adjacent operations
-    result_cigartuples: List[Tuple[int, int]] = []
+    result_cigartuples: list[tuple[int, int]] = []
     for op, length in tmp_cigartuples:
         if length == 0:
             continue
@@ -55,7 +55,7 @@ def squash_gaps(
 
 
 def count_indel_positions(
-    cigartuples: Tuple[Tuple[int, int], ...],
+    cigartuples: tuple[tuple[int, int], ...],
     ref_start: int,
     indel_counter: tCounter[int]
 ) -> None:
@@ -75,7 +75,7 @@ def count_indel_positions(
 
 def prepare_sam(sam_file: str, out_file: str) -> None:
     """Prepare SAM/BAM alignment files for downstream analysis."""
-    cigars: List[Tuple[Tuple[int, int], ...]] = []
+    cigars: list[tuple[tuple[int, int], ...]] = []
     indel_counter: tCounter[int] = Counter()
 
     with AlignmentFile(sam_file, "r") as sam, \
@@ -85,12 +85,12 @@ def prepare_sam(sam_file: str, out_file: str) -> None:
             if read.is_unmapped:
                 cigars.append(())
                 continue
-            cigars.append(squash_gaps(read.cigartuples))
+            cigars.append(squash_gaps(tuple(read.cigartuples or ())))
             count_indel_positions(
                 cigars[-1], read.reference_start, indel_counter)
 
         sam.seek(fp)
         for read, cigar in zip(sam, cigars):
             # TODO: modify cigar according to indel_counter
-            read.cigartuples = cigar
+            read.cigartuples = list(cigar)
             out.write(read)

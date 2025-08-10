@@ -70,7 +70,7 @@ def save_taskmeta(uniqkey, status, payload=None):
     now = utcnow_text()
     S3.put_object(
         Bucket=S3_BUCKET,
-        Key='tasks/{}/taskmeta.json'.format(uniqkey),
+        Key=f'tasks/{uniqkey}/taskmeta.json',
         ContentType='application/json',
         Body=json.dumps({
             'taskKey': uniqkey,
@@ -85,7 +85,7 @@ def save_taskmeta(uniqkey, status, payload=None):
 def save_file(uniqkey, config_file, content_type, payload):
     S3.put_object(
         Bucket=S3_BUCKET,
-        Key='tasks/{}/{}'.format(uniqkey, config_file),
+        Key=f'tasks/{uniqkey}/{config_file}',
         ContentType=content_type,
         Body=payload.encode('U8')
     )
@@ -101,30 +101,30 @@ def save_pairinfo(uniqkey, pairinfo):
 
 
 def verify_pairinfo(pairinfo, fastq_files):
-    known_names = set([])
+    known_names = set()
     for idx, one in enumerate(pairinfo):
         if 'name' not in one:
-            return False, "item {} misses property 'name'".format(idx)
+            return False, f"item {idx} misses property 'name'"
         if 'pair' not in one:
-            return False, "item {} misses property 'pair'".format(idx)
+            return False, f"item {idx} misses property 'pair'"
         if 'n' not in one:
-            return False, "item {} misses property 'n'".format(idx)
+            return False, f"item {idx} misses property 'n'"
         if one['name'] in known_names:
-            return False, "item {} has duplicate name".format(idx)
+            return False, f"item {idx} has duplicate name"
         if len(one['pair']) > 2:
             return (
                 False,
-                "item {}'s property 'pair' has too many files".format(idx)
+                f"item {idx}'s property 'pair' has too many files"
             )
         if len(one['pair']) < 2:
             return (
                 False,
-                "item {}'s property 'pair' has too few file".format(idx)
+                f"item {idx}'s property 'pair' has too few file"
             )
         if one['n'] == 2 and any(f is None for f in one['pair']):
             return (
                 False,
-                "item {}'s property 'pair' doesn't match n=2".format(idx)
+                f"item {idx}'s property 'pair' doesn't match n=2"
             )
         if (
             one['n'] == 1 and
@@ -133,7 +133,7 @@ def verify_pairinfo(pairinfo, fastq_files):
         ):
             return (
                 False,
-                "item {}'s property 'pair' doesn't match n=1".format(idx)
+                f"item {idx}'s property 'pair' doesn't match n=1"
             )
         files = {f for f in one['pair'] if f is not None}
         missing_files = files - fastq_files
@@ -150,7 +150,7 @@ def verify_pairinfo(pairinfo, fastq_files):
 def load_taskmeta(uniqkey):
     obj = S3.get_object(
         Bucket=S3_BUCKET,
-        Key='tasks/{}/taskmeta.json'.format(uniqkey)
+        Key=f'tasks/{uniqkey}/taskmeta.json'
     )
     data = json.load(obj['Body'])
     data['lastUpdatedAt'] = parse_dt(data['lastUpdatedAt'])
@@ -162,7 +162,7 @@ def verify_profiles(profiles):
         try:
             S3.head_object(
                 Bucket=S3_BUCKET,
-                Key='profiles/{}'.format(profile)
+                Key=f'profiles/{profile}'
             )
         except S3.exceptions.NoSuchKey:
             return False
@@ -314,7 +314,7 @@ def fetch_codfreqs(request):
         'get_object',
         Params={
             'Bucket': S3_BUCKET,
-            'Key': 'tasks/{}/response.json'.format(uniqkey)
+            'Key': f'tasks/{uniqkey}/response.json'
         },
         ExpiresIn=300)
 
@@ -338,7 +338,7 @@ def fetch_allfiles(request):
     if not is_success(taskmeta):
         return {"error": "this task is not finished yet"}, 400
 
-    path_prefix = 'tasks/{}/'.format(uniqkey)
+    path_prefix = f'tasks/{uniqkey}/'
     lskw = {
         'Bucket': S3_BUCKET,
         'MaxKeys': 1000,
@@ -385,7 +385,7 @@ def fetch_codfreqs_zip(request):
         'get_object',
         Params={
             'Bucket': S3_BUCKET,
-            'Key': 'tasks/{}/codfreqs.zip'.format(uniqkey)
+            'Key': f'tasks/{uniqkey}/codfreqs.zip'
         },
         ExpiresIn=300)
 
@@ -429,8 +429,8 @@ def fetch_runner_logs(request):
     for task_id, stime in zip(ecs_task_ids, start_time):
         events = []
         kw = dict(
-            logGroupName='/ecs/{}'.format(ECS_TASK_DEFINITION),
-            logStreamName='ecs/{}'.format(task_id),
+            logGroupName=f'/ecs/{ECS_TASK_DEFINITION}',
+            logStreamName=f'ecs/{task_id}',
             startTime=stime, limit=limit)
         done = False
         while True:
@@ -496,7 +496,7 @@ def trigger_runner(request):
         return {"error": "this task is not ready for a runner"}, 400
     payload = taskmeta['payload']
     fastq_files = set(payload['fastqFiles'])
-    path_prefix = 'tasks/{}/'.format(uniqkey)
+    path_prefix = f'tasks/{uniqkey}/'
     result = S3.list_objects_v2(
         Bucket=S3_BUCKET,
         MaxKeys=len(fastq_files) + 6,
@@ -613,7 +613,7 @@ def direct_upload(request):
         sigs.append(
             S3.generate_presigned_post(
                 Bucket=S3_BUCKET,
-                Key='tasks/{}/{}'.format(uniqkey, filename),
+                Key=f'tasks/{uniqkey}/{filename}',
                 Fields={'content-type': 'binary/octet-stream'},
                 Conditions=[{'content-type': 'binary/octet-stream'}],
                 ExpiresIn=3600

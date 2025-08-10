@@ -1,6 +1,6 @@
 import sys
 from subprocess import Popen, PIPE
-from typing import List, Tuple, Callable
+from collections.abc import Callable
 
 import rich
 import typer
@@ -10,7 +10,7 @@ ALIGN_FUNCTIONS = {}
 AUTOREMOVE_CONTAINERS = False
 
 
-def execute(command: List[str]) -> Tuple[str, str]:
+def execute(command: list[str]) -> tuple[str, str]:
     """Execute a subprocess and capture its output.
 
     :param command: Command and arguments to run.
@@ -54,7 +54,7 @@ def align_func(name: str) -> Callable:
     return wrapper
 
 
-def get_programs() -> List[str]:
+def get_programs() -> list[str]:
     return sorted(ALIGN_FUNCTIONS.keys())
 
 

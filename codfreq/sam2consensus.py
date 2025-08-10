@@ -1,14 +1,7 @@
 import json
 import cython  # type: ignore
 from collections import defaultdict, Counter
-
-from typing import (
-    DefaultDict,
-    Counter as tCounter,
-    Tuple,
-    List,
-    Dict
-)
+from collections import Counter as tCounter
 from .codfreq_types import (
     NAPos,
     NAChar,
@@ -18,7 +11,7 @@ from .codfreq_types import (
     NARegionConfig,
     RegionalConsensus
 )
-from .posnas import get_posnas_in_genome_region, PosNA
+from .posnas import get_posnas_in_genome_region
 
 from .filename_helper import name_bamfile
 
@@ -31,9 +24,11 @@ ENCODING = 'UTF-8'
 @cython.inline
 @cython.returns(dict)
 def make_consensus(
-    nacons_lookup: Dict[Tuple[NAPos, int], NAChar],
+    nacons_lookup: dict[tuple[NAPos, int], NAChar],
     region: NARegionConfig
 ) -> RegionalConsensus:
+    """Build consensus sequence for a region from nucleotide counts."""
+
     refpos: NAPos
     idx: int
 
@@ -65,18 +60,10 @@ def sam2consensus(
     sampath: str,
     region: NARegionConfig,
 ) -> RegionalConsensus:
+    """Generate consensus sequence for a region from a SAM file."""
 
-    name: str
-    refpos_start: NAPos
-    refpos_end: NAPos
-    consarr: bytearray
-    posnas: List[PosNA]
-    refpos: NAPos
-    idx: int
-    na: NAChar
-
-    nafreqs: DefaultDict[
-        Tuple[NAPos, int],
+    nafreqs: defaultdict[
+        tuple[NAPos, int],
         tCounter[NAChar]
     ] = defaultdict(Counter)
 
@@ -89,11 +76,11 @@ def sam2consensus(
         for refpos, idx, na, _ in posnas:
             nafreqs[(refpos, idx)][na] += 1
 
-    nacons_with_count_lookup: Dict[Tuple[NAPos, int], Tuple[NAChar, int]] = {
+    nacons_with_count_lookup: dict[tuple[NAPos, int], tuple[NAChar, int]] = {
         pos: nas.most_common(1)[0]
         for pos, nas in nafreqs.items()
     }
-    nacons_lookup: Dict[Tuple[NAPos, int], NAChar] = {
+    nacons_lookup: dict[tuple[NAPos, int], NAChar] = {
         (pos, idx): na
         for (pos, idx), (na, count) in nacons_with_count_lookup.items()
         if idx == 0 or
@@ -118,7 +105,7 @@ def create_untrans_region_consensus(
     fragment: FragmentConfig
     region: SequenceAssemblyConfig
 
-    results: List[RegionalConsensus] = []
+    results: list[RegionalConsensus] = []
     for fragment in profile['fragmentConfig']:
         if 'fromFragment' in fragment:
             continue
@@ -145,5 +132,5 @@ def create_untrans_region_consensus(
                     'refEnd': region['refEnd']
                 }
             ))
-    with open('{}.untrans.json'.format(seqname), 'w') as fp:
+    with open(f'{seqname}.untrans.json', 'w') as fp:
         json.dump(results, fp)

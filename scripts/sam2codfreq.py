@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-from __future__ import print_function
 import os
 import sys
 import csv
@@ -115,7 +114,7 @@ def reads_producer(filename, offset):
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: {} <SAMFILE> <OUTPUT>".format(sys.argv[0]),
+        print(f"Usage: {sys.argv[0]} <SAMFILE> <OUTPUT>",
               file=sys.stderr)
         exit(1)
     with pysam.AlignmentFile(sys.argv[1], 'rb') as samfile:
@@ -161,10 +160,10 @@ def main():
             for codon, read in sorted(counter.items(),
                                       key=lambda it: (-it[1], it[0])):
                 writer.writerow([gene, cdpos, total, codon, read])
-    print('{} reads processed. Of them:'.format(num_finished))
-    print('  Length of {} were too short'.format(num_tooshort))
-    print('  Quality of {} were too low'.format(num_lowqual))
-    print("{} done.".format(sys.argv[2]))
+    print(f'{num_finished} reads processed. Of them:')
+    print(f'  Length of {num_tooshort} were too short')
+    print(f'  Quality of {num_lowqual} were too low')
+    print(f"{sys.argv[2]} done.")
 
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
-from typing import TextIO, List, Optional
+from typing import TextIO
 from .codfreq_types import Sequence
 
 
-def load(fp: TextIO) -> List[Sequence]:
-    sequences: List[Sequence] = []
-    header: Optional[str] = None
+def load(fp: TextIO) -> list[Sequence]:
+    sequences: list[Sequence] = []
+    header: str | None = None
     curseq: bytearray = bytearray()
     for line in fp:
         if line.startswith('>'):

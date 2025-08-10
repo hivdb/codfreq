@@ -1,7 +1,5 @@
 #! /usr/bin/env python
 
-from __future__ import print_function
-from __future__ import division
 import re
 import sys
 import csv
@@ -45,7 +43,7 @@ def main():
     with open(sys.argv[2], 'w') as out:
         for fname in sys.argv[3:]:
             cons = []
-            with open(fname, 'r') as fp:
+            with open(fname) as fp:
                 all_codons = defaultdict(set)
                 reader = csv.reader(fp, delimiter='\t')
                 for gene, cdpos, total, codon, read, *_ in reader:
@@ -81,7 +79,7 @@ def main():
                         cons.append(nas)
             cons = ''.join(cons).strip('N')
             header = fname.rsplit('/', 1)[-1].rsplit('.', 1)[0]
-            out.write('>{}\n{}\n'.format(header, cons))
+            out.write(f'>{header}\n{cons}\n')
 
 
 if __name__ == '__main__':
