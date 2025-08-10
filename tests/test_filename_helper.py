@@ -34,3 +34,15 @@ def test_suggest_and_name_file() -> None:
     pattern = ("_", 1, 0, 0)
     assert suggest_pair_name(fnpair, pattern) == "reads"
     assert name_file(fnpair, pattern, ".bam") == "reads.bam"
+
+
+def test_suggest_pair_name_reverse_minus_one() -> None:
+    fnpair = ("/path/sample.fastq", None)
+    pattern = ("_", 1, 0, -1)
+    assert suggest_pair_name(fnpair, pattern) == "/path/sample"
+
+
+def test_suggest_pair_name_reverse_order() -> None:
+    fnpair = ("/path/a_b_c.fastq", None)
+    pattern = ("_", 1, 0, 1)
+    assert suggest_pair_name(fnpair, pattern) == "/path/a_c"
