@@ -16,8 +16,8 @@ from pathlib import Path
 from .cmdwrappers import pigz
 from .enums import LogFormat
 
-import rich  # type: ignore[import-not-found]
-import typer  # type: ignore[import-not-found]
+import rich
+import typer
 
 EXT_UNTRANS_JSON = '.untrans.json'
 EXT_CODFREQ = '.codfreq'
@@ -116,7 +116,7 @@ def compress_codfreq(
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
         if log_format == LogFormat.json:
-            rich.print(json.dumps({
+            print(json.dumps({
                 'op': 'compress-codfreq',
                 'to': f'{codfreq}.gz'
             }))

@@ -2,8 +2,8 @@ import sys
 from subprocess import Popen, PIPE
 from typing import List, Tuple, Callable
 
-import rich  # type: ignore[import-not-found]
-import typer  # type: ignore[import-not-found]
+import rich
+import typer
 
 REFINIT_FUNCTIONS = {}
 ALIGN_FUNCTIONS = {}

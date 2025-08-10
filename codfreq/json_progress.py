@@ -1,7 +1,6 @@
 import sys
 import time
 import json
-import rich  # type: ignore[import-not-found]
 
 from typing import Dict, Any
 
@@ -45,7 +44,7 @@ class JsonProgress:
         now: int = int(time.time() * 1000)
         if now - self.prev_ts >= self.ts_interval:
             self.prev_ts = now
-            rich.print(json.dumps({
+            print(json.dumps({
                 'op': self.op,
                 'status': 'working',
                 'description': self.description,
@@ -63,7 +62,7 @@ class JsonProgress:
         :returns: None
         """
         now: int = int(time.time() * 1000)
-        rich.print(json.dumps({
+        print(json.dumps({
             'op': self.op,
             'status': 'done',
             'description': self.description,
