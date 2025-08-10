@@ -65,3 +65,14 @@ def test_iter_single_read_posnas_trims_multiple_trailing_insertions() -> None:
         (1, 0, ord("A"), 10),
         (2, 0, ord("C"), 20),
     ]
+
+
+def test_iter_single_read_posnas_defaults_quality() -> None:
+    """Quality scores default to ``1`` when absent."""
+
+    seq = "AC"
+    pairs = [(0, 0), (1, 1)]
+    assert iter_single_read_posnas(seq, None, pairs) == [
+        (1, 0, ord("A"), 1),
+        (2, 0, ord("C"), 1),
+    ]
