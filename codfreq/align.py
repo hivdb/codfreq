@@ -4,6 +4,7 @@ import os
 import re
 import csv
 import json
+import sys
 import tempfile
 import multiprocessing
 from itertools import combinations
@@ -17,10 +18,12 @@ from typing import (
     Tuple,
     DefaultDict,
     Set,
-    Optional
+    Optional,
+    Annotated,
 )
 
-import typer
+import rich  # type: ignore[import-not-found]
+import typer  # type: ignore[import-not-found]
 
 from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
 
@@ -252,13 +255,20 @@ def fastp_preprocess(
     fastp_config: fastp.FASTPConfig,
     log_format: str
 ) -> PairedFASTQ:
+    """Merge paired FASTQ reads using fastp.
+
+    :param paired_fastq: Input paired FASTQ metadata.
+    :param fastp_config: Configuration options for fastp.
+    :param log_format: Output format for logging.
+    :returns: Metadata for the merged FASTQ file.
+    """
     if log_format == 'text':
-        typer.echo(
+        rich.print(
             'Pre-processing {} using fastp...'
             .format(paired_fastq['name'])
         )
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'preprocess',
             'status': 'working',
             'query': paired_fastq['name']
@@ -281,9 +291,9 @@ def fastp_preprocess(
         **fastp_config
     )
     if log_format == 'text':
-        typer.echo('Done')
+        rich.print('Done')
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'preprocess',
             'status': 'done',
             'query': paired_fastq['name']
@@ -297,14 +307,22 @@ def ivar_trim(
     ivar_trim_config: ivar.TrimConfig,
     log_format: str
 ) -> None:
+    """Trim primer sequences using ivar.
+
+    :param input_bam: Input BAM file path.
+    :param output_bam: Output trimmed BAM file path.
+    :param ivar_trim_config: Configuration for ivar trim.
+    :param log_format: Logging output format.
+    :returns: None
+    """
     name: str = os.path.basename(input_bam)
     if log_format == 'text':
-        typer.echo(
+        rich.print(
             'Trimming {} using ivar...'
             .format(name)
         )
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'trim',
             'status': 'working',
             'command': 'ivar',
@@ -316,9 +334,9 @@ def ivar_trim(
         **ivar_trim_config
     )
     if log_format == 'text':
-        typer.echo('Done')
+        rich.print('Done')
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'trim',
             'status': 'done',
             'command': 'ivar',
@@ -331,6 +349,13 @@ def cutadapt_trim(
     cutadapt_config: cutadapt.CutadaptConfig,
     log_format: str
 ) -> PairedFASTQ:
+    """Trim reads using cutadapt.
+
+    :param merged_fastq: FASTQ metadata after merging.
+    :param cutadapt_config: Configuration for cutadapt.
+    :param log_format: Logging output format.
+    :returns: Metadata for the trimmed FASTQ file.
+    """
     name: str = merged_fastq['name']
     output_fastq: PairedFASTQ = {
         'name': merged_fastq['name'],
@@ -344,12 +369,12 @@ def cutadapt_trim(
         'n': 1
     }
     if log_format == 'text':
-        typer.echo(
+        rich.print(
             'Trimming {} using cutadapt...'
             .format(name)
         )
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'trim',
             'status': 'working',
             'command': 'cutadapt',
@@ -361,9 +386,9 @@ def cutadapt_trim(
         **cutadapt_config
     )
     if log_format == 'text':
-        typer.echo('Done')
+        rich.print('Done')
     else:
-        typer.echo(json.dumps({
+        rich.print(json.dumps({
             'op': 'trim',
             'status': 'done',
             'command': 'cutadapt',
@@ -381,6 +406,17 @@ def align_with_profile(
     cutadapt_config: Optional[cutadapt.CutadaptConfig],
     ivar_trim_config: Optional[ivar.TrimConfig]
 ) -> None:
+    """Align reads to references defined in the profile.
+
+    :param paired_fastq: FASTQ pair to align.
+    :param program: Alignment program to execute.
+    :param profile: Profile configuration object.
+    :param log_format: Logging output format.
+    :param fastp_config: ``fastp`` preprocessing settings.
+    :param cutadapt_config: ``cutadapt`` trimming settings, if any.
+    :param ivar_trim_config: ``ivar`` trimming settings, if any.
+    :returns: None
+    """
     paired_fastq = fastp_preprocess(paired_fastq, fastp_config, log_format)
 
     if cutadapt_config is not None:
@@ -409,12 +445,12 @@ def align_with_profile(
                 is_trimmed=True)
             refinit(refpath)
             if log_format == 'text':
-                typer.echo(
+                rich.print(
                     'Aligning {} with {}...'
                     .format(paired_fastq['name'], refname)
                 )
             else:
-                typer.echo(json.dumps({
+                rich.print(json.dumps({
                     'op': 'alignment',
                     'status': 'working',
                     'query': paired_fastq['name'],
@@ -422,9 +458,9 @@ def align_with_profile(
                 }))
             alignfunc(refpath, *paired_fastq['pair'], orig_bamfile)
             if log_format == 'text':
-                typer.echo('Done')
+                rich.print('Done')
             else:
-                typer.echo(json.dumps({
+                rich.print(json.dumps({
                     'op': 'alignment',
                     'status': 'done',
                     'query': paired_fastq['name'],
@@ -465,10 +501,10 @@ def align(
     row: CodFreqRow
     profile_obj: Profile = json.load(profile)
     if profile_obj.get('version') != REQUIRED_PROFILE_VERSION:
-        typer.echo(
+        rich.print(
             'Incompatible profile detected. Download the latest profile files '
             'from: https://github.com/hivdb/codfreq/tree/main/profiles',
-            err=True)
+            file=sys.stderr)
         raise typer.Abort()
     paired_fastqs = list(find_paired_fastqs(workdir, autopairing))
 
@@ -520,33 +556,50 @@ def align(
 
 @app.command()
 def align_cmd(
-    workdir: Path = typer.Argument(
-        ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
-    ),
-    program: Program = typer.Option(
-        ..., '--program', '-p',
-        help='Alignment program'
-    ),
-    profile: typer.FileText = typer.Option(
-        ..., '--profile', '-r', encoding=ENCODING, help='Profile JSON file'
-    ),
-    log_format: LogFormat = typer.Option(
-        LogFormat.text, '--log-format', show_default=True,
-        help='Log output format'
-    ),
-    enable_profiling: bool = typer.Option(
-        False, '--enable-profiling/--disable-profiling',
-        help='Enable/disable cProfile'
-    ),
-    autopairing: bool = typer.Option(
-        True, '--autopairing/--no-autopairing',
-        help='Enable/disable automatical FASTQ pairing algorithm'
-    ),
-    workers: int = typer.Option(
-        multiprocessing.cpu_count(), '--workers',
-        show_default=True,
-        help='Number of sub-process workers to be used'
-    ),
+    workdir: Annotated[
+        Path,
+        typer.Argument(
+            ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
+        ),
+    ],
+    program: Annotated[
+        Program,
+        typer.Option('-p', help='Alignment program'),
+    ],
+    profile: Annotated[
+        typer.FileText,
+        typer.Option('-r', encoding=ENCODING, help='Profile JSON file'),
+    ],
+    log_format: Annotated[
+        LogFormat,
+        typer.Option(
+            '--log-format',
+            show_default=True,
+            help='Log output format',
+        ),
+    ] = LogFormat.text,
+    enable_profiling: Annotated[
+        bool,
+        typer.Option(
+            '--enable-profiling/--disable-profiling',
+            help='Enable/disable cProfile',
+        ),
+    ] = False,
+    autopairing: Annotated[
+        bool,
+        typer.Option(
+            '--autopairing/--no-autopairing',
+            help='Enable/disable automatical FASTQ pairing algorithm',
+        ),
+    ] = True,
+    workers: Annotated[
+        int,
+        typer.Option(
+            '--workers',
+            show_default=True,
+            help='Number of sub-process workers to be used',
+        ),
+    ] = multiprocessing.cpu_count(),
 ) -> None:
     """Command-line interface for :func:`align`.
 

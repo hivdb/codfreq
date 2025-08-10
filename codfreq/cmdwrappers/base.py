@@ -1,6 +1,9 @@
-import typer
+import sys
 from subprocess import Popen, PIPE
 from typing import List, Tuple, Callable
+
+import rich  # type: ignore[import-not-found]
+import typer  # type: ignore[import-not-found]
 
 REFINIT_FUNCTIONS = {}
 ALIGN_FUNCTIONS = {}
@@ -29,7 +32,7 @@ def raise_on_proc_error(proc: Popen, err: str) -> None:
     :raises typer.Abort: If the subprocess had a non-zero return code.
     """
     if proc.returncode:
-        typer.echo(err, err=True)
+        rich.print(err, file=sys.stderr)
         raise typer.Abort()
 
 

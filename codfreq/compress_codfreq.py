@@ -7,7 +7,8 @@ from typing import (
     TextIO,
     BinaryIO,
     Optional,
-    ByteString
+    ByteString,
+    Annotated,
 )
 
 from pathlib import Path
@@ -15,7 +16,8 @@ from pathlib import Path
 from .cmdwrappers import pigz
 from .enums import LogFormat
 
-import typer
+import rich  # type: ignore[import-not-found]
+import typer  # type: ignore[import-not-found]
 
 EXT_UNTRANS_JSON = '.untrans.json'
 EXT_CODFREQ = '.codfreq'
@@ -66,13 +68,20 @@ def find_codfreq_untrans_pairs(
 
 @app.command()
 def compress_codfreq(
-    workdir: Path = typer.Argument(
-        ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
-    ),
-    log_format: LogFormat = typer.Option(
-        LogFormat.text, '--log-format', show_default=True,
-        help='Output log format'
-    ),
+    workdir: Annotated[
+        Path,
+        typer.Argument(
+            ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
+        ),
+    ],
+    log_format: Annotated[
+        LogFormat,
+        typer.Option(
+            '--log-format',
+            show_default=True,
+            help='Output log format',
+        ),
+    ] = LogFormat.text,
 ) -> None:
     """Compress CodFreq files and optionally log the operation.
 
@@ -107,12 +116,12 @@ def compress_codfreq(
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
         if log_format == LogFormat.json:
-            typer.echo(json.dumps({
+            rich.print(json.dumps({
                 'op': 'compress-codfreq',
                 'to': f'{codfreq}.gz'
             }))
         else:
-            typer.echo(f'Create {codfreq}.gz')
+            rich.print(f'Create {codfreq}.gz')
 
 
 if __name__ == '__main__':

@@ -3,9 +3,9 @@ import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Dict, Iterator, List, Tuple, Annotated
 
-import typer
+import typer  # type: ignore[import-not-found]
 
 
 app = typer.Typer()
@@ -48,10 +48,13 @@ def yield_untrans(workdir: Path) -> Iterator[Tuple[str, Any]]:
 
 @app.command()
 def make_response(
-    workdir: Path = typer.Argument(
-        ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
-    ),
-    path_prefix: str = typer.Argument(...),
+    workdir: Annotated[
+        Path,
+        typer.Argument(
+            ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
+        ),
+    ],
+    path_prefix: Annotated[str, typer.Argument(...)],
 ) -> None:
     """Create CodFreq file for response.
 

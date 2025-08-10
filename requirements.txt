@@ -16,7 +16,7 @@ pyyaml==6.0.2; python_version >= '3.8'
 rich==14.1.0; python_full_version >= '3.8.0'
 shellingham==1.5.4; python_version >= '3.7'
 tqdm==4.67.1; python_version >= '3.7'
-typer>=0.16.0; python_version >= '3.7'
+typer==0.16.0; python_version >= '3.7'
 types-setuptools==67.8.0.0
 typing-extensions==4.14.1; python_version >= '3.9'
 urllib3==2.5.0; python_version >= '3.9'
