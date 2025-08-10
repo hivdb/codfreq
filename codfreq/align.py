@@ -30,8 +30,9 @@ from .sam2codfreq import (
 )
 from .sam2consensus import create_untrans_region_consensus
 from .cmdwrappers import (
-    fastp, cutadapt, ivar, get_programs, get_refinit, get_align
+    fastp, cutadapt, ivar, get_refinit, get_align
 )
+from .enums import LogFormat, Program
 from .filename_helper import (
     suggest_pair_name,
     name_bamfile,
@@ -522,15 +523,16 @@ def align_cmd(
     workdir: Path = typer.Argument(
         ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
     ),
-    program: str = typer.Option(
+    program: Program = typer.Option(
         ..., '--program', '-p',
         help='Alignment program'
     ),
     profile: typer.FileText = typer.Option(
         ..., '--profile', '-r', encoding=ENCODING, help='Profile JSON file'
     ),
-    log_format: str = typer.Option(
-        'text', '--log-format', show_default=True, help='Log output format'
+    log_format: LogFormat = typer.Option(
+        LogFormat.text, '--log-format', show_default=True,
+        help='Log output format'
     ),
     enable_profiling: bool = typer.Option(
         False, '--enable-profiling/--disable-profiling',
@@ -550,34 +552,42 @@ def align_cmd(
 
     :param workdir: Working directory with FASTQ files.
     :param program: Alignment program to execute.
+    :type program: Program
     :param profile: Profile configuration file handle.
     :param log_format: Format for log output.
+    :type log_format: LogFormat
     :param enable_profiling: Run with cProfile if ``True``.
     :param autopairing: Automatically pair FASTQ files if ``True``.
     :param workers: Number of worker processes.
     :returns: None
-    :raises typer.Abort: If an unsupported program or log format is provided.
     """
-    if program not in get_programs():
-        typer.echo(f'Unsupported program: {program}', err=True)
-        raise typer.Abort()
-    if log_format not in ('text', 'json'):
-        typer.echo(f'Unsupported log format: {log_format}', err=True)
-        raise typer.Abort()
     if enable_profiling:
         import cProfile
         import pstats
         profile_obj = None
         try:
             with cProfile.Profile() as profile_obj:
-                align(str(workdir), program, profile, workers,
-                      log_format, autopairing)
+                align(
+                    str(workdir),
+                    program.value,
+                    profile,
+                    workers,
+                    log_format.value,
+                    autopairing,
+                )
         finally:
             if profile_obj is not None:
                 ps = pstats.Stats(profile_obj)
                 ps.print_stats()
     else:
-        align(str(workdir), program, profile, workers, log_format, autopairing)
+        align(
+            str(workdir),
+            program.value,
+            profile,
+            workers,
+            log_format.value,
+            autopairing,
+        )
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ from typing import (
 from pathlib import Path
 
 from .cmdwrappers import pigz
+from .enums import LogFormat
 
 import typer
 
@@ -68,16 +69,17 @@ def compress_codfreq(
     workdir: Path = typer.Argument(
         ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
     ),
-    log_format: str = typer.Option(
-        'text', '--log-format', show_default=True, help='Output log format'
+    log_format: LogFormat = typer.Option(
+        LogFormat.text, '--log-format', show_default=True,
+        help='Output log format'
     ),
 ) -> None:
     """Compress CodFreq files and optionally log the operation.
 
     :param workdir: Directory containing CodFreq files.
     :param log_format: Format for logging output.
+    :type log_format: LogFormat
     :returns: None
-    :raises typer.Abort: If an unsupported log format is provided.
     """
     codfreq: str
     untrans: Optional[str]
@@ -87,9 +89,6 @@ def compress_codfreq(
     pairs: List[Tuple[
         str, Optional[str]
     ]] = find_codfreq_untrans_pairs(workdir)
-    if log_format not in ('text', 'json'):
-        typer.echo(f'Unsupported log format: {log_format}', err=True)
-        raise typer.Abort()
     for codfreq, untrans in pairs:
         payload = bytearray(b'\xef\xbb\xbf')  # UTF-8 bom
         if untrans:
@@ -107,7 +106,7 @@ def compress_codfreq(
         payload = pigz.compress(payload)
         with open(codfreq + '.gz', 'wb') as fp:
             fp.write(payload)
-        if log_format == 'json':
+        if log_format == LogFormat.json:
             typer.echo(json.dumps({
                 'op': 'compress-codfreq',
                 'to': f'{codfreq}.gz'

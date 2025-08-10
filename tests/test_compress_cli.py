@@ -17,3 +17,9 @@ def test_compress_codfreq_cli(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(app, [str(tmp_path)])
     assert result.exit_code == 0
     assert (tmp_path / "sample.codfreq.gz").exists()
+
+
+def test_compress_codfreq_cli_invalid_log_format(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, [str(tmp_path), "--log-format", "invalid"])
+    assert result.exit_code != 0
