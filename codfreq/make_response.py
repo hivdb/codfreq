@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterator, List, Tuple, Annotated
 import typer
 
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 def utcnow_text() -> str:

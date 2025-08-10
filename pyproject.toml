@@ -1,3 +1,6 @@
+[project]
+name = "codfreq"
+
 [tool.mypy]
 python_version = '3.13'
 warn_return_any = true

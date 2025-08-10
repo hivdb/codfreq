@@ -48,7 +48,7 @@ FILENAME_DELIMITERS = (' ', '_', '-')
 PAIRED_FASTQ_MARKER = ('1', '2')
 INVALID_PAIRED_FASTQ_MARKER = re.compile(r'[1-9]0*[12]|[^0]00+[12]|[12]\d')
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 def find_paired_marker(text1: str, text2: str) -> int:

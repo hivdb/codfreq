@@ -22,7 +22,7 @@ import typer
 EXT_UNTRANS_JSON = '.untrans.json'
 EXT_CODFREQ = '.codfreq'
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 def find_codfreq_untrans_pairs(
