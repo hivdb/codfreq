@@ -1,4 +1,3 @@
-from collections import Counter as tCounter
 from collections import Counter
 
 from pysam import AlignmentFile
@@ -57,7 +56,7 @@ def squash_gaps(
 def count_indel_positions(
     cigartuples: tuple[tuple[int, int], ...],
     ref_start: int,
-    indel_counter: tCounter[int]
+    indel_counter: Counter[int]
 ) -> None:
     """Count indel positions in cigar tuples.
 
@@ -76,7 +75,7 @@ def count_indel_positions(
 def prepare_sam(sam_file: str, out_file: str) -> None:
     """Prepare SAM/BAM alignment files for downstream analysis."""
     cigars: list[tuple[tuple[int, int], ...]] = []
-    indel_counter: tCounter[int] = Counter()
+    indel_counter: Counter[int] = Counter()
 
     with AlignmentFile(sam_file, "r") as sam, \
             AlignmentFile(out_file, "w", template=sam) as out:

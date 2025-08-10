@@ -1,7 +1,6 @@
 import json
 import cython  # type: ignore
 from collections import defaultdict, Counter
-from collections import Counter as tCounter
 from .codfreq_types import (
     NAPos,
     NAChar,
@@ -64,7 +63,7 @@ def sam2consensus(
 
     nafreqs: defaultdict[
         tuple[NAPos, int],
-        tCounter[NAChar]
+        Counter[NAChar]
     ] = defaultdict(Counter)
 
     for _, posnas in get_posnas_in_genome_region(
