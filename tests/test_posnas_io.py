@@ -105,6 +105,17 @@ def test_get_posnas_between_filters_quality() -> None:
     ]
 
 
+def test_get_posnas_between_skips_empty_reads() -> None:
+    """Reads without sequence are ignored."""
+
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "AC", [10, 20], [(0, 0), (1, 1)]),
+        AlignedSegment("r2", "", [], []),
+    ]
+    result = get_posnas_between("sample.sam", 0, 2)
+    assert result == [("r1", [(1, 0, ord("A"), 10), (2, 0, ord("C"), 20)])]
+
+
 def test_get_posnas_in_genome_region_skips_empty_reads() -> None:
     """Reads without sequence are ignored."""
 
@@ -114,6 +125,18 @@ def test_get_posnas_in_genome_region_skips_empty_reads() -> None:
     ]
     result = get_posnas_in_genome_region("sample.sam", "ref", 1, 5)
     assert result == [("r1", [(1, 0, ord("A"), 10), (2, 0, ord("C"), 20)])]
+
+
+def test_get_posnas_in_genome_region_filters_quality() -> None:
+    """Low-quality bases are removed from genomic region results."""
+
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "AC", [10, 20], [(0, 0), (1, 1)]),
+    ]
+    result = get_posnas_in_genome_region(
+        "sample.sam", "ref", 1, 5, site_quality_cutoff=15
+    )
+    assert result == [("r1", [(2, 0, ord("C"), 20)])]
 
 
 def test_iter_posnas_reports_progress() -> None:
@@ -158,6 +181,44 @@ def test_iter_posnas_reports_progress() -> None:
     ]
     assert mock_bar.update.call_count == 2
     mock_bar.close.assert_called_once()
+
+
+def test_iter_posnas_without_progress() -> None:
+    """Results are yielded directly when no progress bar is configured."""
+
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "AC", [10, 20], [(0, 0), (1, 1)]),
+    ]
+
+    class DummyExecutor:
+        def __init__(self, _workers: int) -> None:
+            pass
+
+        def __enter__(self) -> "DummyExecutor":
+            return self
+
+        def __exit__(self, *exc: Any) -> None:
+            return None
+
+        def map(self, func: Any, *iterables: Any) -> Any:
+            return map(func, *iterables)
+
+    with (
+        patch("codfreq.posnas.ProcessPoolExecutor", DummyExecutor),
+        patch("codfreq.posnas.chunked_samfile", return_value=[(0, 1)]),
+    ):
+        results = list(
+            iter_posnas(
+                "sample.sam",
+                workers=1,
+                description="reads",
+                log_format="quiet",
+                chunk_size=1,
+            )
+        )
+    assert results == [
+        ("r1", [(1, 0, ord("A"), 10), (2, 0, ord("C"), 20)])
+    ]
 
 
 def test_iter_posnas_text_progress() -> None:

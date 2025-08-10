@@ -4,6 +4,7 @@ import sys
 import types
 from collections import Counter
 from typing import Any
+from unittest.mock import patch
 
 # Stub out postalign dependencies used by codonalign_consensus
 postalign = types.ModuleType("postalign")
@@ -181,3 +182,58 @@ def test_codonalign_consensus_updates_counters() -> None:
     assert codonstat[("frag", 1)][b"TTT"] == 2
     assert b"AAA" not in quals[("frag", 1)]
     assert quals[("frag", 1)][b"TTT"] == 5
+
+
+def test_assemble_alignment_returns_none_without_codons() -> None:
+    """Fragments without codons yield ``None`` results."""
+
+    codonstat: dict[tuple[str, int], Counter[bytes]] = {}
+    fragment = {"fragmentName": "F", "refRanges": [(1, 3)]}
+    refseq = bytearray(b"AAA")
+
+    ref_obj, query_obj, first, last = assemble_alignment(
+        codonstat, refseq, fragment
+    )
+
+    assert (ref_obj, query_obj, first, last) == (None, None, None, None)
+
+
+def test_codonalign_consensus_skips_empty_fragment() -> None:
+    """Fragments without statistics are ignored."""
+
+    codonstat: dict[tuple[str, int], Counter[bytes]] = {}
+    quals: dict[tuple[str, int], Counter[bytes]] = {}
+    ref = {"fragmentName": "ref", "refSequence": "AAA"}
+    fragments = [{"fragmentName": "frag", "refRanges": [(1, 3)]}]
+
+    result = codonalign_consensus(codonstat, quals, ref, fragments)
+    assert result == (codonstat, quals)
+
+
+def test_codonalign_consensus_alignment_failure_skips_fragment() -> None:
+    """Alignment failures lead to early fragment skipping."""
+
+    codonstat = {("frag", 1): Counter({b"AAA": 1})}
+    quals = {("frag", 1): Counter({b"AAA": 1})}
+    ref = {"fragmentName": "ref", "refSequence": "AAA"}
+    fragments = [{"fragmentName": "frag", "refRanges": [(1, 3)]}]
+
+    with patch(
+        "codfreq.codonalign_consensus.codon_align",
+        return_value=(None, None),
+    ):
+        codonalign_consensus(codonstat, quals, ref, fragments)
+
+
+def test_codonalign_consensus_skips_positions_missing_quality() -> None:
+    """Codon positions lacking quality scores are ignored."""
+
+    codonstat = {
+        ("frag", 1): Counter({b"AAA": 1}),
+        ("frag", 2): Counter({b"CCC": 1}),
+    }
+    quals = {("frag", 1): Counter({b"AAA": 1})}
+    ref = {"fragmentName": "ref", "refSequence": "AAA CCC".replace(" ", "")}
+    fragments = [{"fragmentName": "frag", "refRanges": [(1, 6)]}]
+
+    codonalign_consensus(codonstat, quals, ref, fragments)

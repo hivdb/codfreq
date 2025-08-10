@@ -120,5 +120,5 @@ def compress_codfreq(
             rich.print(f'Create {codfreq}.gz')
 
 
-if __name__ == '__main__':
-    app()
+if __name__ == '__main__':  # pragma: no cover
+    app()  # pragma: no cover

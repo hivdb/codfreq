@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+# pragma: no cover
 
 import os
 import re

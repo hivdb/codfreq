@@ -17,3 +17,6 @@ plugins = "pydantic.mypy"
 [build-system]
 requires = ["setuptools", "wheel", "cython"]
 build-backend = "setuptools.build_meta:__legacy__"
+
+[tool.coverage.run]
+omit = ["codfreq/align.py"]

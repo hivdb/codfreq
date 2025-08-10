@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import sys
 import types
-from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
+from typing import cast, Any
 
 # Stub cython decorators
 cython_stub = types.ModuleType("cython")
@@ -110,9 +110,10 @@ def test_create_untrans_region_consensus_writes_results(
     mock_name_bamfile: MagicMock,
     mock_sam2consensus: MagicMock,
 ) -> None:
-    """Fragments without parents produce consensus JSON."""
+    """Fragments lacking parents produce consensus JSON;
+    invalid regions are skipped."""
 
-    profile: Profile = {
+    profile_dict: dict[str, Any] = {
         "version": "1",
         "fragmentConfig": [
             {"fragmentName": "F1"},
@@ -140,8 +141,36 @@ def test_create_untrans_region_consensus_writes_results(
                 "refStart": 1,
                 "refEnd": 2,
             },
+            cast(
+                dict[str, Any],
+                {
+                    "name": "R3",
+                    "geneName": None,
+                    "refStart": 1,
+                    "refEnd": 2,
+                },
+            ),
+            cast(
+                dict[str, Any],
+                {
+                    "name": "R4",
+                    "geneName": None,
+                    "fromFragment": "F1",
+                    "refEnd": 2,
+                },
+            ),
+            cast(
+                dict[str, Any],
+                {
+                    "name": "R5",
+                    "geneName": None,
+                    "fromFragment": "F1",
+                    "refStart": 1,
+                },
+            ),
         ],
     }
+    profile = cast(Profile, profile_dict)
     mock_name_bamfile.return_value = "file.bam"
     result_cons = {
         "name": "R1",

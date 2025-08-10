@@ -45,6 +45,7 @@ def test_cutadapt_runs_and_logs(tmp_path: Path) -> None:
             "in.fq",
             str(out_path),
             adapter3="A3",
+            adapter5="A5",
             adapter53="B",
             error_rate=0.2,
             no_indels=True,
@@ -57,6 +58,8 @@ def test_cutadapt_runs_and_logs(tmp_path: Path) -> None:
         "0",
         "-a",
         "A3",
+        "-g",
+        "A5",
         "-b",
         "B",
         "-e",
@@ -200,6 +203,8 @@ def test_ivar_trim_runs(tmp_path: Path) -> None:
             str(output_bam),
             primers_bed="primers.bed",
             min_length=50,
+            min_quality=20,
+            sliding_window_width=4,
             include_reads_with_no_primers=True,
         )
     command = popen_mock.call_args[0][0]
@@ -207,6 +212,8 @@ def test_ivar_trim_runs(tmp_path: Path) -> None:
     assert "-b" in command and "primers.bed" in command
     assert "-m" in command and "50" in command
     assert "-e" in command
+    assert "-q" in command and "20" in command
+    assert "-s" in command and "4" in command
     exec_mock.assert_has_calls(
         [
             call(
@@ -325,6 +332,14 @@ def test_pigz_decompress() -> None:
         stderr=pigz.PIPE,
     )
     assert out == b"out"
+
+
+def test_pigz_decompress_error() -> None:
+    err_proc = MagicMock(returncode=0)
+    err_proc.communicate.return_value = (b"", b"oops")
+    with patch.object(pigz, "Popen", return_value=err_proc):
+        with pytest.raises(RuntimeError):
+            pigz.decompress(b"in")
 
 
 def test_samtools_stats(tmp_path: Path) -> None:

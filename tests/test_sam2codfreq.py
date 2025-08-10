@@ -34,27 +34,31 @@ def test_get_ref_fragments() -> None:
                 "fromFragment": "refA",
                 "geneName": "geneX",
                 "refRanges": [(1, 3)],
-                "codonAlignment": [{"relRefStart": 1, "windowSize": 3}],
+                "codonAlignment": [{
+                    "relRefStart": 1,
+                    "relRefEnd": 3,
+                    "windowSize": 3,
+                    "minGapDistance": 5,
+                    "relGapPlacementScore": "0:0-1=1",
+                }],
+            },
+            {
+                "fragmentName": "fragB",
+                "fromFragment": "refA",
+                "geneName": "geneY",
+                "refRanges": [(4, 6)],
+                "codonAlignment": False,
             },
         ]
     }
     refs, lookup = s2c.get_ref_fragments(profile)
-    assert refs == [
-        (
-            "refA",
-            {"fragmentName": "refA", "refSequence": "AAA"},
-            [
-                {
-                    "fragmentName": "fragA",
-                    "fromFragment": "refA",
-                    "geneName": "geneX",
-                    "refRanges": [(1, 3)],
-                    "codonAlignment": [{"relRefStart": 1, "windowSize": 3}],
-                }
-            ],
-        )
-    ]
-    assert lookup == {"fragA": [("geneX", 0)]}
+    assert refs[0][2][0]["codonAlignment"][0]["relRefEnd"] == 3
+    assert refs[0][2][0]["codonAlignment"][0]["minGapDistance"] == 5
+    assert (
+        refs[0][2][0]["codonAlignment"][0]["relGapPlacementScore"] == "0:0-1=1"
+    )
+    assert refs[0][2][1]["codonAlignment"] is False
+    assert lookup["fragB"] == [("geneY", 0)]
 
 
 def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
@@ -165,6 +169,74 @@ def test_sam2codfreq() -> None:
 
     assert stat_by_fragpos == {("fragA", 1): Counter({"AAA": 2})}
     assert qual_by_fragpos == {("fragA", 1): Counter({"AAA": 40})}
+
+
+def test_sam2codfreq_json_logging() -> None:
+    """JSON log format uses JsonProgress."""
+
+    alignment_mock = MagicMock(mapped=2)
+    alignment_mock.__enter__.return_value = alignment_mock
+    alignment_mock.__exit__.return_value = False
+
+    pbar_mock = MagicMock()
+
+    executor_inst = MagicMock()
+    executor_inst.__enter__.return_value = executor_inst
+    executor_inst.__exit__.return_value = False
+    executor_inst.map.side_effect = (
+        lambda fn, *iterables: [fn(*args) for args in zip(*iterables)]
+    )
+
+    with (
+        patch(
+            "codfreq.sam2codfreq.pysam.AlignmentFile",
+            return_value=alignment_mock,
+        ),
+        patch("codfreq.sam2codfreq.JsonProgress", return_value=pbar_mock),
+        patch("codfreq.sam2codfreq.chunked_samfile", return_value=[(0, 1)]),
+        patch(
+            "codfreq.sam2codfreq.ProcessPoolExecutor",
+            return_value=executor_inst,
+        ),
+        patch.object(
+            s2c,
+            "sam2codfreq_between",
+            return_value=(
+                Counter({
+                    ("fragA", 1, "AAA"): 1,
+                }),
+                Counter({
+                    ("fragA", 1, "AAA"): 20,
+                }),
+                1,
+            ),
+        ),
+        patch.object(
+            s2c,
+            "codonalign_consensus",
+            side_effect=lambda stat, qual, ref, frags: (stat, qual),
+        ),
+    ):
+        ref = cast(
+            MainFragmentConfig,
+            {"fragmentName": "refA", "refSequence": "AAA"},
+        )
+        fragments = [
+            cast(
+                DerivedFragmentConfig,
+                {
+                    "fragmentName": "fragA",
+                    "fromFragment": "refA",
+                    "refRanges": [(1, 3)],
+                },
+            )
+        ]
+        s2c.sam2codfreq(
+            "file.bam", ref, fragments, workers=1, log_format="json"
+        )
+
+    pbar_mock.update.assert_called_once_with(1)
+    pbar_mock.close.assert_called_once()
 
 
 def test_sam2codfreq_all() -> None:

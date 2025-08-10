@@ -90,3 +90,27 @@ def test_iter_poscodons_yields_codons() -> None:
             ],
         )
     ]
+
+
+def test_iter_poscodons_stops_when_past_end() -> None:
+    """Iteration halts once the end position is exceeded."""
+
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "AAA", [30, 30, 30]),
+        AlignedSegment("r2", "GGG", [30, 30, 30]),
+    ]
+    frags: list[FragmentInterval] = [([(1, 3)], "frag")]
+    result = list(iter_poscodons("sample.sam", 0, 0, frags))
+    assert result == [("r1", [("frag", 1, b"AAA", 30)])]
+
+
+def test_iter_poscodons_skips_empty_reads() -> None:
+    """Reads lacking sequence are ignored."""
+
+    AlignmentFile.reads = [
+        AlignedSegment("r1", "", []),
+        AlignedSegment("r2", "TTT", [30, 30, 30]),
+    ]
+    frags: list[FragmentInterval] = [([(1, 3)], "frag")]
+    result = list(iter_poscodons("sample.sam", 0, 5, frags))
+    assert result == [("r2", [("frag", 1, b"TTT", 30)])]

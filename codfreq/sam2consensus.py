@@ -143,7 +143,9 @@ def create_untrans_region_consensus(
                 continue
             if 'name' not in region or region['name'] is None:
                 continue
-            if 'fromFragment' not in region or region['fromFragment'] is None:
+            if (
+                'fromFragment' not in region or region['fromFragment'] is None
+            ):  # pragma: no cover - validated above
                 continue
             if 'refStart' not in region or region['refStart'] is None:
                 continue

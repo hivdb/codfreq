@@ -27,6 +27,13 @@ def test_squash_gaps_switches_operation() -> None:
     assert squash_gaps(cig) == ((0, 5), (2, 2), (0, 4))
 
 
+def test_squash_gaps_merges_same_operation() -> None:
+    """Adjacent insertions merge into a longer insertion."""
+
+    cig = ((0, 5), (1, 2), (0, 3), (1, 1), (0, 4))
+    assert squash_gaps(cig) == ((0, 5), (1, 3), (0, 7))
+
+
 def test_prepare_sam_processes_reads() -> None:
     """Mapped reads receive squashed cigars and are written out."""
 

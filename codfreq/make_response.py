@@ -107,5 +107,5 @@ def make_response(
         }))
 
 
-if __name__ == '__main__':
-    app()
+if __name__ == '__main__':  # pragma: no cover
+    app()  # pragma: no cover
