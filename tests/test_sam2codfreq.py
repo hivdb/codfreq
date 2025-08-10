@@ -1,6 +1,7 @@
 from collections import Counter
-from types import SimpleNamespace
-from typing import Any, Iterator, Literal, cast
+from typing import cast
+
+from unittest.mock import MagicMock, patch
 
 import codfreq.sam2codfreq as s2c
 from codfreq.codfreq_types import (
@@ -84,139 +85,118 @@ def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
     ]
 
 
-def test_sam2codfreq_between(monkeypatch: Any) -> None:
-    def stub_iter_poscodons(
-        *args: Any, **kwargs: Any
-    ) -> Iterator[tuple[None, list[tuple[str, int, str, int]]]]:
-        yield None, [("fragA", 1, "AAA", 30)]
-        yield None, [("fragA", 1, "AAA", 20), ("fragA", 2, "CCC", 10)]
+def test_sam2codfreq_between() -> None:
+    """Aggregate codons from positional reads."""
 
-    monkeypatch.setattr(s2c, "iter_poscodons", stub_iter_poscodons)
-    stat, qual, num_row = s2c.sam2codfreq_between(
-        "file.bam", 0, 10, [([(1, 3)], "fragA")]
+    iter_mock = MagicMock(
+        return_value=iter(
+            [
+                (None, [("fragA", 1, "AAA", 30)]),
+                (
+                    None,
+                    [("fragA", 1, "AAA", 20), ("fragA", 2, "CCC", 10)],
+                ),
+            ]
+        )
     )
+
+    with patch.object(s2c, "iter_poscodons", iter_mock):
+        stat, qual, num_row = s2c.sam2codfreq_between(
+            "file.bam", 0, 10, [([(1, 3)], "fragA")]
+        )
+
     assert stat == Counter({("fragA", 1, "AAA"): 2, ("fragA", 2, "CCC"): 1})
     assert qual == Counter({("fragA", 1, "AAA"): 50, ("fragA", 2, "CCC"): 10})
     assert num_row == 2
 
 
-def test_sam2codfreq(monkeypatch: Any) -> None:
-    class DummyAlignmentFile:
-        mapped: int
+def test_sam2codfreq() -> None:
+    """Combine chunk results into codon counters."""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self.mapped = 3
+    alignment_mock = MagicMock(mapped=3)
+    alignment_mock.__enter__.return_value = alignment_mock
+    alignment_mock.__exit__.return_value = False
 
-        def __enter__(self) -> "DummyAlignmentFile":
-            return self
+    pbar_mock = MagicMock()
 
-        def __exit__(self, *exc: Any) -> Literal[False]:
-            return False
-
-    class DummyTQDM:
-        total: int
-
-        def __init__(self, total: int) -> None:
-            self.total = total
-
-        def set_description(self, desc: str) -> None:
-            self.desc = desc
-
-        def update(self, n: int) -> None:
-            self.total += n
-
-        def close(self) -> None:
-            pass
-
-    monkeypatch.setattr(
-        s2c,
-        "pysam",
-        SimpleNamespace(AlignmentFile=DummyAlignmentFile),
-    )
-    monkeypatch.setattr(s2c, "tqdm", DummyTQDM)
-    monkeypatch.setattr(
-        s2c,
-        "chunked_samfile",
-        lambda *args, **kwargs: [(0, 1)],
+    executor_inst = MagicMock()
+    executor_inst.__enter__.return_value = executor_inst
+    executor_inst.__exit__.return_value = False
+    executor_inst.map.side_effect = (
+        lambda fn, *iterables: [fn(*args) for args in zip(*iterables)]
     )
 
-    class DummyExecutor:
-        def __init__(self, workers: int) -> None:
-            self.workers = workers
-
-        def __enter__(self) -> "DummyExecutor":
-            return self
-
-        def __exit__(self, *exc: Any) -> Literal[False]:
-            return False
-
-        def map(self, fn: Any, *iterables: Any) -> list[Any]:
-            return [fn(*args) for args in zip(*iterables)]
-
-    monkeypatch.setattr(s2c, "ProcessPoolExecutor", DummyExecutor)
-
-    def stub_between(*args: Any, **kwargs: Any) -> tuple[Counter, Counter, int]:
-        return (
+    with patch(
+        "codfreq.sam2codfreq.pysam.AlignmentFile",
+        return_value=alignment_mock,
+    ), patch("codfreq.sam2codfreq.tqdm", return_value=pbar_mock), patch(
+        "codfreq.sam2codfreq.chunked_samfile", return_value=[(0, 1)]
+    ), patch(
+        "codfreq.sam2codfreq.ProcessPoolExecutor", return_value=executor_inst
+    ), patch.object(
+        s2c,
+        "sam2codfreq_between",
+        return_value=(
             Counter({("fragA", 1, "AAA"): 2}),
             Counter({("fragA", 1, "AAA"): 40}),
             2,
-        )
-
-    monkeypatch.setattr(s2c, "sam2codfreq_between", stub_between)
-    monkeypatch.setattr(
+        ),
+    ), patch.object(
         s2c,
         "codonalign_consensus",
-        lambda stat, qual, ref, frags: (stat, qual),
-    )
-
-    ref = cast(MainFragmentConfig, {"fragmentName": "refA", "refSequence": "AAA"})
-    fragments = [
-        cast(
-            DerivedFragmentConfig,
-            {
-                "fragmentName": "fragA",
-                "fromFragment": "refA",
-                "refRanges": [(1, 3)],
-            },
+        side_effect=lambda stat, qual, ref, frags: (stat, qual),
+    ):
+        ref = cast(
+            MainFragmentConfig, {"fragmentName": "refA", "refSequence": "AAA"}
         )
-    ]
-    stat_by_fragpos, qual_by_fragpos = s2c.sam2codfreq(
-        "file.bam", ref, fragments, workers=1
-    )
+        fragments = [
+            cast(
+                DerivedFragmentConfig,
+                {
+                    "fragmentName": "fragA",
+                    "fromFragment": "refA",
+                    "refRanges": [(1, 3)],
+                },
+            )
+        ]
+        stat_by_fragpos, qual_by_fragpos = s2c.sam2codfreq(
+            "file.bam", ref, fragments, workers=1
+        )
+
     assert stat_by_fragpos == {("fragA", 1): Counter({"AAA": 2})}
     assert qual_by_fragpos == {("fragA", 1): Counter({"AAA": 40})}
 
 
-def test_sam2codfreq_all(monkeypatch: Any) -> None:
-    def stub_sam2codfreq(
-        *args: Any, **kwargs: Any
-    ) -> tuple[dict[tuple[str, int], Counter[str]], dict[tuple[str, int], Counter[str]]]:
-        return (
+def test_sam2codfreq_all() -> None:
+    """Process all fragments and convert to rows."""
+
+    with patch.object(
+        s2c,
+        "sam2codfreq",
+        return_value=(
             {("fragA", 1): Counter({"AAA": 1})},
             {("fragA", 1): Counter({"AAA": 30})},
+        ),
+    ), patch(
+        "codfreq.sam2codfreq.name_bamfile", return_value="file.bam"
+    ):
+        profile = cast(
+            Profile,
+            {
+                "fragmentConfig": [
+                    {"fragmentName": "refA", "refSequence": "AAA"},
+                    {
+                        "fragmentName": "fragA",
+                        "fromFragment": "refA",
+                        "geneName": "geneX",
+                        "refRanges": [(1, 3)],
+                    },
+                ]
+            },
         )
 
-    monkeypatch.setattr(s2c, "sam2codfreq", stub_sam2codfreq)
-    monkeypatch.setattr(
-        s2c, "name_bamfile", lambda name, refname, is_trimmed=True: "file.bam"
-    )
+        rows = s2c.sam2codfreq_all("sample", (None, None), profile, workers=1)
 
-    profile = cast(
-        Profile,
-        {
-            "fragmentConfig": [
-                {"fragmentName": "refA", "refSequence": "AAA"},
-                {
-                    "fragmentName": "fragA",
-                    "fromFragment": "refA",
-                    "geneName": "geneX",
-                    "refRanges": [(1, 3)],
-                },
-            ]
-        },
-    )
-
-    rows = s2c.sam2codfreq_all("sample", (None, None), profile, workers=1)
     assert rows == [
         {
             "gene": "geneX",

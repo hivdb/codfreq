@@ -1,57 +1,11 @@
-import sys
-import types
+"""Tests for :mod:`codfreq.sam_prep`."""
+
 from collections import Counter
 from typing import Any, Iterator, List
 
-pysam_stub = types.ModuleType("pysam")
+from unittest.mock import MagicMock, patch
 
-
-class AlignmentFile:  # pragma: no cover - minimal stub
-    """Simplified :class:`pysam.AlignmentFile` for testing."""
-
-    reads_in: List[Any] = []
-    written: List[Any] = []
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.mode = args[1] if len(args) > 1 else kwargs.get("mode", "r")
-        self._index = 0
-
-    def __enter__(self) -> "AlignmentFile":
-        return self
-
-    def __exit__(self, *exc_info: Any) -> None:
-        return None
-
-    def __iter__(self) -> Iterator[Any]:
-        if self.mode.startswith("r"):
-            for read in AlignmentFile.reads_in[self._index:]:
-                yield read
-                self._index += 1
-
-    def fetch(self) -> List[Any]:  # noqa: D401
-        return []
-
-    def tell(self) -> int:
-        return self._index
-
-    def seek(self, pos: int) -> None:
-        self._index = pos
-
-    def write(self, read: object) -> None:
-        AlignmentFile.written.append(read)
-
-
-def _install_stub() -> None:
-    pysam_stub.AlignmentFile = AlignmentFile  # type: ignore[attr-defined]
-    sys.modules["pysam"] = pysam_stub
-
-
-_install_stub()
-
-from codfreq.sam_prep import (  # noqa: E402
-    count_indel_positions,
-    squash_gaps,
-)
+from codfreq.sam_prep import count_indel_positions, prepare_sam, squash_gaps
 
 
 def test_squash_gaps_merges_indels() -> None:
@@ -89,19 +43,34 @@ def test_prepare_sam_processes_reads() -> None:
 
     unmapped = Read(True, (), 0)
     mapped = Read(False, ((0, 5), (1, 2), (0, 3), (2, 1), (0, 4)), 100)
-    _install_stub()
-    import importlib
-    import codfreq.sam_prep as sam_prep_module
-    spm = importlib.reload(sam_prep_module)
 
-    alignment_file = spm.AlignmentFile  # type: ignore[attr-defined]
-    alignment_file.reads_in = [unmapped, mapped]  # type: ignore[attr-defined]
-    alignment_file.written = []  # type: ignore[attr-defined]
-    spm.prepare_sam("in.sam", "out.sam")
-    written = alignment_file.written  # type: ignore[attr-defined]
+    reads: List[Read] = [unmapped, mapped]
+    written: List[Any] = []
+
+    def alignmentfile_factory(*args: Any, **kwargs: Any) -> MagicMock:
+        mode = args[1] if len(args) > 1 else kwargs.get("mode", "r")
+        af = MagicMock()
+        af.__enter__.return_value = af
+        af.__exit__.return_value = None
+        if mode.startswith("r"):
+            af._pos = 0
+
+            def iterate() -> Iterator[Read]:
+                for r in reads[af._pos:]:
+                    af._pos += 1
+                    yield r
+
+            af.__iter__.side_effect = iterate
+            af.tell.side_effect = lambda: af._pos
+            af.seek.side_effect = lambda pos: setattr(af, "_pos", pos)
+        else:
+            af.write.side_effect = lambda r: written.append(r)
+        return af
+
+    with patch(
+        "codfreq.sam_prep.AlignmentFile", side_effect=alignmentfile_factory
+    ):
+        prepare_sam("in.sam", "out.sam")
+
     assert len(written) == 2
-    assert written[1].cigartuples == [  # type: ignore[attr-defined]
-        (0, 5),
-        (1, 1),
-        (0, 7),
-    ]
+    assert written[1].cigartuples == [(0, 5), (1, 1), (0, 7)]

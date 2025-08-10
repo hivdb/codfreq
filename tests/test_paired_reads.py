@@ -1,49 +1,34 @@
 """Tests for :mod:`codfreq.paired_reads`."""
 
-import sys
-import types
 from pathlib import Path
 
-import pytest
+from unittest.mock import MagicMock, patch
+
+from codfreq.paired_reads import iter_paired_reads
 
 
-def test_iter_paired_reads_groups_by_query_names(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_iter_paired_reads_groups_by_query_names(tmp_path: Path) -> None:
     """Reads sharing a query name are grouped together."""
 
-    pysam_stub = types.ModuleType("pysam")
+    reads = [
+        MagicMock(query_name="r1"),
+        MagicMock(query_name="r1"),
+        MagicMock(query_name=None),
+        MagicMock(query_name="r2"),
+    ]
 
-    class AlignedSegment:
-        def __init__(self, name: str | None) -> None:
-            self.query_name = name
+    alignment_mock = MagicMock()
+    alignment_mock.__enter__.return_value = alignment_mock
+    alignment_mock.__exit__.return_value = None
+    alignment_mock.fetch.return_value = reads
 
-    class AlignmentFile:
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            pass
+    with patch(
+        "codfreq.paired_reads.pysam.AlignmentFile",
+        return_value=alignment_mock,
+    ):
+        samfile = tmp_path / "reads.sam"
+        samfile.write_text("", encoding="utf-8")
+        pairs = iter_paired_reads(str(samfile))
 
-        def __enter__(self) -> "AlignmentFile":  # noqa: D401
-            return self
-
-        def __exit__(self, *exc: object) -> None:  # noqa: D401
-            return None
-
-        def fetch(self) -> list[AlignedSegment]:  # noqa: D401
-            return [
-                AlignedSegment("r1"),
-                AlignedSegment("r1"),
-                AlignedSegment(None),
-                AlignedSegment("r2"),
-            ]
-
-    pysam_stub.AlignmentFile = AlignmentFile  # type: ignore[attr-defined]
-    pysam_stub.AlignedSegment = AlignedSegment  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "pysam", pysam_stub)
-
-    from codfreq.paired_reads import iter_paired_reads
-
-    samfile = tmp_path / "reads.sam"
-    samfile.write_text("", encoding="utf-8")
-    pairs = iter_paired_reads(str(samfile))
     assert [name for name, _ in pairs] == ["r1", "r2"]
     assert len(pairs[0][1]) == 2
