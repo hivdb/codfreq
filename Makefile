@@ -38,7 +38,7 @@ deploy-profiles:
 	@aws s3 sync profiles s3://codfreq-assets.hivdb.org/profiles --delete
 
 test:
-	@pipenv run pytest -v --cov=postalign --cov-report=term-missing
+	@pipenv run pytest -v --cov=codfreq --cov-report=term-missing
 
 lint:
 	@pipenv run mypy codfreq || true
