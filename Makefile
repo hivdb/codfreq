@@ -40,4 +40,8 @@ deploy-profiles:
 test:
 	@pipenv run pytest -v --cov=postalign --cov-report=term-missing
 
-.PHONY: login-ecr *-runner *-controller deploy-profiles test
+lint:
+	@pipenv run mypy codfreq || true
+	@pipenv run flake8 codfreq || true
+
+.PHONY: login-ecr *-runner *-controller deploy-profiles test lint
