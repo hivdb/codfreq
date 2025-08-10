@@ -9,13 +9,13 @@ verify_ssl = true
 [packages]
 cython = ">=0.29.35"
 pysam = ">=0.21.0"
-click = "*"
 tqdm = "*"
 more-itertools = "*"
 urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
 post-align = {file = "https://github.com/hivdb/post-align/archive/cb28b83e2d9639960533f805f7dc2612ea63ddc6.zip"}
 typing-extensions = "*"
+typer = ">=0.16.0"
 cutadapt = ">=4.4"
 pyyaml = "*"
 

@@ -102,9 +102,9 @@ setup_params = dict(
     # tests_require=reqs('test-requirements.txt'),
     # include_package_data=True,
     entry_points={'console_scripts': [
-        'fastq2codfreq = codfreq.align:align_cmd',
-        'compress-codfreq = codfreq.compress_codfreq:compress_codfreq',
-        'make-response = codfreq.make_response:make_response'
+        'fastq2codfreq = codfreq.align:app',
+        'compress-codfreq = codfreq.compress_codfreq:app',
+        'make-response = codfreq.make_response:app'
     ]},
     classifiers=[
         'Development Status :: 3 - Alpha',

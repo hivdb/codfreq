@@ -1,15 +1,27 @@
 import os
 import csv
 import json
-import click  # type: ignore
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Tuple
+
+import typer  # type: ignore[import-not-found]
 
 
-def utcnow_text():
+app = typer.Typer()
+
+
+def utcnow_text() -> str:
+    """Return the current UTC timestamp as an ISO formatted string."""
     return datetime.now(tz=timezone.utc).isoformat()
 
 
-def yield_codfreqs(workdir):
+def yield_codfreqs(workdir: Path) -> Iterator[Tuple[str, csv.DictReader]]:
+    """Yield codfreq name and row iterator pairs from a directory.
+
+    :param workdir: Directory containing CodFreq files.
+    :returns: Generator of file name and CSV rows.
+    """
     suffix = '.codfreq'
     for fname in os.listdir(workdir):
         if not fname.endswith(suffix):
@@ -19,7 +31,12 @@ def yield_codfreqs(workdir):
             yield name, csv.DictReader(fp)
 
 
-def yield_untrans(workdir):
+def yield_untrans(workdir: Path) -> Iterator[Tuple[str, Any]]:
+    """Yield untranslated region data from a directory.
+
+    :param workdir: Directory containing untranslated region files.
+    :returns: Generator of file name and JSON data.
+    """
     suffix = '.untrans.json'
     for fname in os.listdir(workdir):
         if not fname.endswith(suffix):
@@ -29,19 +46,24 @@ def yield_untrans(workdir):
             yield name, json.load(fp)
 
 
-@click.command()
-@click.argument(
-    'workdir',
-    type=click.Path(exists=True, file_okay=False,
-                    dir_okay=True, resolve_path=True))
-@click.argument('path_prefix', type=str)
-def make_response(workdir, path_prefix):
+@app.command()
+def make_response(
+    workdir: Path = typer.Argument(
+        ..., exists=True, file_okay=False, dir_okay=True, resolve_path=True
+    ),
+    path_prefix: str = typer.Argument(...),
+) -> None:
+    """Create CodFreq file for response.
+
+    :param workdir: Directory containing CodFreq outputs.
+    :param path_prefix: Prefix used to derive the task key.
+    :returns: None
+    """
     uniqkey = path_prefix.split('/', 1)[-1]
-    """Create CodFreq file for response"""
-    codfreqs = {}
+    codfreqs: Dict[str, List[Dict[str, Any]]] = {}
     for name, rows in yield_codfreqs(workdir):
         name = '{}.codfreq'.format(name)
-        gpmap = {}
+        gpmap: Dict[Tuple[str, int], Dict[str, Any]] = {}
         for row in rows:
             gene = row['gene']
             pos = int(row['position'])
@@ -65,7 +87,7 @@ def make_response(workdir, path_prefix):
             })
         codfreqs.setdefault(name, []).extend(gpmap.values())
     untrans_lookup = dict(yield_untrans(workdir))
-    codfreqs = [{
+    codfreq_list = [{
         'name': name,
         'untranslatedRegions': untrans_lookup.get(
             name.rsplit('.codfreq', 1)[0]
@@ -77,9 +99,9 @@ def make_response(workdir, path_prefix):
             'taskKey': uniqkey,
             'lastUpdatedAt': utcnow_text(),
             'status': 'success',
-            'codfreqs': codfreqs
+            'codfreqs': codfreq_list
         }))
 
 
 if __name__ == '__main__':
-    make_response()
+    app()

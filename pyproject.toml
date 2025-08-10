@@ -1,14 +1,14 @@
 [tool.mypy]
-python_version=3.13
-warn_return_any=True
-warn_unused_configs=True
-warn_redundant_casts=True
-warn_no_return=True
-warn_unreachable=True
-disallow_untyped_calls=True
-disallow_untyped_defs=True
-disallow_incomplete_defs=True
-check_untyped_defs=True
+python_version = '3.13'
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_no_return = true
+warn_unreachable = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
 
 [build-system]
 requires = ["setuptools", "wheel", "cython"]

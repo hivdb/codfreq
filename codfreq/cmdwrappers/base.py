@@ -1,4 +1,4 @@
-import click  # type: ignore
+import typer  # type: ignore[import-not-found]
 from subprocess import Popen, PIPE
 from typing import List, Tuple, Callable
 
@@ -8,6 +8,12 @@ AUTOREMOVE_CONTAINERS = False
 
 
 def execute(command: List[str]) -> Tuple[str, str]:
+    """Execute a subprocess and capture its output.
+
+    :param command: Command and arguments to run.
+    :returns: Tuple of standard output and error text.
+    :raises typer.Abort: If the command exits with a non-zero status.
+    """
     proc = Popen(command, stdout=PIPE, stderr=PIPE, encoding='U8')
     out, err = proc.communicate()
     raise_on_proc_error(proc, err)
@@ -15,9 +21,16 @@ def execute(command: List[str]) -> Tuple[str, str]:
 
 
 def raise_on_proc_error(proc: Popen, err: str) -> None:
+    """Abort the program if the subprocess returned an error.
+
+    :param proc: Completed subprocess instance.
+    :param err: Captured standard error output.
+    :returns: None
+    :raises typer.Abort: If the subprocess had a non-zero return code.
+    """
     if proc.returncode:
-        click.echo(err, err=True)
-        raise click.Abort()
+        typer.echo(err, err=True)
+        raise typer.Abort()
 
 
 def refinit_func(name: str) -> Callable:
