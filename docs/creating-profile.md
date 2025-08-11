@@ -73,7 +73,7 @@ codfreq-profile create my_profile.json
 ```
 
 You may provide a GenBank accession when prompted. The command downloads the
-reference sequence with Biopython and displays all gene features in a checkbox
+reference sequence with Biopython (Entrez requires an email address) and displays all gene features in a checkbox
 list that is preselected by default so you can deselect unwanted genes. Genes
 with discontiguous ranges (e.g., the SEV glycoprotein) are represented as
 multiple ``refRanges`` entries. After fragment selection, the tool suggests an
@@ -93,6 +93,6 @@ For fragments that embed a GenBank accession in the name (e.g. `Wuhan-Hu-1::NC_0
 
 1. Fetch the reference genome from GenBank.
 2. Define a main fragment with the full reference sequence.
-3. Add derived fragments with coordinate ranges for genes or regions of interest.
+3. Add derived fragments with coordinate ranges for genes or regions of interest. Leaving the gene name blank uses the fragment name.
 4. Add assembly regions to stitch fragments as needed.
 5. Validate the JSON file with `codfreq-profile validate`.

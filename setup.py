@@ -105,6 +105,7 @@ setup_params = dict(
         'compress-codfreq = codfreq.compress_codfreq:app',
         'make-response = codfreq.make_response:app',
         'codfreq-profile = codfreq.profile:app',
+        'validate-profile = codfreq.profile:validate_app',
     ]},
     classifiers=[
         'Development Status :: 3 - Alpha',

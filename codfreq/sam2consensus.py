@@ -7,7 +7,7 @@ from .codfreq_types import (
     Profile,
     FragmentConfig,
     SequenceAssemblyConfig,
-    NARegionConfig,
+    RegionAssemblyConfig,
     RegionalConsensus,
     DerivedFragmentConfig,
     GeneAssemblyConfig,
@@ -26,7 +26,7 @@ ENCODING = 'UTF-8'
 @cython.returns(dict)
 def make_consensus(
     nacons_lookup: dict[tuple[NAPos, int], NAChar],
-    region: NARegionConfig
+    region: RegionAssemblyConfig
 ) -> RegionalConsensus:
     """Build consensus sequence for a region from nucleotide counts.
 
@@ -34,7 +34,7 @@ def make_consensus(
         nucleotide's ordinal value.
     :type nacons_lookup: dict[tuple[NAPos, int], NAChar]
     :param region: Region definition including name and coordinate range.
-    :type region: NARegionConfig
+    :type region: RegionAssemblyConfig
     :returns: Consensus record for the region.
     :rtype: RegionalConsensus
     """
@@ -68,14 +68,14 @@ def make_consensus(
 
 def sam2consensus(
     sampath: str,
-    region: NARegionConfig,
+    region: RegionAssemblyConfig,
 ) -> RegionalConsensus:
     """Generate a consensus sequence for a region from a SAM file.
 
     :param sampath: Path to the SAM/BAM file.
     :type sampath: str
     :param region: Region configuration describing fragment and coordinates.
-    :type region: NARegionConfig
+    :type region: RegionAssemblyConfig
     :returns: Consensus nucleotides covering the region.
     :rtype: RegionalConsensus
     """
@@ -141,9 +141,7 @@ def create_untrans_region_consensus(
         refname = fragment.fragmentName
         samfile = name_bamfile(seqname, refname, is_trimmed=True)
         for region in profile.sequenceAssemblyConfig:
-            if isinstance(
-                region, GeneAssemblyConfig
-            ):  # pragma: no cover - gene regions
+            if isinstance(region, GeneAssemblyConfig):
                 continue
             rf = getattr(region, "fromFragment", None)
             name = getattr(region, "name", None)
@@ -157,7 +155,7 @@ def create_untrans_region_consensus(
             results.append(
                 sam2consensus(
                     samfile,
-                    NARegionConfig(
+                    RegionAssemblyConfig(
                         name=name,
                         fromFragment=rf,
                         refStart=start,

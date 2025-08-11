@@ -43,17 +43,21 @@ class GenBankRecord(BaseModel):
     features: list[GeneFeature]
 
 
-def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover
+def _fetch_record(
+    accession: str, email: str
+) -> GenBankRecord:  # pragma: no cover
     """Retrieve a GenBank record for *accession* using Biopython's Entrez.
 
     :param accession: GenBank accession identifier.
     :type accession: str
+    :param email: Email address required by NCBI for Entrez requests.
+    :type email: str
     :returns: Parsed GenBank record with sequence and gene features.
     :rtype: GenBankRecord
     :raises Exception: If the accession cannot be fetched.
     """
 
-    Entrez.email = "anonymous@example.com"  # type: ignore[assignment]
+    Entrez.email = email  # type: ignore[assignment]
     with Entrez.efetch(  # pragma: no cover - network I/O
         db="nuccore", id=accession, rettype="gb", retmode="text"
     ) as handle:  # type: ignore[no-untyped-call]
@@ -97,17 +101,16 @@ def _prompt_genbank_fragments(
     :rtype: list[FragmentConfig]
     """
 
-    if not record.features:  # pragma: no cover - no features
+    if not record.features:
         return []
     choices = [
-        questionary.Choice(f"{feat.name} {feat.ranges}", value=feat)
+        questionary.Choice(
+            f"{feat.name} {feat.ranges}", value=feat, checked=True
+        )
         for feat in record.features
     ]
-    default = [choice.value for choice in choices]
     selected: list[GeneFeature] = questionary.checkbox(
-        "Select fragments to add:",
-        choices=choices,
-        default=default,  # type: ignore[arg-type]
+        "Select fragments to add:", choices=choices
     ).ask()
     fragments: list[FragmentConfig] = []
     for feat in selected:
@@ -122,7 +125,7 @@ def _prompt_genbank_fragments(
     return fragments
 
 
-def _prompt_manual_fragments(  # pragma: no cover - interactive
+def _prompt_manual_fragments(
     main_name: str | None,
 ) -> tuple[str, list[FragmentConfig]]:
     """Prompt the user for manually defined fragments.
@@ -154,7 +157,9 @@ def _prompt_manual_fragments(  # pragma: no cover - interactive
         ).ask()
         if not name:
             break
-        gene = questionary.text("Gene name (optional):").ask()
+        gene = questionary.text(
+            "Gene name (same as fragment name if leave empty):"
+        ).ask()
         ranges_text = questionary.text(
             "Reference ranges for this fragment (e.g., 1-5,8-10):"
         ).ask()
@@ -173,7 +178,7 @@ def _prompt_manual_fragments(  # pragma: no cover - interactive
             DerivedFragmentConfig(
                 fragmentName=name,
                 fromFragment=main_name,
-                geneName=gene or None,
+                geneName=gene or name,
                 refRanges=ranges,
             )
         )
@@ -264,7 +269,7 @@ def _auto_assembly(
     return assemblies
 
 
-def _prompt_manual_assemblies(  # pragma: no cover - interactive
+def _prompt_manual_assemblies(
     fragments: list[FragmentConfig],
 ) -> list[SequenceAssemblyConfig]:
     """Prompt the user to enter assembly regions manually.
@@ -292,12 +297,16 @@ def _prompt_manual_assemblies(  # pragma: no cover - interactive
         if questionary.confirm("Is this region a gene?").ask():
             gene_name = questionary.text("Gene name:").ask()
             if gene_name not in gene_spans:
-                print(f"[red]Unknown gene {gene_name}[/red]")
-                continue
+                print(
+                    f"[red]Unknown gene {gene_name}[/red]"
+                )  # pragma: no cover - user input validation
+                continue  # pragma: no cover - user input validation
             start, end = gene_spans[gene_name]
             if start != prev_end + 1:
-                print("[red]Gap or overlap detected; re-enter region[/red]")
-                continue
+                print(
+                    "[red]Gap or overlap detected; re-enter region[/red]"
+                )  # pragma: no cover - user input validation
+                continue  # pragma: no cover - user input validation
             trim_text = questionary.text(
                 "Trim ranges (e.g., 1-5,10)? leave blank for none:"
             ).ask()
@@ -332,8 +341,10 @@ def _prompt_manual_assemblies(  # pragma: no cover - interactive
                 ).ask()
             )
             if ref_start != prev_end + 1:
-                print("[red]Gap or overlap detected; re-enter region[/red]")
-                continue
+                print(
+                    "[red]Gap or overlap detected; re-enter region[/red]"
+                )  # pragma: no cover - user input validation
+                continue  # pragma: no cover - user input validation
             assemblies.append(
                 RegionAssemblyConfig(
                     name=region_name,
@@ -375,6 +386,12 @@ def validate(
         raise typer.Exit(code=1)
 
 
+validate_app = typer.Typer(
+    pretty_exceptions_enable=False, help="Validate profile files"
+)
+validate_app.command()(validate)
+
+
 @app.command()
 def create(
     output: Annotated[
@@ -404,7 +421,10 @@ def create(
     main_name: str | None = None
     if accession:
         try:
-            record = _fetch_record(accession)
+            email = questionary.text(
+                "Email address for NCBI queries:",
+            ).ask()
+            record = _fetch_record(accession, email)
         except Exception as err:  # pragma: no cover - network failure
             print(f"[red]Failed to fetch {accession}: {err}[/red]")
             raise typer.Exit(code=1)
@@ -440,7 +460,7 @@ def create(
 
     try:
         Profile.model_validate(profile_data)
-    except ValidationError as err:  # pragma: no cover - defensive validation
+    except ValidationError as err:
         print("[red]Profile creation failed[/red]")
         for e in err.errors():
             loc = ".".join(str(item) for item in e["loc"])

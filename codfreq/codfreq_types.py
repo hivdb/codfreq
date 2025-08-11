@@ -156,24 +156,22 @@ class GeneAssemblyConfig(BaseModel):
     geneName: str
     trim: list[tuple[NAPos, NAPos]] | None = None
 
-    @model_validator(mode="before")
+    @field_validator("trim", mode="before")
     @classmethod
-    def normalize_trim(cls, data: Any) -> Any:
+    def normalize_trim(
+        cls, value: list[tuple[int, int]] | list[int] | None
+    ) -> list[tuple[int, int]] | None:
         """Normalize ``trim`` entries to ``(start, end)`` tuples."""
 
-        if (
-            isinstance(data, dict)
-            and "trim" in data
-            and data["trim"] is not None
-        ):
-            norm = []
-            for item in data["trim"]:
-                if isinstance(item, int):
-                    norm.append((item, item))
-                else:
-                    norm.append((item[0], item[1]))
-            data["trim"] = norm
-        return data
+        if value is None:
+            return None
+        norm: list[tuple[int, int]] = []
+        for item in value:
+            if isinstance(item, int):
+                norm.append((item, item))
+            else:
+                norm.append((item[0], item[1]))
+        return norm
 
 
 class RegionAssemblyConfig(BaseModel):
@@ -200,17 +198,6 @@ class RegionAssemblyConfig(BaseModel):
 
 
 SequenceAssemblyConfig = GeneAssemblyConfig | RegionAssemblyConfig
-
-
-class NARegionConfig(BaseModel):
-    """Definition of a nucleotide assembly region."""
-
-    model_config = ConfigDict(frozen=True, extra='forbid')
-
-    name: str
-    fromFragment: str
-    refStart: int
-    refEnd: int
 
 
 class RegionalConsensus(BaseModel):
@@ -292,7 +279,7 @@ class Profile(BaseModel):
         if expected_start - 1 != main_len:
             raise ValueError(
                 "sequenceAssemblyConfig does not extend to end of reference"
-            )  # pragma: no cover
+            )
 
         return self
 

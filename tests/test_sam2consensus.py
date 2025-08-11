@@ -34,12 +34,12 @@ from codfreq.sam2consensus import (  # noqa: E402
     sam2consensus,
 )
 from codfreq.codfreq_types import (  # noqa: E402
-    NARegionConfig,
     Profile,
     RegionalConsensus,
     RegionAssemblyConfig,
     MainFragmentConfig,
     DerivedFragmentConfig,
+    GeneAssemblyConfig,
 )
 
 
@@ -57,7 +57,7 @@ def _cleanup_modules() -> Iterator[None]:
 def test_make_consensus_handles_gaps_and_insertions() -> None:
     """Missing bases yield gaps and insertions are appended."""
 
-    region = NARegionConfig(
+    region = RegionAssemblyConfig(
         name="gag", fromFragment="frag", refStart=1, refEnd=2
     )
     nacons_lookup: dict[tuple[int, int], int] = {
@@ -105,7 +105,7 @@ def test_sam2consensus_keeps_frequent_insertions(
             ],
         ),
     ]
-    region = NARegionConfig(
+    region = RegionAssemblyConfig(
         name="gag", fromFragment="frag", refStart=1, refEnd=2
     )
     result = sam2consensus("sample.sam", region)
@@ -184,7 +184,7 @@ def test_create_untrans_region_consensus_writes_results(
     mock_name_bamfile.assert_called_once_with("seq1", "F1", is_trimmed=True)
     mock_sam2consensus.assert_called_once_with(
         "file.bam",
-        NARegionConfig(
+        RegionAssemblyConfig(
             name="R1", fromFragment="F1", refStart=1, refEnd=2
         ),
     )
@@ -214,6 +214,28 @@ def test_create_untrans_region_consensus_skips_missing_fromfragment(
                 refEnd=2,
             )
         ],
+    )
+    mock_name_bamfile.return_value = "file.bam"
+    m = mock_open()
+    with patch("codfreq.sam2consensus.open", m, create=True):
+        create_untrans_region_consensus("seq1", profile)
+    mock_sam2consensus.assert_not_called()
+
+
+@patch("codfreq.sam2consensus.sam2consensus")
+@patch("codfreq.sam2consensus.name_bamfile")
+def test_create_untrans_region_consensus_skips_gene_regions(
+    mock_name_bamfile: MagicMock,
+    mock_sam2consensus: MagicMock,
+) -> None:
+    """Gene assembly regions are ignored for untranslated consensus."""
+
+    profile = Profile.model_construct(
+        version="1",
+        fragmentConfig=[
+            MainFragmentConfig(fragmentName="F1", refSequence="AAA"),
+        ],
+        sequenceAssemblyConfig=[GeneAssemblyConfig(geneName="gag")],
     )
     mock_name_bamfile.return_value = "file.bam"
     m = mock_open()

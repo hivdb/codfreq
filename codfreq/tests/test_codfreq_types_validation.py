@@ -90,3 +90,12 @@ def test_profile_assembly_contiguity() -> None:
     }
     with pytest.raises(ValidationError):
         Profile.model_validate(invalid)
+    truncated = {
+        "version": "1",
+        "fragmentConfig": [main],
+        "sequenceAssemblyConfig": [
+            {"name": "ref", "fromFragment": "ref", "refStart": 1, "refEnd": 3}
+        ],
+    }
+    with pytest.raises(ValidationError):
+        Profile.model_validate(truncated)

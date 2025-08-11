@@ -8,13 +8,14 @@ from typer.testing import CliRunner
 from unittest.mock import patch
 
 import codfreq.profile as profile_module
-from codfreq.profile import app
+from codfreq.profile import app, validate_app
 from codfreq.codfreq_types import (
     Profile,
     FragmentConfig,
     MainFragmentConfig,
     DerivedFragmentConfig,
     GeneAssemblyConfig,
+    RegionAssemblyConfig,
 )
 
 
@@ -24,7 +25,7 @@ def _write_profile(path: Path, profile: dict) -> None:
 
 
 def test_validate_profile_valid(tmp_path: Path) -> None:
-    """CLI exits with code 0 for a valid profile."""
+    """Standalone validator exits with code 0 for valid input."""
     profile = {
         "version": "20221213",
         "fragmentConfig": [
@@ -47,12 +48,12 @@ def test_validate_profile_valid(tmp_path: Path) -> None:
     prof = tmp_path / "prof.json"
     _write_profile(prof, profile)
     runner = CliRunner()
-    result = runner.invoke(app, ["validate", str(prof)])
+    result = runner.invoke(validate_app, [str(prof)])
     assert result.exit_code == 0
 
 
 def test_validate_profile_invalid(tmp_path: Path) -> None:
-    """CLI reports errors for an invalid profile."""
+    """Standalone validator reports errors for invalid input."""
     profile = {
         "version": "20221213",
         "fragmentConfig": [{"fragmentName": "ref", "refSequence": "acgt"}],
@@ -61,7 +62,7 @@ def test_validate_profile_invalid(tmp_path: Path) -> None:
     prof = tmp_path / "prof.json"
     _write_profile(prof, profile)
     runner = CliRunner()
-    result = runner.invoke(app, ["validate", str(prof)])
+    result = runner.invoke(validate_app, [str(prof)])
     assert result.exit_code != 0
     assert "geneName" in result.stdout
 
@@ -121,6 +122,7 @@ def test_create_profile_genbank(tmp_path: Path) -> None:
     answers = iter([
         "20221213",
         "TEST",
+        "user@example.com",
         "ref",
         "",
         True,
@@ -162,6 +164,215 @@ def test_create_profile_genbank(tmp_path: Path) -> None:
     )
     assert gene2["refRanges"] == [[11, 15], [16, 20]]
     Profile.model_validate(data)
+
+
+def test_prompt_genbank_fragments_no_features() -> None:
+    """Records without features yield no fragments."""
+
+    record = profile_module.GenBankRecord(
+        accession="A", sequence="ACGT", features=[]
+    )
+    assert (
+        profile_module._prompt_genbank_fragments(record, "ref") == []
+    )
+
+
+def test_prompt_manual_fragments() -> None:
+    """Manual fragment prompts default gene name to fragment name."""
+
+    answers = iter([
+        "ref",
+        "ACGT",
+        "g1",
+        "",
+        "1-3,5,",
+        "",
+    ])
+
+    class Prompt:
+        def __init__(self, _m: str) -> None:
+            self._m = _m
+
+        def ask(self) -> object:  # pragma: no cover - trivial
+            return next(answers)
+
+    with patch.object(
+        questionary, "text", side_effect=lambda m, **_: Prompt(m)
+    ):
+        main, frags = profile_module._prompt_manual_fragments(None)
+    assert main == "ref"
+    assert isinstance(frags[0], MainFragmentConfig)
+    derived = frags[1]
+    assert isinstance(derived, DerivedFragmentConfig)
+    assert derived.geneName == "g1"
+    assert derived.refRanges == [(1, 3), (5, 5)]
+
+
+def test_prompt_manual_assemblies() -> None:
+    """Manual assembly prompts support gene and inter-gene regions."""
+
+    frags: list[FragmentConfig] = [
+        MainFragmentConfig(fragmentName="ref", refSequence="AAAAA"),
+        DerivedFragmentConfig(
+            fragmentName="g1",
+            fromFragment="ref",
+            geneName="g1",
+            refRanges=[(1, 3)],
+        ),
+    ]
+
+    answers = iter([
+        True,  # add region
+        True,  # is gene
+        "g1",
+        "1,3-4,",  # trim
+        True,  # add region
+        False,  # not gene
+        "tail",
+        "ref",
+        "4",
+        "5",
+        False,  # stop
+    ])
+
+    class Prompt:
+        def __init__(self, _m: str) -> None:
+            self._m = _m
+
+        def ask(self) -> object:  # pragma: no cover - trivial
+            return next(answers)
+
+    with (
+        patch.object(questionary, "confirm", side_effect=lambda m: Prompt(m)),
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+    ):
+        assemblies = profile_module._prompt_manual_assemblies(frags)
+    assert isinstance(assemblies[0], GeneAssemblyConfig)
+    assert isinstance(assemblies[1], RegionAssemblyConfig)
+
+
+def test_create_profile_rejects_suggestion(tmp_path: Path) -> None:
+    """User can override suggested assembly with manual entries."""
+
+    answers = iter([
+        "20221213",
+        "",  # no GenBank
+        "ref",
+        "ac",
+        "g1",
+        "g1",
+        "1-2",
+        "",  # stop fragments
+        False,  # reject auto assembly
+        True,  # add region
+        True,  # gene
+        "g1",
+        "",  # trim
+        False,  # stop
+    ])
+
+    class Prompt:
+        def __init__(self, _m: str) -> None:
+            self._m = _m
+
+        def ask(self) -> object:  # pragma: no cover - trivial
+            return next(answers)
+
+    with (
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+        patch.object(questionary, "confirm", side_effect=lambda m: Prompt(m)),
+    ):
+        runner = CliRunner()
+        out = tmp_path / "override.json"
+        result = runner.invoke(app, ["create", str(out)])
+        assert result.exit_code == 0
+
+
+def test_create_profile_manual_assembly_when_missing(tmp_path: Path) -> None:
+    """Manual assembly is requested when no suggestion is available."""
+
+    answers = iter([
+        "20221213",
+        "",  # no GenBank
+        "ref",
+        "acgt",
+        "",  # stop fragments
+        # no confirm because assemblies is empty
+        True,
+        False,
+    ])
+
+    class Prompt:
+        def __init__(self, _m: str) -> None:
+            self._m = _m
+
+        def ask(self) -> object:  # pragma: no cover - trivial
+            return next(answers)
+
+    with (
+        patch.object(profile_module, "_auto_assembly", return_value=[]),
+        patch.object(
+            profile_module,
+            "_prompt_manual_assemblies",
+            return_value=[
+                RegionAssemblyConfig(
+                    name="ref", fromFragment="ref", refStart=1, refEnd=4
+                )
+            ],
+        ),
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+        patch.object(questionary, "confirm", side_effect=lambda m: Prompt(m)),
+    ):
+        runner = CliRunner()
+        out = tmp_path / "manual.json"
+        result = runner.invoke(app, ["create", str(out)])
+        assert result.exit_code == 0
+
+
+def test_create_profile_validation_failure(tmp_path: Path) -> None:
+    """Invalid assembly data triggers validation error."""
+
+    answers = iter([
+        "20221213",
+        "",  # no GenBank
+        "ref",
+        "acgt",
+        "",  # stop fragments
+        True,
+    ])
+
+    class Prompt:
+        def __init__(self, _m: str) -> None:
+            self._m = _m
+
+        def ask(self) -> object:  # pragma: no cover - trivial
+            return next(answers)
+
+    bad_assembly = [
+        RegionAssemblyConfig(
+            name="ref", fromFragment="ref", refStart=2, refEnd=4
+        )
+    ]
+
+    with (
+        patch.object(
+            profile_module, "_auto_assembly", return_value=bad_assembly
+        ),
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+        patch.object(questionary, "confirm", side_effect=lambda m: Prompt(m)),
+    ):
+        runner = CliRunner()
+        out = tmp_path / "bad.json"
+        result = runner.invoke(app, ["create", str(out)])
+        assert result.exit_code != 0
 
 
 def test_auto_assembly_overlap_and_gap() -> None:
