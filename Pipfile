@@ -23,7 +23,7 @@ cutadapt = ">=4.4"
 pyyaml = "*"
 rich = "*"
 pydantic = "*"
-biopython = "*"
+questionary = "*"
 
 [requires]
 python_version = "3.13"

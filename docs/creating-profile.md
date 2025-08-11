@@ -60,10 +60,10 @@ All coordinate positions in the profile (for `refRanges`, `refStart`, and
 
 ## Validating a profile
 
-Run `profile validate` to check a file:
+Run `codfreq-profile` to check a file:
 
 ```bash
-profile validate profiles/SARS2.json
+codfreq-profile profiles/SARS2.json
 ```
 
 The command prints validation errors and exits non-zero if the file does not match the schema.
@@ -75,11 +75,13 @@ profile create my_profile.json
 ```
 
 You may provide a GenBank accession when prompted. The command downloads the
-reference sequence and suggests derived fragments for each gene feature. Genes
-with discontiguous ranges (e.g., the SEV glycoprotein) are represented as
-multiple ``refRanges`` entries. Coordinate numbers such as ``refRanges`` pairs,
-``refStart``, and ``refEnd`` are **1-based** and **inclusive**, matching the
-reference sequence indexing used internally.
+reference sequence and displays all gene features in a checkbox list so you can
+select the fragments to keep. Genes with discontiguous ranges (e.g., the SEV
+glycoprotein) are represented as multiple ``refRanges`` entries. After fragment
+selection, an assembly configuration is suggested automatically; you can accept
+or edit it. Coordinate numbers such as ``refRanges`` pairs, ``refStart``, and
+``refEnd`` are **1-based** and **inclusive**, matching the reference sequence
+indexing used internally.
 
 ## Reference sequence checks
 
@@ -94,4 +96,4 @@ For fragments that embed a GenBank accession in the name (e.g. `Wuhan-Hu-1::NC_0
 2. Define a main fragment with the full reference sequence.
 3. Add derived fragments with coordinate ranges for genes or regions of interest.
 4. Add assembly regions to stitch fragments as needed.
-5. Validate the JSON file with `profile validate`.
+5. Validate the JSON file with `codfreq-profile`.

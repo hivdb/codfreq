@@ -1,14 +1,13 @@
-"""Tests for the profile validation CLI."""
+"""Tests for the profile CLI."""
 
-import io
 import json
 from pathlib import Path
 
-from Bio import Entrez
-import questionary
+import questionary  # type: ignore[import-not-found]
 from pytest import MonkeyPatch
 from typer.testing import CliRunner
 
+import codfreq.profile as profile_module
 from codfreq.profile import app
 from codfreq.codfreq_types import Profile
 
@@ -64,6 +63,7 @@ def test_create_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         "ref",
         "acgt",
         "",
+        False,
         True,
         "region1",
         "ref",
@@ -79,8 +79,9 @@ def test_create_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         def ask(self) -> object:  # pragma: no cover - trivial
             return next(answers)
 
-    monkeypatch.setattr(questionary, "text", lambda msg: Prompt(msg))
+    monkeypatch.setattr(questionary, "text", lambda msg, **_: Prompt(msg))
     monkeypatch.setattr(questionary, "confirm", lambda msg: Prompt(msg))
+    monkeypatch.setattr(questionary, "checkbox", lambda *a, **k: Prompt("cb"))
 
     runner = CliRunner()
     out = tmp_path / "new.json"
@@ -113,19 +114,17 @@ def test_create_profile_genbank(
         "//\n"
     )
 
-    def fake_efetch(*_args: object, **_kwargs: object) -> io.StringIO:
-        return io.StringIO(gb_record)
-
-    monkeypatch.setattr(Entrez, "efetch", fake_efetch)
+    monkeypatch.setattr(
+        profile_module, "_download_genbank", lambda _acc: gb_record
+    )
+    record = profile_module._parse_genbank(gb_record, "TEST")
 
     answers = iter([
         "20221213",
         "TEST",
         "ref",
-        True,
-        True,
         "",
-        False,
+        True,
     ])
 
     class Prompt:
@@ -137,6 +136,15 @@ def test_create_profile_genbank(
 
     monkeypatch.setattr(questionary, "text", lambda msg, **_: Prompt(msg))
     monkeypatch.setattr(questionary, "confirm", lambda msg: Prompt(msg))
+
+    def fake_checkbox(*_a: object, **_k: object) -> object:
+        class CB:
+            def ask(self) -> object:  # pragma: no cover - trivial
+                return record.features
+
+        return CB()
+
+    monkeypatch.setattr(questionary, "checkbox", fake_checkbox)
 
     runner = CliRunner()
     out = tmp_path / "gb.json"
