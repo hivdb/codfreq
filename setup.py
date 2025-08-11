@@ -103,7 +103,8 @@ setup_params = dict(
     entry_points={'console_scripts': [
         'fastq2codfreq = codfreq.align:app',
         'compress-codfreq = codfreq.compress_codfreq:app',
-        'make-response = codfreq.make_response:app'
+        'make-response = codfreq.make_response:app',
+        'profile = codfreq.profile:app'
     ]},
     classifiers=[
         'Development Status :: 3 - Alpha',

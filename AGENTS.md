@@ -15,6 +15,8 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 - **Dependencies**: keep them up to date with minimal, safe upgrades.
 - **Changes**: when you touch code, you also add/update tests.
 - **Cleanup**: remove unused and unexposed code.
+- **CLI output**: use ``rich.print`` instead of ``typer.echo``/``typer.secho``.
+- **JSON output**: when emitting machine-readable JSON, use plain ``print``.
 - **External deps**: never check in stand‑ins for third‑party packages
   (e.g. ``pysam`` or ``cython``).  When a dependency is heavy or absent,
   tests must patch it at runtime using ``unittest.mock`` (such as

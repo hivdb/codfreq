@@ -23,6 +23,7 @@ cutadapt = ">=4.4"
 pyyaml = "*"
 rich = "*"
 pydantic = "*"
+biopython = "*"
 
 [requires]
 python_version = "3.13"
