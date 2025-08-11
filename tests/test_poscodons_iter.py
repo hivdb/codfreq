@@ -5,8 +5,9 @@ import types
 import importlib
 from array import array
 from typing import Any, Iterator
+from unittest.mock import patch
+import pytest
 
-# Stub pysam module
 pysam_stub = types.ModuleType("pysam")
 
 
@@ -52,9 +53,7 @@ class AlignmentFile:
 
 pysam_stub.AlignmentFile = AlignmentFile  # type: ignore[attr-defined]
 pysam_stub.AlignedSegment = AlignedSegment  # type: ignore[attr-defined]
-sys.modules["pysam"] = pysam_stub
 
-# Stub cython decorators
 cython_stub = types.ModuleType("cython")
 
 
@@ -67,12 +66,25 @@ def _decorator(*dargs: Any, **dkwargs: Any) -> Any:  # pragma: no cover
 cython_stub.cfunc = _decorator  # type: ignore[attr-defined]
 cython_stub.inline = _decorator  # type: ignore[attr-defined]
 cython_stub.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
-sys.modules["cython"] = cython_stub
+
+_patch = patch.dict(sys.modules, {"pysam": pysam_stub, "cython": cython_stub})
+_patch.start()
 
 import codfreq.poscodons as poscodons  # noqa: E402
 importlib.reload(poscodons)
 from codfreq.codfreq_types import FragmentInterval  # noqa: E402
 from codfreq.poscodons import iter_poscodons  # noqa: E402
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _cleanup_modules() -> Iterator[None]:
+    """Remove stubbed modules after tests.
+
+    Yields:
+        Iterator[None]: ``None``.
+    """
+    yield
+    _patch.stop()
 
 
 def test_iter_poscodons_yields_codons() -> None:

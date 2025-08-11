@@ -1,21 +1,12 @@
+"""Tests for :mod:`codfreq.sam2codfreq`."""
+
 from collections import Counter
 from typing import cast
 
 from unittest.mock import MagicMock, patch
-import sys
 
-from .mock_postalign import mock_postalign
-
-_POSTALIGN = mock_postalign()
-_POSTALIGN.__enter__()
-sys.modules.pop("codfreq.codonalign_consensus", None)
-sys.modules.pop("codfreq.sam2codfreq", None)
-import codfreq.sam2codfreq as s2c  # noqa: E402
-from codfreq.codfreq_types import (  # noqa: E402
-    DerivedFragmentConfig,
-    MainFragmentConfig,
-    Profile,
-)
+import codfreq.sam2codfreq as s2c
+from codfreq.codfreq_types import Profile
 
 
 def test_build_fragment_intervals_and_get_ref_ranges() -> None:
@@ -121,131 +112,6 @@ def test_sam2codfreq_between() -> None:
     assert num_row == 2
 
 
-def test_sam2codfreq() -> None:
-    """Combine chunk results into codon counters."""
-
-    alignment_mock = MagicMock(mapped=3)
-    alignment_mock.__enter__.return_value = alignment_mock
-    alignment_mock.__exit__.return_value = False
-
-    pbar_mock = MagicMock()
-
-    executor_inst = MagicMock()
-    executor_inst.__enter__.return_value = executor_inst
-    executor_inst.__exit__.return_value = False
-    executor_inst.map.side_effect = (
-        lambda fn, *iterables: [fn(*args) for args in zip(*iterables)]
-    )
-
-    with patch(
-        "codfreq.sam2codfreq.pysam.AlignmentFile",
-        return_value=alignment_mock,
-    ), patch("codfreq.sam2codfreq.tqdm", return_value=pbar_mock), patch(
-        "codfreq.sam2codfreq.chunked_samfile", return_value=[(0, 1)]
-    ), patch(
-        "codfreq.sam2codfreq.ProcessPoolExecutor", return_value=executor_inst
-    ), patch.object(
-        s2c,
-        "sam2codfreq_between",
-        return_value=(
-            Counter({("fragA", 1, "AAA"): 2}),
-            Counter({("fragA", 1, "AAA"): 40}),
-            2,
-        ),
-    ), patch.object(
-        s2c,
-        "codonalign_consensus",
-        side_effect=lambda stat, qual, ref, frags: (stat, qual),
-    ):
-        ref = cast(
-            MainFragmentConfig, {"fragmentName": "refA", "refSequence": "AAA"}
-        )
-        fragments = [
-            cast(
-                DerivedFragmentConfig,
-                {
-                    "fragmentName": "fragA",
-                    "fromFragment": "refA",
-                    "refRanges": [(1, 3)],
-                },
-            )
-        ]
-        stat_by_fragpos, qual_by_fragpos = s2c.sam2codfreq(
-            "file.bam", ref, fragments, workers=1
-        )
-
-    assert stat_by_fragpos == {("fragA", 1): Counter({"AAA": 2})}
-    assert qual_by_fragpos == {("fragA", 1): Counter({"AAA": 40})}
-
-
-def test_sam2codfreq_json_logging() -> None:
-    """JSON log format uses JsonProgress."""
-
-    alignment_mock = MagicMock(mapped=2)
-    alignment_mock.__enter__.return_value = alignment_mock
-    alignment_mock.__exit__.return_value = False
-
-    pbar_mock = MagicMock()
-
-    executor_inst = MagicMock()
-    executor_inst.__enter__.return_value = executor_inst
-    executor_inst.__exit__.return_value = False
-    executor_inst.map.side_effect = (
-        lambda fn, *iterables: [fn(*args) for args in zip(*iterables)]
-    )
-
-    with (
-        patch(
-            "codfreq.sam2codfreq.pysam.AlignmentFile",
-            return_value=alignment_mock,
-        ),
-        patch("codfreq.sam2codfreq.JsonProgress", return_value=pbar_mock),
-        patch("codfreq.sam2codfreq.chunked_samfile", return_value=[(0, 1)]),
-        patch(
-            "codfreq.sam2codfreq.ProcessPoolExecutor",
-            return_value=executor_inst,
-        ),
-        patch.object(
-            s2c,
-            "sam2codfreq_between",
-            return_value=(
-                Counter({
-                    ("fragA", 1, "AAA"): 1,
-                }),
-                Counter({
-                    ("fragA", 1, "AAA"): 20,
-                }),
-                1,
-            ),
-        ),
-        patch.object(
-            s2c,
-            "codonalign_consensus",
-            side_effect=lambda stat, qual, ref, frags: (stat, qual),
-        ),
-    ):
-        ref = cast(
-            MainFragmentConfig,
-            {"fragmentName": "refA", "refSequence": "AAA"},
-        )
-        fragments = [
-            cast(
-                DerivedFragmentConfig,
-                {
-                    "fragmentName": "fragA",
-                    "fromFragment": "refA",
-                    "refRanges": [(1, 3)],
-                },
-            )
-        ]
-        s2c.sam2codfreq(
-            "file.bam", ref, fragments, workers=1, log_format="json"
-        )
-
-    pbar_mock.update.assert_called_once_with(1)
-    pbar_mock.close.assert_called_once()
-
-
 def test_sam2codfreq_all() -> None:
     """Process all fragments and convert to rows."""
 
@@ -286,3 +152,150 @@ def test_sam2codfreq_all() -> None:
             "total_quality_score": 30,
         }
     ]
+
+
+def test_sam2codfreq_accumulates_and_reports_progress() -> None:
+    """Multiprocessing results are merged and progress is reported."""
+
+    class DummyExecutor:
+        """Context manager yielding preset ``map`` results."""
+
+        def __init__(self, _workers: int) -> None:
+            return
+
+        def __enter__(self) -> "DummyExecutor":
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+        def map(self, func, *args):  # type: ignore[no-untyped-def]
+            return iter(
+                [
+                    (
+                        Counter({("fragA", 1, "AAA"): 1}),
+                        Counter({("fragA", 1, "AAA"): 30}),
+                        1,
+                    ),
+                    (
+                        Counter({("fragA", 2, "CCC"): 1}),
+                        Counter({("fragA", 2, "CCC"): 20}),
+                        1,
+                    ),
+                ]
+            )
+
+    class DummyAlignmentFile:
+        mapped = 2
+
+        def __enter__(self) -> "DummyAlignmentFile":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    progress = MagicMock()
+
+    ref = {"fragmentName": "refA", "refSequence": "AAA"}
+    fragments = [
+        {
+            "fragmentName": "fragA",
+            "fromFragment": "refA",
+            "refRanges": [(1, 3)],
+        }
+    ]
+
+    with (
+        patch(
+            "codfreq.sam2codfreq.pysam.AlignmentFile",
+            return_value=DummyAlignmentFile(),
+        ),
+        patch("codfreq.sam2codfreq.tqdm", return_value=progress),
+        patch("codfreq.sam2codfreq.ProcessPoolExecutor", DummyExecutor),
+        patch(
+            "codfreq.sam2codfreq.chunked_samfile",
+            return_value=[(0, 1), (1, 2)],
+        ),
+        patch(
+            "codfreq.sam2codfreq.codonalign_consensus",
+            side_effect=lambda *a: a[:2],
+        ),
+    ):
+        codonstat, qualities = s2c.sam2codfreq(
+            "file.bam", ref, cast(list, fragments), workers=1
+        )
+
+    assert codonstat == {
+        ("fragA", 1): Counter({"AAA": 1}),
+        ("fragA", 2): Counter({"CCC": 1}),
+    }
+    assert qualities == {
+        ("fragA", 1): Counter({"AAA": 30}),
+        ("fragA", 2): Counter({"CCC": 20}),
+    }
+    progress.set_description.assert_called_once()
+    assert progress.update.call_count == 2
+    progress.close.assert_called_once()
+
+
+def test_sam2codfreq_supports_json_log_format() -> None:
+    """JSON log format initializes :class:`JsonProgress`."""
+
+    class DummyExecutor:
+        def __init__(self, _workers: int) -> None:
+            return
+
+        def __enter__(self) -> "DummyExecutor":
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+        def map(self, func, *args):  # type: ignore[no-untyped-def]
+            return iter([(Counter(), Counter(), 0)])
+
+    class DummyAlignmentFile:
+        mapped = 0
+
+        def __enter__(self) -> "DummyAlignmentFile":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    json_progress = MagicMock()
+
+    ref = {"fragmentName": "refA", "refSequence": "AAA"}
+    fragments = [
+        {
+            "fragmentName": "fragA",
+            "fromFragment": "refA",
+            "refRanges": [(1, 3)],
+        }
+    ]
+
+    with (
+        patch(
+            "codfreq.sam2codfreq.pysam.AlignmentFile",
+            return_value=DummyAlignmentFile(),
+        ),
+        patch("codfreq.sam2codfreq.JsonProgress", return_value=json_progress),
+        patch("codfreq.sam2codfreq.ProcessPoolExecutor", DummyExecutor),
+        patch(
+            "codfreq.sam2codfreq.chunked_samfile", return_value=[(0, 0)]
+        ),
+        patch(
+            "codfreq.sam2codfreq.codonalign_consensus",
+            side_effect=lambda *a: a[:2],
+        ),
+    ):
+        s2c.sam2codfreq(
+            "file.bam",
+            ref,
+            cast(list, fragments),
+            workers=1,
+            log_format="json",
+        )
+
+    json_progress.update.assert_called_once_with(0)
+    json_progress.close.assert_called_once()

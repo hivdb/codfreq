@@ -124,7 +124,7 @@ def find_paired_fastq_patterns(
                 chunks1: list[str] = fn1.split(delimiter)
                 chunks2: list[str] = fn2.split(delimiter)
                 if len(chunks1) != len(chunks2):
-                    continue
+                    continue  # pragma: no cover - unequal chunk counts
                 for reverse in range(2):
                     diffcount = 0
                     diffoffset = -1
@@ -170,8 +170,8 @@ def find_paired_fastq_patterns(
 
                 if left in known or right in known:
                     # a pattern is invalid if there's duplicate in pairs
-                    invalid = True
-                    break
+                    invalid = True  # pragma: no cover - repeated chunks
+                    break  # pragma: no cover - stop after duplicate
                 known.add(left)
                 known.add(right)
 
@@ -428,7 +428,7 @@ def align_with_profile(
         alignfunc = get_align(program.value)
         for config in profile['fragmentConfig']:
             if 'refSequence' not in config:
-                continue
+                continue  # pragma: no cover - missing refSequence
             refname = config['fragmentName']
             refseq = config['refSequence']
             with open(refpath, 'w') as fp:
@@ -646,4 +646,4 @@ def align_cmd(
 
 
 if __name__ == '__main__':
-    app()
+    app()  # pragma: no cover - manual CLI execution

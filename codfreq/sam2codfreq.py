@@ -305,15 +305,17 @@ def sam2codfreq(
     chunk_size: int = 25000,
     **extras: Any
 ) -> tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
-    """Returns CodFreq rows from a SAM/BAM file
+    """Return CodFreq rows from a SAM/BAM file.
 
     This function utilizes subprocesses to process alignment data from a
-    segment of SAM/BAM file and to aggregate the results into a codon counter
-    and a quality score counter.
+    segment of a SAM/BAM file and to aggregate the results into a codon counter
+    and a quality score counter.  A progress bar is emitted via either ``tqdm``
+    or :class:`~codfreq.json_progress.JsonProgress` depending on
+    ``log_format`` and is updated as each chunk is processed.
 
     The codon counter and quality score counter are converted into CodFreq
-    results. The consensus codon from CodFreq results are then processed by
-    codonalign function provided by hivdb/postalign.
+    results. The consensus codon from CodFreq results are then processed by the
+    codon-alignment function provided by ``hivdb/postalign``.
 
     :param samfile: str of the SAM/BAM file path
     :param ref: dict of the reference configuration
@@ -333,8 +335,7 @@ def sam2codfreq(
     with pysam.AlignmentFile(samfile, 'rb') as samfp:
         total = samfp.mapped
         if log_format == 'json':
-            pbar = JsonProgress(
-                total=total, description=samfile, **extras)
+            pbar = JsonProgress(total=total, description=samfile, **extras)
         elif log_format == 'text':
             pbar = tqdm(total=total)
             pbar.set_description(f'Processing {samfile}')
@@ -356,7 +357,7 @@ def sam2codfreq(
                     samfile_begin,
                     samfile_end,
                     fragment_intervals,
-                    site_quality_cutoff
+                    site_quality_cutoff,
                 )
                 for samfile_begin, samfile_end in chunks
             ])

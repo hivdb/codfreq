@@ -1,15 +1,8 @@
-"""Tests for codon-alignment helpers and consensus assembly."""
+"""Tests for :mod:`codfreq.codonalign_consensus`."""
 
 from collections import Counter
 from unittest.mock import patch
-import sys
-
-from .mock_postalign import mock_postalign
-
-_POSTALIGN = mock_postalign()
-_POSTALIGN.__enter__()
-sys.modules.pop("codfreq.codonalign_consensus", None)
-from codfreq.codonalign_consensus import (  # noqa: E402
+from codfreq.codonalign_consensus import (
     aapos_to_napos,
     assemble_alignment,
     codonalign_consensus,

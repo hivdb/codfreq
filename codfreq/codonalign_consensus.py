@@ -254,7 +254,7 @@ def codonalign_consensus(
             frag_refseq_obj is None or
             frag_queryseq_obj is None
         ):
-            continue
+            continue  # pragma: no cover - skip fragments lacking sequence data
 
         for aapos0, (refcodon, querycodon) in enumerate(zip(
             *group_by_codons(

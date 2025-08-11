@@ -39,6 +39,32 @@ def mock_postalign() -> Iterator[None]:
     cython.void = None  # type: ignore[attr-defined]
     cython.cfunc = _decorator  # type: ignore[attr-defined]
 
+    pysam = ModuleType("pysam")
+
+    class AlignedSegment:  # pragma: no cover - placeholder
+        """Minimal ``pysam.AlignedSegment`` stand-in."""
+
+        def __init__(self, query_name: str | None = None) -> None:
+            self.query_name = query_name
+
+    class AlignmentFile:  # pragma: no cover - placeholder
+        """Stub for ``pysam.AlignmentFile`` with a ``mapped`` count."""
+
+        mapped = 0
+
+        # pragma: no cover - stub
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            return
+
+        def __enter__(self) -> "AlignmentFile":  # pragma: no cover
+            return self
+
+        def __exit__(self, *exc: Any) -> None:  # pragma: no cover
+            return None
+
+    pysam.AlignedSegment = AlignedSegment  # type: ignore[attr-defined]
+    pysam.AlignmentFile = AlignmentFile  # type: ignore[attr-defined]
+
     def group_by_codons(
         seq1: bytearray, seq2: bytearray
     ) -> tuple[list[bytearray], list[bytearray]]:
@@ -117,6 +143,7 @@ def mock_postalign() -> Iterator[None]:
         "postalign.models": models,
         "postalign.models.sequence": models_seq,
         "cython": cython,
+        "pysam": pysam,
     }
 
     with patch.dict(sys.modules, modules):
