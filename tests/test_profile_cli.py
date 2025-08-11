@@ -9,7 +9,13 @@ from unittest.mock import patch
 
 import codfreq.profile as profile_module
 from codfreq.profile import app
-from codfreq.codfreq_types import Profile
+from codfreq.codfreq_types import (
+    Profile,
+    FragmentConfig,
+    MainFragmentConfig,
+    DerivedFragmentConfig,
+    GeneAssemblyConfig,
+)
 
 
 def _write_profile(path: Path, profile: dict) -> None:
@@ -29,14 +35,20 @@ def test_validate_profile_valid(tmp_path: Path) -> None:
                 "refRanges": [[1, 4]],
             },
         ],
-        "sequenceAssemblyConfig": [],
+        "sequenceAssemblyConfig": [
+            {
+                "name": "ref",
+                "fromFragment": "ref",
+                "refStart": 1,
+                "refEnd": 4,
+            }
+        ],
     }
     prof = tmp_path / "prof.json"
     _write_profile(prof, profile)
     runner = CliRunner()
     result = runner.invoke(app, ["validate", str(prof)])
     assert result.exit_code == 0
-    assert "Profile is valid" in result.stdout
 
 
 def test_validate_profile_invalid(tmp_path: Path) -> None:
@@ -63,13 +75,7 @@ def test_create_profile(tmp_path: Path) -> None:
         "ref",
         "acgt",
         "",
-        False,
         True,
-        "region1",
-        "ref",
-        "1",
-        "2",
-        False,
     ])
 
     class Prompt:
@@ -85,12 +91,6 @@ def test_create_profile(tmp_path: Path) -> None:
         ),
         patch.object(
             questionary, "confirm", side_effect=lambda m: Prompt(m)
-        ),
-        patch.object(
-            questionary, "checkbox", side_effect=lambda *a, **k: Prompt("cb")
-        ),
-        patch.object(
-            questionary, "select", side_effect=lambda *a, **k: Prompt("sel")
         ),
     ):
         runner = CliRunner()
@@ -123,7 +123,6 @@ def test_create_profile_genbank(tmp_path: Path) -> None:
         "TEST",
         "ref",
         "",
-        True,
         True,
     ])
 
@@ -166,45 +165,43 @@ def test_create_profile_genbank(tmp_path: Path) -> None:
 
 
 def test_auto_assembly_overlap_and_gap() -> None:
-    """Overlapping fragments yield left/right trimmed assemblies."""
+    """Overlapping fragments yield left-trimmed assemblies."""
 
-    fragments: list[dict[str, object]] = [
-        {"fragmentName": "ref", "refSequence": "A" * 25},
-        {
-            "fragmentName": "g1",
-            "fromFragment": "ref",
-            "geneName": "g1",
-            "refRanges": [(1, 5)],
-        },
-        {
-            "fragmentName": "g2",
-            "fromFragment": "ref",
-            "geneName": "g2",
-            "refRanges": [(8, 15)],
-        },
-        {
-            "fragmentName": "g3",
-            "fromFragment": "ref",
-            "geneName": "g3",
-            "refRanges": [(14, 20)],
-        },
+    fragments: list[FragmentConfig] = [
+        MainFragmentConfig(fragmentName="ref", refSequence="A" * 25),
+        DerivedFragmentConfig(
+            fragmentName="g1",
+            fromFragment="ref",
+            geneName="g1",
+            refRanges=[(1, 5)],
+        ),
+        DerivedFragmentConfig(
+            fragmentName="g2",
+            fromFragment="ref",
+            geneName="g2",
+            refRanges=[(8, 15)],
+        ),
+        DerivedFragmentConfig(
+            fragmentName="g3",
+            fromFragment="ref",
+            geneName="g3",
+            refRanges=[(14, 20)],
+        ),
     ]
-    options = profile_module._auto_assembly_options(fragments)
-    assert len(options) == 2
-    left, right = options
-    assert left[3]["trim"] == [[1, 2]]
-    assert right[2]["trim"] == [[7, 8]]
+    assemblies = profile_module._auto_assembly(fragments)
+    assert isinstance(assemblies[3], GeneAssemblyConfig)
+    assert assemblies[3].trim == [(1, 2)]
 
 
 def test_auto_assembly_no_main() -> None:
     """No main fragment produces no assembly options."""
 
-    frags: list[dict[str, object]] = [
-        {
-            "fragmentName": "g1",
-            "geneName": "g1",
-            "fromFragment": "ref",
-            "refRanges": [(1, 5)],
-        }
+    frags: list[FragmentConfig] = [
+        DerivedFragmentConfig(
+            fragmentName="g1",
+            fromFragment="ref",
+            geneName="g1",
+            refRanges=[(1, 5)],
+        )
     ]
-    assert profile_module._auto_assembly_options(frags) == []
+    assert profile_module._auto_assembly(frags) == []

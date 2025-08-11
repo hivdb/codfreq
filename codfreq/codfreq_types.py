@@ -141,31 +141,19 @@ class DerivedFragmentConfig(BaseModel):
 FragmentConfig = MainFragmentConfig | DerivedFragmentConfig
 
 
-class SequenceAssemblyConfig(BaseModel):
-    """Configuration for assembling sequences from fragments.
+class GeneAssemblyConfig(BaseModel):
+    """Assembly configuration for a gene region.
 
-    :param name: Name of the assembly region.
-    :type name: str | None
-    :param geneName: Associated gene name.
-    :type geneName: str | None
-    :param fromFragment: Source fragment name.
-    :type fromFragment: str | None
-    :param refStart: Start position in reference coordinates.
-    :type refStart: int | None
-    :param refEnd: End position in reference coordinates.
-    :type refEnd: int | None
-    :param trim: Ranges to exclude from the fragment. Each tuple is a
+    :param geneName: Gene identifier referenced in ``fragmentConfig``.
+    :type geneName: str
+    :param trim: Ranges to exclude from the assembled gene. Each tuple is a
         1-based inclusive interval relative to the fragment.
     :type trim: list[tuple[NAPos, NAPos]] | None
     """
 
-    model_config = ConfigDict(frozen=True, extra='forbid')
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str | None = None
-    geneName: str | None = None
-    fromFragment: str | None = None
-    refStart: int | None = None
-    refEnd: int | None = None
+    geneName: str
     trim: list[tuple[NAPos, NAPos]] | None = None
 
     @model_validator(mode="before")
@@ -186,6 +174,32 @@ class SequenceAssemblyConfig(BaseModel):
                     norm.append((item[0], item[1]))
             data["trim"] = norm
         return data
+
+
+class RegionAssemblyConfig(BaseModel):
+    """Inter-gene assembly configuration defined by explicit coordinates.
+
+    :param name: Region name.
+    :type name: str
+    :param fromFragment: Source fragment name.
+    :type fromFragment: str
+    :param refStart: Start position in reference coordinates (1-based,
+        inclusive).
+    :type refStart: int
+    :param refEnd: End position in reference coordinates (1-based,
+        inclusive).
+    :type refEnd: int
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    fromFragment: str
+    refStart: int
+    refEnd: int
+
+
+SequenceAssemblyConfig = GeneAssemblyConfig | RegionAssemblyConfig
 
 
 class NARegionConfig(BaseModel):
@@ -226,6 +240,61 @@ class Profile(BaseModel):
     version: str
     fragmentConfig: list[FragmentConfig]
     sequenceAssemblyConfig: list[SequenceAssemblyConfig]
+
+    @model_validator(mode="after")
+    def check_assembly_continuity(self) -> "Profile":
+        """Ensure ``sequenceAssemblyConfig`` covers the reference contiguously.
+
+        The first region must start at position ``1`` of the main fragment and
+        subsequent regions must abut without gaps or overlaps. The final region
+        must end at the length of the main fragment.
+
+        :raises ValueError: If the assembly does not cover the reference
+            contiguously.
+        """
+
+        main = next(
+            (
+                f
+                for f in self.fragmentConfig
+                if isinstance(f, MainFragmentConfig)
+            ),
+            None,
+        )
+        if main is None or not self.sequenceAssemblyConfig:
+            return self
+
+        main_len = len(main.refSequence)
+
+        gene_spans: dict[str, tuple[int, int]] = {}
+        for frag in self.fragmentConfig:
+            if isinstance(frag, DerivedFragmentConfig) and frag.geneName:
+                starts = [r[0] for r in frag.refRanges]
+                ends = [r[1] for r in frag.refRanges]
+                gene_spans[frag.geneName] = (min(starts), max(ends))
+
+        expected_start = 1
+        for region in self.sequenceAssemblyConfig:
+            if isinstance(region, GeneAssemblyConfig):
+                if region.geneName not in gene_spans:
+                    msg = (
+                        f"Unknown gene '{region.geneName}' in "
+                        "sequenceAssemblyConfig"
+                    )  # pragma: no cover
+                    raise ValueError(msg)  # pragma: no cover
+                start, end = gene_spans[region.geneName]
+            else:
+                start, end = region.refStart, region.refEnd
+            if start != expected_start:
+                raise ValueError("sequenceAssemblyConfig is not continuous")
+            expected_start = end + 1
+
+        if expected_start - 1 != main_len:
+            raise ValueError(
+                "sequenceAssemblyConfig does not extend to end of reference"
+            )  # pragma: no cover
+
+        return self
 
 
 class CodFreqRow(BaseModel):

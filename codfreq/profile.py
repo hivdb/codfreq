@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import json
-import urllib.request
 from pathlib import Path
-from typing import Annotated, Any, Iterable, cast
+from typing import Annotated, Iterable, cast
 
-from Bio import SeqIO  # type: ignore[import-not-found]
+from Bio import Entrez, SeqIO  # type: ignore[import-not-found]
 from Bio.SeqFeature import CompoundLocation  # type: ignore[import-not-found]
 import questionary  # type: ignore[import-not-found]
 import typer
 from pydantic import BaseModel, ConfigDict, ValidationError
 from rich import print
 
-from .codfreq_types import Profile
+from .codfreq_types import (
+    Profile,
+    FragmentConfig,
+    DerivedFragmentConfig,
+    MainFragmentConfig,
+    GeneAssemblyConfig,
+    RegionAssemblyConfig,
+    SequenceAssemblyConfig,
+)
 
 
 class GeneFeature(BaseModel):
@@ -36,8 +43,8 @@ class GenBankRecord(BaseModel):
     features: list[GeneFeature]
 
 
-def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover - network I/O
-    """Retrieve a GenBank record for *accession* using Biopython.
+def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover
+    """Retrieve a GenBank record for *accession* using Biopython's Entrez.
 
     :param accession: GenBank accession identifier.
     :type accession: str
@@ -46,12 +53,9 @@ def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover - networ
     :raises Exception: If the accession cannot be fetched.
     """
 
-    url = (
-        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-        f"?db=nuccore&id={accession}&rettype=gb&retmode=text"
-    )
-    with urllib.request.urlopen(  # pragma: no cover - network I/O
-        url
+    Entrez.email = "anonymous@example.com"  # type: ignore[assignment]
+    with Entrez.efetch(  # pragma: no cover - network I/O
+        db="nuccore", id=accession, rettype="gb", retmode="text"
     ) as handle:  # type: ignore[no-untyped-call]
         record = SeqIO.read(handle, "genbank")  # type: ignore[no-untyped-call]
 
@@ -82,7 +86,7 @@ def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover - networ
 
 def _prompt_genbank_fragments(
     record: GenBankRecord, main_name: str
-) -> list[dict[str, object]]:
+) -> list[FragmentConfig]:
     """Ask the user which gene features to keep as fragments.
 
     :param record: GenBank record containing features.
@@ -90,7 +94,7 @@ def _prompt_genbank_fragments(
     :param main_name: Name of the main fragment.
     :type main_name: str
     :returns: Derived fragments chosen by the user.
-    :rtype: list[dict[str, object]]
+    :rtype: list[FragmentConfig]
     """
 
     if not record.features:  # pragma: no cover - no features
@@ -105,166 +109,240 @@ def _prompt_genbank_fragments(
         choices=choices,
         default=default,  # type: ignore[arg-type]
     ).ask()
-    fragments: list[dict[str, object]] = []
+    fragments: list[FragmentConfig] = []
     for feat in selected:
         fragments.append(
-            {
-                "fragmentName": feat.name,
-                "fromFragment": main_name,
-                "geneName": feat.name,
-                "refRanges": feat.ranges,
-            }
+            DerivedFragmentConfig(
+                fragmentName=feat.name,
+                fromFragment=main_name,
+                geneName=feat.name,
+                refRanges=feat.ranges,
+            )
         )
     return fragments
 
 
-def _prompt_manual_fragments() -> list[dict[str, object]]:
-    """Prompt the user to enter additional fragments manually."""
+def _prompt_manual_fragments(  # pragma: no cover - interactive
+    main_name: str | None,
+) -> tuple[str, list[FragmentConfig]]:
+    """Prompt the user for manually defined fragments.
 
-    frags: list[dict[str, object]] = []
+    The first prompt collects the main fragment if *main_name* is ``None``. All
+    subsequent fragments are treated as derived fragments referencing the main
+    fragment. Coordinate ranges are **1-based** and **inclusive**.
+
+    :param main_name: Existing main fragment name if already defined.
+    :type main_name: str | None
+    :returns: Tuple of the main fragment name and the list of entered
+        fragments.
+    :rtype: tuple[str, list[FragmentConfig]]
+    """
+
+    frags: list[FragmentConfig] = []
+    if main_name is None:
+        main_name = questionary.text("Main fragment name:").ask()
+        seq = questionary.text(
+            f"Reference sequence for {main_name}:"
+        ).ask()
+        frags.append(
+            MainFragmentConfig(fragmentName=main_name, refSequence=seq)
+        )
+
     while True:
         name = questionary.text(
             "Fragment name (leave blank to finish):"
         ).ask()
         if not name:
             break
-        seq = questionary.text(f"Reference sequence for {name}:").ask()
-        frags.append({"fragmentName": name, "refSequence": seq})
-    return frags
+        gene = questionary.text("Gene name (optional):").ask()
+        ranges_text = questionary.text(
+            "Reference ranges for this fragment (e.g., 1-5,8-10):"
+        ).ask()
+        ranges: list[tuple[int, int]] = []
+        for part in ranges_text.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                start_s, end_s = part.split("-", 1)
+                ranges.append((int(start_s), int(end_s)))
+            else:
+                pos = int(part)
+                ranges.append((pos, pos))
+        frags.append(
+            DerivedFragmentConfig(
+                fragmentName=name,
+                fromFragment=main_name,
+                geneName=gene or None,
+                refRanges=ranges,
+            )
+        )
+    return main_name, frags
 
 
-def _auto_assembly_options(
-    fragments: list[dict[str, object]]
-) -> list[list[dict[str, object]]]:
-    """Return possible assembly configurations derived from *fragments*.
+def _auto_assembly(
+    fragments: list[FragmentConfig],
+) -> list[SequenceAssemblyConfig]:
+    """Generate an assembly configuration from *fragments*.
 
-    The function sorts fragments by genomic coordinates and fills gaps with
-    inter-fragment regions. Overlaps are resolved by trimming either
-    the left or right fragment. When overlaps exist, both trimming
-    strategies are returned.
-
-    ``trim`` entries are 1-based inclusive ranges relative to the fragment.
+    Fragments are ordered by their genomic coordinates. Gaps between genes are
+    filled by inter-gene regions, and overlaps are resolved by trimming the
+    leftmost bases of the subsequent fragment. ``trim`` ranges are **1-based**
+    and **inclusive**.
 
     :param fragments: Fragment configuration list.
-    :type fragments: list[dict[str, object]]
-    :returns: Candidate assembly configurations.
-    :rtype: list[list[dict[str, object]]]
+    :type fragments: list[FragmentConfig]
+    :returns: Assembly configuration using left-trimming for overlaps.
+    :rtype: list[SequenceAssemblyConfig]
     """
 
-    main = next((f for f in fragments if "refSequence" in f), None)
+    main = next(
+        (f for f in fragments if isinstance(f, MainFragmentConfig)), None
+    )
     if main is None:
         return []
-    main_name = cast(str, main["fragmentName"])
-    main_len = len(cast(str, main["refSequence"]))
+    main_name = main.fragmentName
+    main_len = len(main.refSequence)
 
-    genes = [f for f in fragments if f.get("geneName")]
+    genes = [
+        f
+        for f in fragments
+        if isinstance(f, DerivedFragmentConfig) and f.geneName
+    ]
     if not genes:
-        return [[{
-            "name": main_name,
-            "fromFragment": main_name,
-            "refStart": 1,
-            "refEnd": main_len,
-        }]]
+        return [
+            RegionAssemblyConfig(
+                name=main_name,
+                fromFragment=main_name,
+                refStart=1,
+                refEnd=main_len,
+            )
+        ]
 
-    def span(frag: dict[str, object]) -> tuple[int, int]:
-        ranges = cast(list[tuple[int, int]], frag["refRanges"])
-        starts = [r[0] for r in ranges]
-        ends = [r[1] for r in ranges]
+    def span(frag: DerivedFragmentConfig) -> tuple[int, int]:
+        starts = [r[0] for r in frag.refRanges]
+        ends = [r[1] for r in frag.refRanges]
         return min(starts), max(ends)
 
     ordered = sorted(genes, key=lambda f: span(f)[0])
 
-    def build(bias: str) -> list[dict[str, object]]:
-        assemblies: list[dict[str, object]] = []
-        prev_end = 0
-        prev_gene = None
-        prev_frag = None
-        prev_idx = None
-
-        for frag in ordered:
-            start, end = span(frag)
-            if start > prev_end + 1:
-                assemblies.append(
-                    {
-                        "name": f"{prev_gene or 'start'}-{frag['geneName']}",
-                        "fromFragment": main_name,
-                        "refStart": prev_end + 1,
-                        "refEnd": start - 1,
-                    }
-                )
-            overlap = prev_end - start + 1 if prev_end >= start else 0
-            entry: dict[str, object] = {"geneName": frag["geneName"]}
-            if overlap > 0:
-                if bias == "left":
-                    entry["trim"] = [[1, overlap]]
-                    start = prev_end + 1
-                elif (
-                    bias == "right"
-                    and prev_idx is not None
-                    and prev_frag is not None
-                ):
-                    prev_len = sum(
-                        r[1] - r[0] + 1
-                        for r in cast(
-                            list[tuple[int, int]], prev_frag["refRanges"]
-                        )
-                    )
-                    trim_range = [prev_len - overlap + 1, prev_len]
-                    trim_list = cast(
-                        list[Any], assemblies[prev_idx].setdefault("trim", [])
-                    )
-                    trim_list.append(trim_range)
-                    prev_end = start - 1
-            assemblies.append(entry)
-            prev_end = end
-            prev_gene = cast(str, frag["geneName"])
-            prev_frag = frag
-            prev_idx = len(assemblies) - 1
-
-        if prev_end < main_len:
+    assemblies: list[SequenceAssemblyConfig] = []
+    prev_end = 0
+    prev_gene: str | None = None
+    for frag in ordered:
+        start, end = span(frag)
+        if start > prev_end + 1:
             assemblies.append(
-                {
-                    "name": f"{prev_gene}-end",
-                    "fromFragment": main_name,
-                    "refStart": prev_end + 1,
-                    "refEnd": main_len,
-                }
+                RegionAssemblyConfig(
+                    name=f"{prev_gene or 'start'}-{frag.geneName}",
+                    fromFragment=main_name,
+                    refStart=prev_end + 1,
+                    refEnd=start - 1,
+                )
             )
-        return assemblies
-
-    left = build("left")
-    right = build("right")
-    options = [left]
-    if right != left:
-        options.append(right)
-    return options
-
-
-def _prompt_manual_assemblies() -> list[dict[str, object]]:
-    """Prompt for assembly regions when auto generation is unsuitable."""
-
-    assemblies: list[dict[str, object]] = []
-    while questionary.confirm("Add an assembly region?").ask():
-        region_name = questionary.text("Region name:").ask()
-        from_fragment = questionary.text("Source fragment:").ask()
-        ref_start = int(
-            questionary.text(
-                "Reference start position (1-based, inclusive):"
-            ).ask()
-        )
-        ref_end = int(
-            questionary.text(
-                "Reference end position (1-based, inclusive):"
-            ).ask()
-        )
+        overlap = prev_end - start + 1 if prev_end >= start else 0
+        trim = None
+        if overlap > 0:
+            trim = [(1, overlap)]
+            start = prev_end + 1
         assemblies.append(
-            {
-                "name": region_name,
-                "fromFragment": from_fragment,
-                "refStart": ref_start,
-                "refEnd": ref_end,
-            }
+            GeneAssemblyConfig(geneName=cast(str, frag.geneName), trim=trim)
         )
+        prev_end = end
+        prev_gene = cast(str, frag.geneName)
+
+    if prev_end < main_len:
+        assemblies.append(
+            RegionAssemblyConfig(
+                name=f"{prev_gene}-end",
+                fromFragment=main_name,
+                refStart=prev_end + 1,
+                refEnd=main_len,
+            )
+        )
+
+    return assemblies
+
+
+def _prompt_manual_assemblies(  # pragma: no cover - interactive
+    fragments: list[FragmentConfig],
+) -> list[SequenceAssemblyConfig]:
+    """Prompt the user to enter assembly regions manually.
+
+    The user is asked whether each region is a gene or an inter-gene fragment.
+    Inputs are validated to ensure regions are contiguous and cover the
+    reference without gaps or overlaps.
+
+    :param fragments: Available fragments for span lookup.
+    :type fragments: list[FragmentConfig]
+    :returns: User-provided assembly configuration.
+    :rtype: list[SequenceAssemblyConfig]
+    """
+
+    gene_spans: dict[str, tuple[int, int]] = {}
+    for frag in fragments:
+        if isinstance(frag, DerivedFragmentConfig) and frag.geneName:
+            starts = [r[0] for r in frag.refRanges]
+            ends = [r[1] for r in frag.refRanges]
+            gene_spans[frag.geneName] = (min(starts), max(ends))
+
+    assemblies: list[SequenceAssemblyConfig] = []
+    prev_end = 0
+    while questionary.confirm("Add an assembly region?").ask():
+        if questionary.confirm("Is this region a gene?").ask():
+            gene_name = questionary.text("Gene name:").ask()
+            if gene_name not in gene_spans:
+                print(f"[red]Unknown gene {gene_name}[/red]")
+                continue
+            start, end = gene_spans[gene_name]
+            if start != prev_end + 1:
+                print("[red]Gap or overlap detected; re-enter region[/red]")
+                continue
+            trim_text = questionary.text(
+                "Trim ranges (e.g., 1-5,10)? leave blank for none:"
+            ).ask()
+            trim: list[tuple[int, int]] | None = None
+            if trim_text:
+                trim = []
+                for part in trim_text.split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    if "-" in part:
+                        a, b = part.split("-", 1)
+                        trim.append((int(a), int(b)))
+                    else:
+                        pos = int(part)
+                        trim.append((pos, pos))
+            assemblies.append(
+                GeneAssemblyConfig(geneName=gene_name, trim=trim)
+            )
+            prev_end = end
+        else:
+            region_name = questionary.text("Region name:").ask()
+            from_fragment = questionary.text("Source fragment:").ask()
+            ref_start = int(
+                questionary.text(
+                    "Reference start position (1-based, inclusive):",
+                ).ask()
+            )
+            ref_end = int(
+                questionary.text(
+                    "Reference end position (1-based, inclusive):",
+                ).ask()
+            )
+            if ref_start != prev_end + 1:
+                print("[red]Gap or overlap detected; re-enter region[/red]")
+                continue
+            assemblies.append(
+                RegionAssemblyConfig(
+                    name=region_name,
+                    fromFragment=from_fragment,
+                    refStart=ref_start,
+                    refEnd=ref_end,
+                )
+            )
+            prev_end = ref_end
     return assemblies
 
 
@@ -295,13 +373,6 @@ def validate(
             loc = ".".join(str(item) for item in e["loc"])
             print(f"{loc}: {e['msg']}")
         raise typer.Exit(code=1)
-    print("[green]Profile is valid[/green]")
-
-
-def validate_main() -> None:
-    """CLI entry point for quick profile validation."""
-
-    typer.run(validate)  # pragma: no cover - CLI entry point
 
 
 @app.command()
@@ -326,10 +397,11 @@ def create(
 
     version = questionary.text("Profile version:").ask()
 
-    fragments: list[dict[str, object]] = []
+    fragments: list[FragmentConfig] = []
     accession = questionary.text(
         "GenBank accession (leave blank for manual input):"
     ).ask()
+    main_name: str | None = None
     if accession:
         try:
             record = _fetch_record(accession)
@@ -340,36 +412,30 @@ def create(
             "Main fragment name:", default=record.accession
         ).ask()
         fragments.append(
-            {"fragmentName": main_name, "refSequence": record.sequence}
+            MainFragmentConfig(
+                fragmentName=main_name, refSequence=record.sequence
+            )
         )
         fragments.extend(_prompt_genbank_fragments(record, main_name))
+    main_name, manual_frags = _prompt_manual_fragments(main_name)
+    fragments.extend(manual_frags)
 
-    fragments.extend(_prompt_manual_fragments())
-
-    options = _auto_assembly_options(fragments)
-    assemblies: list[dict[str, object]]
-    if options:
-        choice = options[0]
-        if len(options) > 1:
-            choice = questionary.select(
-                "Select an assembly strategy:",
-                choices=[
-                    questionary.Choice(f"Option {i+1}", value=opt)
-                    for i, opt in enumerate(options)
-                ],
-            ).ask()  # pragma: no cover - interactive selection
-        print(f"Suggested assembly: {choice}")
-        if questionary.confirm("Use this assembly configuration?").ask():
-            assemblies = choice
-        else:
-            assemblies = _prompt_manual_assemblies()
+    assemblies = _auto_assembly(fragments)
+    if assemblies:
+        print(f"Suggested assembly: {assemblies}")
+        if not questionary.confirm(
+            "Use this assembly configuration?"
+        ).ask():
+            assemblies = _prompt_manual_assemblies(
+                fragments
+            )  # pragma: no cover - manual override
     else:  # pragma: no cover - no fragments scenario
-        assemblies = _prompt_manual_assemblies()
+        assemblies = _prompt_manual_assemblies(fragments)
 
     profile_data = {
         "version": version,
-        "fragmentConfig": fragments,
-        "sequenceAssemblyConfig": assemblies,
+        "fragmentConfig": [f.model_dump() for f in fragments],
+        "sequenceAssemblyConfig": [a.model_dump() for a in assemblies],
     }
 
     try:

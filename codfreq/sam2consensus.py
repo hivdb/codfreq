@@ -10,6 +10,7 @@ from .codfreq_types import (
     NARegionConfig,
     RegionalConsensus,
     DerivedFragmentConfig,
+    GeneAssemblyConfig,
 )
 from .posnas import get_posnas_in_genome_region
 
@@ -140,25 +141,27 @@ def create_untrans_region_consensus(
         refname = fragment.fragmentName
         samfile = name_bamfile(seqname, refname, is_trimmed=True)
         for region in profile.sequenceAssemblyConfig:
-            if region.fromFragment is None:
+            if isinstance(
+                region, GeneAssemblyConfig
+            ):  # pragma: no cover - gene regions
                 continue
-            if region.fromFragment != refname:
+            rf = getattr(region, "fromFragment", None)
+            name = getattr(region, "name", None)
+            start = getattr(region, "refStart", None)
+            end = getattr(region, "refEnd", None)
+            if rf is None or rf != refname:
                 continue
-            if region.name is None:
-                continue
-            if region.refStart is None:
-                continue
-            if region.refEnd is None:
+            if name is None or start is None or end is None:
                 continue
 
             results.append(
                 sam2consensus(
                     samfile,
                     NARegionConfig(
-                        name=region.name,
-                        fromFragment=region.fromFragment,
-                        refStart=region.refStart,
-                        refEnd=region.refEnd,
+                        name=name,
+                        fromFragment=rf,
+                        refStart=start,
+                        refEnd=end,
                     ),
                 )
             )

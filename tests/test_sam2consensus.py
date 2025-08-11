@@ -37,6 +37,9 @@ from codfreq.codfreq_types import (  # noqa: E402
     NARegionConfig,
     Profile,
     RegionalConsensus,
+    RegionAssemblyConfig,
+    MainFragmentConfig,
+    DerivedFragmentConfig,
 )
 
 
@@ -126,68 +129,47 @@ def test_create_untrans_region_consensus_writes_results(
     """Fragments lacking parents produce consensus JSON;
     invalid regions are skipped."""
 
-    profile_dict: dict[str, Any] = {
-        "version": "1",
-        "fragmentConfig": [
-            {"fragmentName": "F1", "refSequence": "AAA"},
-            {
-                "fragmentName": "F2",
-                "fromFragment": "other",
-                "refRanges": [(1, 2)],
-            },
-        ],
-        "sequenceAssemblyConfig": [
-            {
-                "name": "R1",
-                "geneName": None,
-                "fromFragment": "F1",
-                "refStart": 1,
-                "refEnd": 2,
-            },
-            {
-                "name": "R2",
-                "geneName": None,
-                "fromFragment": "F2",
-                "refStart": 1,
-                "refEnd": 2,
-            },
-            {
-                "name": None,
-                "geneName": None,
-                "fromFragment": "F1",
-                "refStart": 1,
-                "refEnd": 2,
-            },
-            cast(
-                dict[str, Any],
-                {
-                    "name": "R3",
-                    "geneName": None,
-                    "refStart": 1,
-                    "refEnd": 2,
-                },
-            ),
-            cast(
-                dict[str, Any],
-                {
-                    "name": "R4",
-                    "geneName": None,
-                    "fromFragment": "F1",
-                    "refEnd": 2,
-                },
-            ),
-            cast(
-                dict[str, Any],
-                {
-                    "name": "R5",
-                    "geneName": None,
-                    "fromFragment": "F1",
-                    "refStart": 1,
-                },
+    profile = Profile.model_construct(
+        version="1",
+        fragmentConfig=[
+            MainFragmentConfig(fragmentName="F1", refSequence="AAA"),
+            DerivedFragmentConfig(
+                fragmentName="F2", fromFragment="other", refRanges=[(1, 2)]
             ),
         ],
-    }
-    profile = Profile.model_validate(profile_dict)
+        sequenceAssemblyConfig=[
+            RegionAssemblyConfig(
+                name="R1", fromFragment="F1", refStart=1, refEnd=2
+            ),
+            RegionAssemblyConfig(
+                name="R2", fromFragment="F2", refStart=1, refEnd=2
+            ),
+            RegionAssemblyConfig.model_construct(
+                name=cast(str, None),
+                fromFragment="F1",
+                refStart=1,
+                refEnd=2,
+            ),
+            RegionAssemblyConfig.model_construct(
+                name="R3",
+                fromFragment=cast(str, None),
+                refStart=1,
+                refEnd=2,
+            ),
+            RegionAssemblyConfig.model_construct(
+                name="R4",
+                fromFragment="F1",
+                refStart=cast(int, None),
+                refEnd=2,
+            ),
+            RegionAssemblyConfig.model_construct(
+                name="R5",
+                fromFragment="F1",
+                refStart=1,
+                refEnd=cast(int, None),
+            ),
+        ],
+    )
     mock_name_bamfile.return_value = "file.bam"
     result_cons = {
         "name": "R1",
@@ -219,18 +201,19 @@ def test_create_untrans_region_consensus_skips_missing_fromfragment(
 ) -> None:
     """Regions lacking ``fromFragment`` are ignored."""
 
-    profile = Profile.model_validate(
-        {
-            "version": "1",
-            "fragmentConfig": [{"fragmentName": "F1", "refSequence": "AAA"}],
-            "sequenceAssemblyConfig": [
-                {
-                    "name": "R1",
-                    "refStart": 1,
-                    "refEnd": 2,
-                }
-            ],
-        }
+    profile = Profile.model_construct(
+        version="1",
+        fragmentConfig=[
+            MainFragmentConfig(fragmentName="F1", refSequence="AAA")
+        ],
+        sequenceAssemblyConfig=[
+            RegionAssemblyConfig.model_construct(
+                name="R1",
+                fromFragment=cast(str, None),
+                refStart=1,
+                refEnd=2,
+            )
+        ],
     )
     mock_name_bamfile.return_value = "file.bam"
     m = mock_open()

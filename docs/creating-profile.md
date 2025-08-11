@@ -45,27 +45,23 @@ Derived fragments reference a main fragment and specify coordinate ranges.
 
 ### SequenceAssemblyConfig
 
-Assembly regions describe how fragments are stitched together. Valid fields are:
+Assembly regions describe how fragments are stitched together and come in two
+forms:
 
-- `name`
-- `geneName`
-- `fromFragment`
-- `refStart`
-- `refEnd`
-- `trim`
-
-The optional `trim` field records 1-based inclusive `(start, end)` ranges
-relative to a fragment that should be excluded, typically to resolve overlaps.
+- ``GeneAssemblyConfig`` – requires ``geneName`` and optionally ``trim`` for
+  1-based inclusive exclusion ranges.
+- ``RegionAssemblyConfig`` – requires ``name``, ``fromFragment``, ``refStart``
+  and ``refEnd`` to represent inter-gene segments.
 
 All coordinate positions in the profile (for `refRanges`, `refStart`, `refEnd`,
 and `trim`) are **1-based** and **inclusive**.
 
 ## Validating a profile
 
-Run `validate-profile` to check a file:
+Run `codfreq-profile validate` to check a file:
 
 ```bash
-validate-profile profiles/SARS2.json
+codfreq-profile validate profiles/SARS2.json
 ```
 
 The command prints validation errors and exits non-zero if the file does not match the schema.
@@ -73,19 +69,18 @@ The command prints validation errors and exits non-zero if the file does not mat
 To interactively build a profile, use:
 
 ```bash
-profile create my_profile.json
+codfreq-profile create my_profile.json
 ```
 
 You may provide a GenBank accession when prompted. The command downloads the
 reference sequence with Biopython and displays all gene features in a checkbox
 list that is preselected by default so you can deselect unwanted genes. Genes
 with discontiguous ranges (e.g., the SEV glycoprotein) are represented as
-multiple ``refRanges`` entries. After fragment selection, the tool suggests one
-or more assembly configurations. Overlaps produce alternative strategies that
-trim either the left or right gene; excluded ranges are captured in ``trim``.
-Coordinate numbers such as ``refRanges`` pairs, ``refStart``, ``refEnd`` and
-``trim`` are **1-based** and **inclusive**, matching the reference sequence
-indexing used internally.
+multiple ``refRanges`` entries. After fragment selection, the tool suggests an
+assembly configuration that left-trims any overlapping genes. Coordinate
+numbers such as ``refRanges`` pairs, ``refStart``, ``refEnd`` and ``trim`` are
+**1-based** and **inclusive**, matching the reference sequence indexing used
+internally.
 
 ## Reference sequence checks
 
@@ -100,4 +95,4 @@ For fragments that embed a GenBank accession in the name (e.g. `Wuhan-Hu-1::NC_0
 2. Define a main fragment with the full reference sequence.
 3. Add derived fragments with coordinate ranges for genes or regions of interest.
 4. Add assembly regions to stitch fragments as needed.
-5. Validate the JSON file with `validate-profile`.
+5. Validate the JSON file with `codfreq-profile validate`.
