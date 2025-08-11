@@ -6,8 +6,9 @@ from more_itertools import unique_everseen
 
 from typing import (
     Any,
-    Literal
+    Mapping
 )
+from pydantic import BaseModel
 from concurrent.futures import ProcessPoolExecutor
 
 from .codfreq_types import (
@@ -22,7 +23,6 @@ from .codfreq_types import (
     FASTQFileName,
     FragmentConfig,
     MainFragmentConfig,
-    CodonAlignmentConfig,
     DerivedFragmentConfig
 )
 from .sam2codfreq_types import (
@@ -51,23 +51,48 @@ ENCODING: str = 'UTF-8'
 @cython.inline
 @cython.returns(list)
 def build_fragment_intervals(
-    fragments: list[DerivedFragmentConfig]
+    fragments: list[DerivedFragmentConfig | Mapping[str, Any]]
 ) -> list[FragmentInterval]:
-    """Extract fragment reference intervals for codon processing."""
+    """Extract fragment reference intervals for codon processing.
 
-    return [(
-        fragment['refRanges'],
-        fragment['fragmentName']
-    ) for fragment in fragments]
+    :param fragments: Fragment configurations to convert.
+    :type fragments: list[DerivedFragmentConfig | Mapping[str, Any]]
+    :returns: Intervals paired with fragment names.
+    :rtype: list[FragmentInterval]
+    """
+
+    intervals: list[FragmentInterval] = []
+    for fragment in fragments:
+        if isinstance(fragment, DerivedFragmentConfig):
+            ranges = fragment.refRanges or []
+            name = fragment.fragmentName
+        else:
+            ranges = fragment.get('refRanges', [])
+            name = fragment.get('fragmentName', '')
+        intervals.append((ranges, name))
+    return intervals
 
 
 @cython.cfunc
 @cython.inline
 @cython.returns(list)
-def get_ref_ranges(config: dict) -> list[NAPosRange]:
-    refstart = config.get('refStart')
-    refend = config.get('refEnd')
-    orig_refranges = config.get('refRanges')
+def get_ref_ranges(config: Mapping[str, Any] | BaseModel) -> list[NAPosRange]:
+    """Normalize reference range definitions.
+
+    :param config: Fragment or region configuration.
+    :type config: Mapping[str, Any] | BaseModel
+    :returns: List of reference coordinate ranges.
+    :rtype: list[NAPosRange]
+    """
+
+    if isinstance(config, BaseModel):
+        refstart = getattr(config, 'refStart', None)
+        refend = getattr(config, 'refEnd', None)
+        orig_refranges = getattr(config, 'refRanges', None)
+    else:
+        refstart = config.get('refStart')
+        refend = config.get('refEnd')
+        orig_refranges = config.get('refRanges')
     refranges: list[NAPosRange] = []
     if isinstance(orig_refranges, list):
         refranges = [(start, end) for start, end in orig_refranges]
@@ -90,84 +115,47 @@ def get_ref_fragments(
     FragmentGeneLookup
 ]:
     refname: str
-    codon_alignment: None | (
-        Literal[False] |
-        list[CodonAlignmentConfig]
-    )
-    cda: CodonAlignmentConfig
     config: FragmentConfig
     ref_fragments: dict[Header, TypedRefFragment] = {}
     frag_size_lookup: dict[Header, AAPos] = {}
-    for config in profile['fragmentConfig']:
-        refname = config['fragmentName']
-        refseq = config.get('refSequence')
-        if isinstance(refseq, str):
-            ref_fragments[refname] = {
-                'ref': {
-                    'fragmentName': refname,
-                    'refSequence': refseq
-                },
+    for config in profile.fragmentConfig:
+        if isinstance(config, MainFragmentConfig):
+            ref_fragments[config.fragmentName] = {
+                'ref': config,
                 'fragments': []
             }
-    for config in profile['fragmentConfig']:
-        refname = config['fragmentName']
-        fromref = config.get('fromFragment')
-        gene = config.get('geneName')
+    for config in profile.fragmentConfig:
+        if not isinstance(config, DerivedFragmentConfig):
+            continue
         refranges = get_ref_ranges(config)
-        codon_alignment_raw: Any = config.get('codonAlignment')
-        codon_alignment = None
-        if isinstance(codon_alignment_raw, list):
-            codon_alignment = []
-            for one in codon_alignment_raw:
-                cda = {}
-                if 'relRefStart' in one:
-                    cda['relRefStart'] = one['relRefStart']
-                if 'relRefEnd' in one:
-                    cda['relRefEnd'] = one['relRefEnd']
-                if 'windowSize' in one:
-                    cda['windowSize'] = one['windowSize']
-                if 'minGapDistance' in one:
-                    cda['minGapDistance'] = one['minGapDistance']
-                if 'relGapPlacementScore' in one:
-                    cda['relGapPlacementScore'] = one['relGapPlacementScore']
-                codon_alignment.append(cda)
-        elif codon_alignment_raw is False:
-            codon_alignment = False
-
-        if (
-            isinstance(fromref, str) and
-            (gene is None or isinstance(gene, str)) and
-            refranges
-        ):
-            ref_fragments[fromref]['fragments'].append({
-                'fragmentName': refname,
-                'fromFragment': fromref,
-                'geneName': gene,
-                'refRanges': refranges,
-                'codonAlignment': codon_alignment
-            })
-            frag_size_lookup[refname] = sum(
-                (end - start + 1) for start, end in refranges
-            ) // 3
+        if not refranges:
+            continue  # pragma: no cover - validated above
+        derived = DerivedFragmentConfig(
+            fragmentName=config.fragmentName,
+            fromFragment=config.fromFragment,
+            geneName=config.geneName,
+            refRanges=refranges,
+            codonAlignment=config.codonAlignment,
+        )
+        ref_fragments[config.fromFragment]['fragments'].append(derived)
+        frag_size_lookup[config.fragmentName] = sum(
+            (end - start + 1) for start, end in refranges
+        ) // 3
 
     # build frag_gene_lookup
     gene_offsets: dict[GeneText, AAPos] = {}
     frag_gene_lookup: FragmentGeneLookup = {}
-    for config in profile['fragmentConfig']:
-        refname = config['fragmentName']
-        gene = config.get('geneName')
-
+    for config in profile.fragmentConfig:
+        gene = getattr(config, 'geneName', None)
         if not isinstance(gene, str):
             continue
-
+        refname = config.fragmentName
         if gene not in gene_offsets:
             gene_offsets[gene] = 0
-
         if refname not in frag_gene_lookup:
             frag_gene_lookup[refname] = []
-
         frag_gene_lookup[refname].append((gene, gene_offsets[gene]))
-        gene_offsets[gene] += frag_size_lookup[refname]
+        gene_offsets[gene] += frag_size_lookup.get(refname, 0)
 
     return [
         (refname, pair['ref'], pair['fragments'])

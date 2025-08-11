@@ -185,7 +185,7 @@ def test_create_untrans_region_consensus_writes_results(
             ),
         ],
     }
-    profile = cast(Profile, profile_dict)
+    profile = Profile.model_validate(profile_dict)
     mock_name_bamfile.return_value = "file.bam"
     result_cons = {
         "name": "R1",

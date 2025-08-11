@@ -8,7 +8,8 @@ from .codfreq_types import (
     FragmentConfig,
     SequenceAssemblyConfig,
     NARegionConfig,
-    RegionalConsensus
+    RegionalConsensus,
+    DerivedFragmentConfig,
 )
 from .posnas import get_posnas_in_genome_region
 
@@ -133,33 +134,33 @@ def create_untrans_region_consensus(
     region: SequenceAssemblyConfig
 
     results: list[RegionalConsensus] = []
-    for fragment in profile['fragmentConfig']:
-        if 'fromFragment' in fragment:
+    for fragment in profile.fragmentConfig:
+        if isinstance(fragment, DerivedFragmentConfig):
             continue
-        refname = fragment['fragmentName']
+        refname = fragment.fragmentName
         samfile = name_bamfile(seqname, refname, is_trimmed=True)
-        for region in profile['sequenceAssemblyConfig']:
-            if region.get('fromFragment') != refname:
+        for region in profile.sequenceAssemblyConfig:
+            if region.fromFragment != refname:
                 continue
-            if 'name' not in region or region['name'] is None:
+            if region.name is None:
                 continue
-            if (
-                'fromFragment' not in region or region['fromFragment'] is None
-            ):  # pragma: no cover - validated above
+            if region.fromFragment is None:
+                continue  # pragma: no cover - validated above
+            if region.refStart is None:
                 continue
-            if 'refStart' not in region or region['refStart'] is None:
-                continue
-            if 'refEnd' not in region or region['refEnd'] is None:
+            if region.refEnd is None:
                 continue
 
-            results.append(sam2consensus(
-                samfile,
-                {
-                    'name': region['name'],
-                    'fromFragment': region['fromFragment'],
-                    'refStart': region['refStart'],
-                    'refEnd': region['refEnd']
-                }
-            ))
+            results.append(
+                sam2consensus(
+                    samfile,
+                    {
+                        'name': region.name,
+                        'fromFragment': region.fromFragment,
+                        'refStart': region.refStart,
+                        'refEnd': region.refEnd,
+                    },
+                )
+            )
     with open(f'{seqname}.untrans.json', 'w') as fp:
         json.dump(results, fp)

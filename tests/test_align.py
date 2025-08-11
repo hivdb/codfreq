@@ -23,7 +23,7 @@ from codfreq.align import (
     REQUIRED_PROFILE_VERSION,
 )
 from codfreq.enums import LogFormat, Program  # noqa: E402
-from codfreq.codfreq_types import PairedFASTQ  # noqa: E402
+from codfreq.codfreq_types import PairedFASTQ, Profile  # noqa: E402
 from codfreq.cmdwrappers.fastp import FASTPConfig  # noqa: E402
 from codfreq.cmdwrappers.ivar import TrimConfig  # noqa: E402
 from codfreq.cmdwrappers.cutadapt import CutadaptConfig  # noqa: E402
@@ -245,7 +245,9 @@ def test_align_with_profile_replaces_without_trim(tmp_path: Path) -> None:
     """When no trimming is configured files are renamed after alignment."""
 
     paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
-    profile = {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    profile = Profile.model_validate(
+        {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    )
     with (
         patch("codfreq.align.fastp_preprocess", return_value=paired),
         patch("codfreq.align.get_refinit", return_value=lambda x: None),
@@ -275,7 +277,9 @@ def test_align_with_profile_trims_and_logs_json(
     """Alignment path uses cutadapt and ivar trimming when configured."""
 
     paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
-    profile = {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    profile = Profile.model_validate(
+        {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    )
     with (
         patch("codfreq.align.fastp_preprocess", return_value=paired),
         patch("codfreq.align.cutadapt_trim", return_value=paired) as mock_cut,

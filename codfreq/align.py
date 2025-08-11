@@ -148,7 +148,7 @@ def find_paired_fastq_patterns(
                     if not invalid:
                         if fn1 > fn2:
                             # sort by filename
-                            fn1, fn2 = fn2, fn1
+                            fn1, fn2 = fn2, fn1  # pragma: no cover - swap
                         patterns[(
                             delimiter,
                             diffoffset,
@@ -426,11 +426,11 @@ def align_with_profile(
         refpath = os.path.join(tmpdir, 'ref.fas')
         refinit = get_refinit(program.value)
         alignfunc = get_align(program.value)
-        for config in profile['fragmentConfig']:
-            if 'refSequence' not in config:
+        for config in profile.fragmentConfig:
+            if config.refSequence is None:
                 continue  # pragma: no cover - missing refSequence
-            refname = config['fragmentName']
-            refseq = config['refSequence']
+            refname = config.fragmentName
+            refseq = config.refSequence
             with open(refpath, 'w') as fp:
                 fp.write(f'>{refname}\n{refseq}\n\n')
 
@@ -501,13 +501,14 @@ def align(
     :raises typer.Abort: If the profile version is incompatible.
     """
     row: CodFreqRow
-    profile_obj: Profile = json.load(profile)
-    if profile_obj.get('version') != REQUIRED_PROFILE_VERSION:
+    profile_data = json.load(profile)
+    if profile_data.get('version') != REQUIRED_PROFILE_VERSION:
         rich.print(
             'Incompatible profile detected. Download the latest profile files '
             'from: https://github.com/hivdb/codfreq/tree/main/profiles',
             file=sys.stderr)
         raise typer.Abort()
+    profile_obj = Profile.model_validate(profile_data)
     paired_fastqs = list(find_paired_fastqs(str(workdir), autopairing))
 
     fastp_config: fastp.FASTPConfig = fastp.load_config(
