@@ -99,3 +99,19 @@ def test_profile_assembly_contiguity() -> None:
     }
     with pytest.raises(ValidationError):
         Profile.model_validate(truncated)
+
+
+def test_profile_unknown_gene() -> None:
+    """Unknown genes in assemblies raise an error."""
+
+    main = {"fragmentName": "ref", "refSequence": "acgt"}
+    profile = {
+        "version": "1",
+        "fragmentConfig": [main],
+        "sequenceAssemblyConfig": [
+            {"geneName": "g1"},
+        ],
+    }
+    with pytest.raises(ValidationError) as err:
+        Profile.model_validate(profile)
+    assert "Unknown gene" in str(err.value)

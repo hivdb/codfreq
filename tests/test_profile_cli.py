@@ -1,9 +1,37 @@
 """Tests for the profile CLI."""
 
 import json
+import io
+import sys
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from typing import cast
 
-import questionary  # type: ignore[import-not-found]
+try:  # pragma: no cover - dependency shim
+    import questionary  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover - dependency shim
+    questionary = SimpleNamespace(  # type: ignore[assignment]
+        text=lambda *a, **k: None,
+        confirm=lambda *a, **k: None,
+        checkbox=lambda *a, **k: None,
+        Choice=lambda *a, **k: SimpleNamespace(**k),
+    )
+    sys.modules["questionary"] = cast(ModuleType, questionary)
+
+try:  # pragma: no cover - dependency shim
+    from Bio import Entrez, SeqIO  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover - dependency shim
+    Entrez = SimpleNamespace(efetch=lambda *a, **k: None)
+    SeqIO = SimpleNamespace(read=lambda *a, **k: None)
+    bio_mod = SimpleNamespace(Entrez=Entrez, SeqIO=SeqIO)
+    sys.modules["Bio"] = cast(ModuleType, bio_mod)
+    sys.modules["Bio.Entrez"] = Entrez  # type: ignore[assignment]
+    sys.modules["Bio.SeqIO"] = SeqIO  # type: ignore[assignment]
+    sys.modules["Bio.SeqFeature"] = SimpleNamespace(
+        CompoundLocation=type("CompoundLocation", (), {})
+    )  # type: ignore[assignment]
+    from Bio import Entrez, SeqIO  # type: ignore[import-not-found]
+
 from typer.testing import CliRunner
 from unittest.mock import patch
 
@@ -22,6 +50,47 @@ from codfreq.codfreq_types import (
 def _write_profile(path: Path, profile: dict) -> None:
     """Write profile JSON to disk."""
     path.write_text(json.dumps(profile), encoding="utf-8")
+
+
+def test_fetch_record_parses_features() -> None:
+    """``_fetch_record`` extracts sequences and gene ranges."""
+
+    feature_skip = SimpleNamespace(
+        type="misc_feature",
+        qualifiers={},
+        location=SimpleNamespace(start=0, end=1),
+    )
+    feature_missing = SimpleNamespace(
+        type="gene",
+        qualifiers={},
+        location=SimpleNamespace(start=1, end=2),
+    )
+    feature = SimpleNamespace(
+        type="gene",
+        qualifiers={"gene": ["g1"]},
+        location=SimpleNamespace(start=2, end=4),
+    )
+    record = SimpleNamespace(
+        seq="ACGT",
+        features=[feature_skip, feature_missing, feature],
+    )
+
+    class Handle(io.StringIO):
+        def __enter__(self) -> "Handle":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            self.close()
+
+    with (
+        patch.object(profile_module.Entrez, "efetch", return_value=Handle()),
+        patch.object(profile_module.SeqIO, "read", return_value=record),
+    ):
+        result = profile_module._fetch_record("ACC", "a@b")
+    assert result.accession == "ACC"
+    assert result.sequence == "ACGT"
+    assert result.features[0].name == "g1"
+    assert result.features[0].ranges == [(3, 4)]
 
 
 def test_validate_profile_valid(tmp_path: Path) -> None:
@@ -83,7 +152,7 @@ def test_create_profile(tmp_path: Path) -> None:
         def __init__(self, _msg: str) -> None:
             self._msg = _msg
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     with (
@@ -132,12 +201,12 @@ def test_create_profile_genbank(tmp_path: Path) -> None:
         def __init__(self, _msg: str) -> None:
             self._msg = _msg
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     def fake_checkbox(*_a: object, **_k: object) -> object:
         class P:
-            def ask(self) -> object:  # pragma: no cover - trivial
+            def ask(self) -> object:
                 return record.features
 
         return P()
@@ -193,7 +262,7 @@ def test_prompt_manual_fragments() -> None:
         def __init__(self, _m: str) -> None:
             self._m = _m
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     with patch.object(
@@ -239,7 +308,7 @@ def test_prompt_manual_assemblies() -> None:
         def __init__(self, _m: str) -> None:
             self._m = _m
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     with (
@@ -277,7 +346,7 @@ def test_create_profile_rejects_suggestion(tmp_path: Path) -> None:
         def __init__(self, _m: str) -> None:
             self._m = _m
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     with (
@@ -310,7 +379,7 @@ def test_create_profile_manual_assembly_when_missing(tmp_path: Path) -> None:
         def __init__(self, _m: str) -> None:
             self._m = _m
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     with (
@@ -351,7 +420,7 @@ def test_create_profile_validation_failure(tmp_path: Path) -> None:
         def __init__(self, _m: str) -> None:
             self._m = _m
 
-        def ask(self) -> object:  # pragma: no cover - trivial
+        def ask(self) -> object:
             return next(answers)
 
     bad_assembly = [

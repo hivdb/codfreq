@@ -267,8 +267,8 @@ class Profile(BaseModel):
                     msg = (
                         f"Unknown gene '{region.geneName}' in "
                         "sequenceAssemblyConfig"
-                    )  # pragma: no cover
-                    raise ValueError(msg)  # pragma: no cover
+                    )
+                    raise ValueError(msg)
                 start, end = gene_spans[region.geneName]
             else:
                 start, end = region.refStart, region.refEnd

@@ -45,7 +45,7 @@ class GenBankRecord(BaseModel):
 
 def _fetch_record(
     accession: str, email: str
-) -> GenBankRecord:  # pragma: no cover
+) -> GenBankRecord:
     """Retrieve a GenBank record for *accession* using Biopython's Entrez.
 
     :param accession: GenBank accession identifier.
@@ -58,7 +58,7 @@ def _fetch_record(
     """
 
     Entrez.email = email  # type: ignore[assignment]
-    with Entrez.efetch(  # pragma: no cover - network I/O
+    with Entrez.efetch(
         db="nuccore", id=accession, rettype="gb", retmode="text"
     ) as handle:  # type: ignore[no-untyped-call]
         record = SeqIO.read(handle, "genbank")  # type: ignore[no-untyped-call]
@@ -448,8 +448,8 @@ def create(
         ).ask():
             assemblies = _prompt_manual_assemblies(
                 fragments
-            )  # pragma: no cover - manual override
-    else:  # pragma: no cover - no fragments scenario
+            )
+    else:
         assemblies = _prompt_manual_assemblies(fragments)
 
     profile_data = {
