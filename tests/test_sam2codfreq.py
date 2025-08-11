@@ -118,7 +118,7 @@ def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
             "total": 3,
             "codon": "AAA",
             "count": 2,
-            "total_quality_score": 50,
+            "total_quality_score": 50.0,
         },
         {
             "gene": "geneX",
@@ -126,7 +126,7 @@ def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
             "total": 3,
             "codon": "CCC",
             "count": 1,
-            "total_quality_score": 20,
+            "total_quality_score": 20.0,
         },
     ]
 
@@ -197,7 +197,7 @@ def test_sam2codfreq_all() -> None:
             "total": 1,
             "codon": "AAA",
             "count": 1,
-            "total_quality_score": 30,
+            "total_quality_score": 30.0,
         }
     ]
 

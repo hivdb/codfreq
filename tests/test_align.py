@@ -377,7 +377,7 @@ def test_align_runs_pipeline(tmp_path: Path) -> None:
                     total=1,
                     codon=b"AAA",
                     count=1,
-                    total_quality_score=1,
+                    total_quality_score=1.0,
                 )
             ],
         ),

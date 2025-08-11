@@ -73,7 +73,7 @@ class CodonAlignmentConfig(BaseModel):
     :type relGapPlacementScore: str | None
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     relRefStart: NAPos
     relRefEnd: NAPos
@@ -98,7 +98,7 @@ class DerivedFragmentConfig(BaseModel):
     :type codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     fragmentName: Header
     fromFragment: Header
@@ -156,6 +156,8 @@ class SequenceAssemblyConfig(BaseModel):
     :type refEnd: int | None
     """
 
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str | None = None
     geneName: str | None = None
     fromFragment: str | None = None
@@ -196,7 +198,7 @@ class Profile(BaseModel):
     :type sequenceAssemblyConfig: list[SequenceAssemblyConfig]
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     version: str
     fragmentConfig: list[FragmentConfig]
@@ -204,7 +206,21 @@ class Profile(BaseModel):
 
 
 class CodFreqRow(BaseModel):
-    """Single CodFreq output row."""
+    """Single CodFreq output row.
+
+    :param gene: Gene name.
+    :type gene: GeneText
+    :param position: Amino acid position.
+    :type position: AAPos
+    :param total: Total codons observed at the position.
+    :type total: int
+    :param codon: Codon sequence encoded as bytes.
+    :type codon: CodonText
+    :param count: Number of reads supporting the codon.
+    :type count: int
+    :param total_quality_score: Sum of base qualities supporting the codon.
+    :type total_quality_score: float
+    """
 
     model_config = ConfigDict(frozen=True, extra='forbid')
 
@@ -213,7 +229,7 @@ class CodFreqRow(BaseModel):
     total: int
     codon: CodonText
     count: int
-    total_quality_score: int
+    total_quality_score: float
 
 
 #                                 refStart refEnd

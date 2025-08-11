@@ -9,9 +9,7 @@ from postalign.models.sequence import (
     NAPosition
 )
 from operator import itemgetter
-from typing import (
-    Literal
-)
+from typing import Any, Literal
 from collections import Counter
 
 from .sam2codfreq_types import CodonCounterByFragPos
@@ -83,7 +81,7 @@ def aapos_to_napos(
 def assemble_alignment(
     codonstat_by_fragpos: CodonCounterByFragPos,
     refseq: bytearray,
-    fragment: DerivedFragmentConfig
+    fragment: DerivedFragmentConfig | dict[str, Any]
 ) -> tuple[
     Sequence | None,
     Sequence | None,
@@ -97,8 +95,9 @@ def assemble_alignment(
     :type codonstat_by_fragpos: CodonCounterByFragPos
     :param refseq: Reference nucleotide sequence for the main fragment.
     :type refseq: bytearray
-    :param fragment: Fragment configuration including reference ranges.
-    :type fragment: DerivedFragmentConfig
+    :param fragment: Fragment configuration including reference ranges or a raw
+        mapping that can be validated into one.
+    :type fragment: DerivedFragmentConfig | dict[str, Any]
     :returns: Tuple of reference sequence, query sequence and the first and
         last amino-acid positions represented. ``None`` values indicate that no
         codons were found for the fragment.
@@ -167,10 +166,16 @@ order_getter = itemgetter('count', 'total_quality_score')
 def codonalign_consensus(
     codonstat_by_fragpos: CodonCounterByFragPos,
     qualities_by_fragpos: CodonCounterByFragPos,
-    ref: MainFragmentConfig,
-    fragments: list[DerivedFragmentConfig],
+    ref: MainFragmentConfig | dict[str, Any],
+    fragments: list[DerivedFragmentConfig | dict[str, Any]],
 ) -> tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
-    """Derive codon consensus for aligned fragments."""
+    """Derive codon consensus for aligned fragments.
+
+    :param ref: Reference fragment configuration or raw mapping.
+    :type ref: MainFragmentConfig | dict[str, Any]
+    :param fragments: Derived fragment configurations or raw mappings.
+    :type fragments: list[DerivedFragmentConfig | dict[str, Any]]
+    """
 
     fragment_name: Header
     fragment: DerivedFragmentConfig
@@ -188,7 +193,7 @@ def codonalign_consensus(
 
     if not isinstance(ref, MainFragmentConfig):
         ref = MainFragmentConfig.model_validate(ref)
-    fragments = [
+    fragments_validated = [
         (
             f
             if isinstance(f, DerivedFragmentConfig)
@@ -199,7 +204,7 @@ def codonalign_consensus(
         for f in fragments
     ]
     refseq: bytearray = bytearray(ref.refSequence, ENCODING)
-    for fragment in fragments:
+    for fragment in fragments_validated:
         fragment_name = fragment.fragmentName
         codon_align_config: None | (
             Literal[False] | list[CodonAlignmentConfig]
@@ -210,7 +215,9 @@ def codonalign_consensus(
             continue
 
         if not codon_align_config:
-            codon_align_config = [CodonAlignmentConfig(relRefStart=0, relRefEnd=0)]
+            codon_align_config = [
+                CodonAlignmentConfig(relRefStart=0, relRefEnd=0)
+            ]
 
         # assemble consensus codon reads into pairwise alignment
         (frag_refseq_obj,
