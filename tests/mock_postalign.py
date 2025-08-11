@@ -26,6 +26,19 @@ def mock_postalign() -> Iterator[None]:
     models = ModuleType("postalign.models")
     models.__path__ = []  # type: ignore[attr-defined]
 
+    cython = ModuleType("cython")
+
+    def _decorator(*dargs: Any, **dkwargs: Any) -> Any:  # pragma: no cover
+        if dargs and callable(dargs[0]):
+            return dargs[0]
+        return lambda func: func
+
+    cython.ccall = _decorator  # type: ignore[attr-defined]
+    cython.inline = _decorator  # type: ignore[attr-defined]
+    cython.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
+    cython.void = None  # type: ignore[attr-defined]
+    cython.cfunc = _decorator  # type: ignore[attr-defined]
+
     def group_by_codons(
         seq1: bytearray, seq2: bytearray
     ) -> tuple[list[bytearray], list[bytearray]]:
@@ -103,6 +116,7 @@ def mock_postalign() -> Iterator[None]:
         "postalign.processors.codon_alignment": processors_codon,
         "postalign.models": models,
         "postalign.models.sequence": models_seq,
+        "cython": cython,
     }
 
     with patch.dict(sys.modules, modules):

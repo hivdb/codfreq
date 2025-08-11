@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, mock_open
 import sys
 
 import pytest
+import typer
 
 from .mock_postalign import mock_postalign
 
@@ -24,8 +25,11 @@ from codfreq.align import (  # noqa: E402
     find_paired_fastqs,
     ivar_trim,
     cutadapt_trim,
+    align_with_profile,
+    align,
+    REQUIRED_PROFILE_VERSION,
 )
-from codfreq.enums import LogFormat  # noqa: E402
+from codfreq.enums import LogFormat, Program  # noqa: E402
 from codfreq.codfreq_types import PairedFASTQ  # noqa: E402
 from codfreq.cmdwrappers.fastp import FASTPConfig  # noqa: E402
 from codfreq.cmdwrappers.ivar import TrimConfig  # noqa: E402
@@ -188,3 +192,165 @@ def test_cutadapt_trim_json_logs(
         merged["pair"][0], result["pair"][0], **config
     )
     assert result["pair"][0].endswith("merged-trimed.fastq.gz")
+
+
+def test_find_paired_fastq_patterns_chunk_mismatch() -> None:
+    """Filename pairs with different chunk counts are treated as singles."""
+
+    files = ["a_extra_R1.fastq", "b_R2.fastq"]
+    patterns = list(find_paired_fastq_patterns(files, autopairing=True))
+    assert len(patterns) == 2
+    assert all(p["pair"][1] is None for p in patterns)
+
+
+def test_find_paired_fastq_patterns_multiple_marker_diffs() -> None:
+    """Pairs with more than one marker difference are rejected."""
+
+    files = ["s_R1_1_x.fastq", "s_R2_2_x.fastq"]
+    patterns = list(find_paired_fastq_patterns(files, autopairing=True))
+    assert len(patterns) == 2
+    assert all(p["pair"][1] is None for p in patterns)
+
+
+def test_ivar_trim_json_logs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ivar.trim emits structured JSON progress when requested."""
+
+    in_bam = str(tmp_path / "in.bam")
+    out_bam = str(tmp_path / "out.bam")
+    config: TrimConfig = {}
+    with patch("codfreq.align.ivar.trim") as mock_trim:
+        ivar_trim(in_bam, out_bam, config, LogFormat.json)
+    out = capsys.readouterr().out
+    assert '"command": "ivar"' in out
+    mock_trim.assert_called_once_with(in_bam, out_bam, **config)
+
+
+def test_cutadapt_trim_text_logs(tmp_path: Path) -> None:
+    """cutadapt.cutadapt emits human-readable progress in text mode."""
+
+    merged: PairedFASTQ = {
+        "name": "sample",
+        "pair": (str(tmp_path / "sample.merged.fastq.gz"), None),
+        "n": 1,
+    }
+    config: CutadaptConfig = {}
+    with (
+        patch("codfreq.align.cutadapt.cutadapt") as mock_cut,
+        patch("codfreq.align.rich.print") as mock_print,
+    ):
+        result = cutadapt_trim(merged, config, LogFormat.text)
+    mock_print.assert_any_call("Trimming sample using cutadapt...")
+    mock_cut.assert_called_once_with(
+        merged["pair"][0], result["pair"][0], **config
+    )
+    assert result["pair"][0].endswith("merged-trimed.fastq.gz")
+
+
+def test_align_with_profile_replaces_without_trim(tmp_path: Path) -> None:
+    """When no trimming is configured files are renamed after alignment."""
+
+    paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    profile = {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    with (
+        patch("codfreq.align.fastp_preprocess", return_value=paired),
+        patch("codfreq.align.get_refinit", return_value=lambda x: None),
+        patch(
+            "codfreq.align.get_align",
+            return_value=MagicMock(),
+        ) as get_align,
+        patch("codfreq.align.os.replace") as mock_replace,
+        patch("codfreq.align.rich.print"),
+    ):
+        align_with_profile(
+            paired,
+            Program.minimap2,
+            profile,
+            LogFormat.text,
+            fastp_config={},
+            cutadapt_config=None,
+            ivar_trim_config=None,
+        )
+    get_align.return_value.assert_called_once()
+    assert mock_replace.call_count == 3
+
+
+def test_align_with_profile_trims_and_logs_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Alignment path uses cutadapt and ivar trimming when configured."""
+
+    paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    profile = {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+    with (
+        patch("codfreq.align.fastp_preprocess", return_value=paired),
+        patch("codfreq.align.cutadapt_trim", return_value=paired) as mock_cut,
+        patch("codfreq.align.get_refinit", return_value=lambda x: None),
+        patch("codfreq.align.get_align", return_value=MagicMock()),
+        patch("codfreq.align.ivar_trim") as mock_ivar,
+    ):
+        align_with_profile(
+            paired,
+            Program.bowtie2,
+            profile,
+            LogFormat.json,
+            fastp_config={},
+            cutadapt_config={},
+            ivar_trim_config={},
+        )
+    out = capsys.readouterr().out
+    assert '"op": "alignment"' in out
+    mock_cut.assert_called_once()
+    mock_ivar.assert_called_once()
+
+
+def test_align_aborts_on_profile_version_mismatch(tmp_path: Path) -> None:
+    """Profiles with wrong version trigger a ``typer.Abort``."""
+
+    profile = tmp_path / "p.json"
+    profile.write_text("{}")
+    with (
+        profile.open() as fp,
+        patch("codfreq.align.json.load", return_value={"version": "old"}),
+        patch("codfreq.align.rich.print") as mock_print,
+    ):
+        with pytest.raises(typer.Abort):
+            align(tmp_path, Program.bowtie2, fp, 1, LogFormat.text, True)
+    mock_print.assert_called_once()
+
+
+def test_align_runs_pipeline(tmp_path: Path) -> None:
+    """Core pipeline orchestrates alignment and codfreq generation."""
+
+    profile = tmp_path / "p.json"
+    profile.write_text("{}")
+    profile_obj = {"version": REQUIRED_PROFILE_VERSION, "fragmentConfig": []}
+    pairobj = {"name": "samp", "pair": ("r1", "r2"), "n": 2}
+    with (
+        profile.open() as fp,
+        patch("codfreq.align.json.load", return_value=profile_obj),
+        patch("codfreq.align.find_paired_fastqs", return_value=[pairobj]),
+        patch("codfreq.align.fastp.load_config", return_value={}),
+        patch("codfreq.align.cutadapt.load_config", return_value=None),
+        patch("codfreq.align.ivar.load_trim_config", return_value=None),
+        patch("codfreq.align.align_with_profile") as mock_align_profile,
+        patch(
+            "codfreq.align.name_codfreq",
+            return_value=str(tmp_path / "out.codfreq"),
+        ),
+        patch("codfreq.align.open", mock_open(), create=True),
+        patch("codfreq.align.csv.DictWriter") as mock_writer,
+        patch(
+            "codfreq.align.sam2codfreq_all",
+            return_value=[{"codon": b"AAA"}],
+        ),
+        patch(
+            "codfreq.align.create_untrans_region_consensus"
+        ) as mock_consensus,
+    ):
+        align(tmp_path, Program.minimap2, fp, 1, LogFormat.text, True)
+    mock_align_profile.assert_called_once()
+    mock_writer.return_value.writeheader.assert_called_once()
+    mock_writer.return_value.writerow.assert_called_once()
+    mock_consensus.assert_called_once()

@@ -5,9 +5,9 @@ import types
 import importlib
 from array import array
 from typing import Any, Iterator
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-# Stub pysam module
+# Build stub modules for third-party dependencies.
 pysam_stub = types.ModuleType("pysam")
 
 
@@ -65,9 +65,7 @@ class AlignmentFile:
 
 pysam_stub.AlignmentFile = AlignmentFile  # type: ignore[attr-defined]
 pysam_stub.AlignedSegment = AlignedSegment  # type: ignore[attr-defined]
-sys.modules["pysam"] = pysam_stub
 
-# Stub cython decorators
 cython_stub = types.ModuleType("cython")
 
 
@@ -82,15 +80,15 @@ cython_stub.inline = _decorator  # type: ignore[attr-defined]
 cython_stub.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
 cython_stub.void = None  # type: ignore[attr-defined]
 cython_stub.cfunc = _decorator  # type: ignore[attr-defined]
-sys.modules["cython"] = cython_stub
 
-import codfreq.posnas as posnas  # noqa: E402
-importlib.reload(posnas)
-from codfreq.posnas import (  # noqa: E402
-    get_posnas_between,
-    get_posnas_in_genome_region,
-    iter_posnas,
-)
+with patch.dict(sys.modules, {"pysam": pysam_stub, "cython": cython_stub}):
+    import codfreq.posnas as posnas  # noqa: E402
+    importlib.reload(posnas)
+    from codfreq.posnas import (  # noqa: E402
+        get_posnas_between,
+        get_posnas_in_genome_region,
+        iter_posnas,
+    )
 
 
 def test_get_posnas_between_filters_quality() -> None:
@@ -120,6 +118,7 @@ def test_get_posnas_between_skips_empty_reads() -> None:
 
 def test_get_posnas_between_stops_at_end() -> None:
     """Processing halts once the file offset exceeds the end marker."""
+
     AlignmentFile.reads = [
         AlignedSegment("r1", "A", [10], [(0, 0)]),
         AlignedSegment("r2", "C", [20], [(0, 1)]),
@@ -235,6 +234,7 @@ def test_iter_posnas_without_progress() -> None:
 
 def test_iter_posnas_text_progress() -> None:
     """Text progress uses ``tqdm`` and sets the description."""
+
     AlignmentFile.reads = [
         AlignedSegment("r1", "AC", [10, 20], [(0, 0), (1, 1)]),
         AlignedSegment("r2", "GT", [30, 40], [(0, 2), (1, 3)]),
