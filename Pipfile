@@ -24,6 +24,7 @@ pyyaml = "*"
 rich = "*"
 pydantic = "*"
 questionary = "*"
+biopython = "*"
 
 [requires]
 python_version = "3.13"

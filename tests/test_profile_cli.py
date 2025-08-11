@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 import questionary  # type: ignore[import-not-found]
-from pytest import MonkeyPatch
 from typer.testing import CliRunner
+from unittest.mock import patch
 
 import codfreq.profile as profile_module
 from codfreq.profile import app
@@ -44,17 +44,17 @@ def test_validate_profile_invalid(tmp_path: Path) -> None:
     profile = {
         "version": "20221213",
         "fragmentConfig": [{"fragmentName": "ref", "refSequence": "acgt"}],
-        "sequenceAssemblyConfig": [{"trim": [1]}],
+        "sequenceAssemblyConfig": [{"geneName": 1}],
     }
     prof = tmp_path / "prof.json"
     _write_profile(prof, profile)
     runner = CliRunner()
     result = runner.invoke(app, ["validate", str(prof)])
     assert result.exit_code != 0
-    assert "trim" in result.stdout
+    assert "geneName" in result.stdout
 
 
-def test_create_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_create_profile(tmp_path: Path) -> None:
     """Interactively create a minimal profile."""
 
     answers = iter([
@@ -79,14 +79,24 @@ def test_create_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         def ask(self) -> object:  # pragma: no cover - trivial
             return next(answers)
 
-    monkeypatch.setattr(questionary, "text", lambda msg, **_: Prompt(msg))
-    monkeypatch.setattr(questionary, "confirm", lambda msg: Prompt(msg))
-    monkeypatch.setattr(questionary, "checkbox", lambda *a, **k: Prompt("cb"))
-
-    runner = CliRunner()
-    out = tmp_path / "new.json"
-    result = runner.invoke(app, ["create", str(out)])
-    assert result.exit_code == 0
+    with (
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+        patch.object(
+            questionary, "confirm", side_effect=lambda m: Prompt(m)
+        ),
+        patch.object(
+            questionary, "checkbox", side_effect=lambda *a, **k: Prompt("cb")
+        ),
+        patch.object(
+            questionary, "select", side_effect=lambda *a, **k: Prompt("sel")
+        ),
+    ):
+        runner = CliRunner()
+        out = tmp_path / "new.json"
+        result = runner.invoke(app, ["create", str(out)])
+        assert result.exit_code == 0
 
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["fragmentConfig"][0]["fragmentName"] == "ref"
@@ -94,36 +104,26 @@ def test_create_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     Profile.model_validate(data)
 
 
-def test_create_profile_genbank(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_create_profile_genbank(tmp_path: Path) -> None:
     """Create a profile from a GenBank accession with gene suggestions."""
 
-    gb_record = (
-        "LOCUS       TEST        20 bp    DNA     linear   01-JAN-2000\n"
-        "DEFINITION  Test sequence\n"
-        "ACCESSION   TEST\n"
-        "VERSION     TEST.1\n"
-        "FEATURES             Location/Qualifiers\n"
-        "     gene            1..10\n"
-        "                     /gene=\"gene1\"\n"
-        "     gene            join(11..15,16..20)\n"
-        "                     /gene=\"gene2\"\n"
-        "ORIGIN\n"
-        "        1 acgtacgtacgtacgtacgt\n"
-        "//\n"
+    record = profile_module.GenBankRecord(
+        accession="TEST",
+        sequence="ACGTACGTACGTACGTACGT",
+        features=[
+            profile_module.GeneFeature(name="gene1", ranges=[(1, 10)]),
+            profile_module.GeneFeature(
+                name="gene2", ranges=[(11, 15), (16, 20)]
+            ),
+        ],
     )
-
-    monkeypatch.setattr(
-        profile_module, "_download_genbank", lambda _acc: gb_record
-    )
-    record = profile_module._parse_genbank(gb_record, "TEST")
 
     answers = iter([
         "20221213",
         "TEST",
         "ref",
         "",
+        True,
         True,
     ])
 
@@ -134,22 +134,27 @@ def test_create_profile_genbank(
         def ask(self) -> object:  # pragma: no cover - trivial
             return next(answers)
 
-    monkeypatch.setattr(questionary, "text", lambda msg, **_: Prompt(msg))
-    monkeypatch.setattr(questionary, "confirm", lambda msg: Prompt(msg))
-
     def fake_checkbox(*_a: object, **_k: object) -> object:
-        class CB:
+        class P:
             def ask(self) -> object:  # pragma: no cover - trivial
                 return record.features
 
-        return CB()
+        return P()
 
-    monkeypatch.setattr(questionary, "checkbox", fake_checkbox)
-
-    runner = CliRunner()
-    out = tmp_path / "gb.json"
-    result = runner.invoke(app, ["create", str(out)])
-    assert result.exit_code == 0
+    with (
+        patch.object(profile_module, "_fetch_record", return_value=record),
+        patch.object(
+            questionary, "text", side_effect=lambda m, **_: Prompt(m)
+        ),
+        patch.object(
+            questionary, "confirm", side_effect=lambda m: Prompt(m)
+        ),
+        patch.object(questionary, "checkbox", side_effect=fake_checkbox),
+    ):
+        runner = CliRunner()
+        out = tmp_path / "gb.json"
+        result = runner.invoke(app, ["create", str(out)])
+        assert result.exit_code == 0
 
     data = json.loads(out.read_text(encoding="utf-8"))
     assert len(data["fragmentConfig"]) == 3
@@ -158,3 +163,48 @@ def test_create_profile_genbank(
     )
     assert gene2["refRanges"] == [[11, 15], [16, 20]]
     Profile.model_validate(data)
+
+
+def test_auto_assembly_overlap_and_gap() -> None:
+    """Overlapping fragments yield left/right trimmed assemblies."""
+
+    fragments: list[dict[str, object]] = [
+        {"fragmentName": "ref", "refSequence": "A" * 25},
+        {
+            "fragmentName": "g1",
+            "fromFragment": "ref",
+            "geneName": "g1",
+            "refRanges": [(1, 5)],
+        },
+        {
+            "fragmentName": "g2",
+            "fromFragment": "ref",
+            "geneName": "g2",
+            "refRanges": [(8, 15)],
+        },
+        {
+            "fragmentName": "g3",
+            "fromFragment": "ref",
+            "geneName": "g3",
+            "refRanges": [(14, 20)],
+        },
+    ]
+    options = profile_module._auto_assembly_options(fragments)
+    assert len(options) == 2
+    left, right = options
+    assert left[3]["trim"] == [[1, 2]]
+    assert right[2]["trim"] == [[7, 8]]
+
+
+def test_auto_assembly_no_main() -> None:
+    """No main fragment produces no assembly options."""
+
+    frags: list[dict[str, object]] = [
+        {
+            "fragmentName": "g1",
+            "geneName": "g1",
+            "fromFragment": "ref",
+            "refRanges": [(1, 5)],
+        }
+    ]
+    assert profile_module._auto_assembly_options(frags) == []

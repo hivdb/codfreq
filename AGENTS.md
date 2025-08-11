@@ -21,6 +21,8 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
   (e.g. ``pysam`` or ``cython``).  When a dependency is heavy or absent,
   tests must patch it at runtime using ``unittest.mock`` (such as
   ``patch.dict(sys.modules, {"pkg": stub})``) rather than vendoring files.
+- **Data models**: prefer frozen ``pydantic.BaseModel`` classes over
+  ``dataclass`` for new or modified structures.
 
 
 ## Environment & packaging

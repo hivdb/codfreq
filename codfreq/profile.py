@@ -3,132 +3,81 @@
 from __future__ import annotations
 
 import json
-import re
 import urllib.request
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Any, Iterable, cast
 
+from Bio import SeqIO  # type: ignore[import-not-found]
+from Bio.SeqFeature import CompoundLocation  # type: ignore[import-not-found]
 import questionary  # type: ignore[import-not-found]
 import typer
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 from rich import print
 
 from .codfreq_types import Profile
 
 
-@dataclass
-class GeneFeature:
-    """A gene feature extracted from a GenBank record."""
+class GeneFeature(BaseModel):
+    """Gene feature extracted from a GenBank record."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     ranges: list[tuple[int, int]]
 
 
-@dataclass
-class GenBankRecord:
+class GenBankRecord(BaseModel):
     """Simplified representation of a GenBank record."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     accession: str
     sequence: str
     features: list[GeneFeature]
 
 
-def _download_genbank(accession: str) -> str:
-    """Return the GenBank flat file for *accession*.
+def _fetch_record(accession: str) -> GenBankRecord:  # pragma: no cover - network I/O
+    """Retrieve a GenBank record for *accession* using Biopython.
 
     :param accession: GenBank accession identifier.
     :type accession: str
-    :returns: GenBank record in flat-file format.
-    :rtype: str
+    :returns: Parsed GenBank record with sequence and gene features.
+    :rtype: GenBankRecord
     :raises Exception: If the accession cannot be fetched.
     """
 
-    url = (  # pragma: no cover - network I/O
+    url = (
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
         f"?db=nuccore&id={accession}&rettype=gb&retmode=text"
     )
     with urllib.request.urlopen(  # pragma: no cover - network I/O
         url
     ) as handle:  # type: ignore[no-untyped-call]
-        return cast(str, handle.read().decode("utf-8"))
+        record = SeqIO.read(handle, "genbank")  # type: ignore[no-untyped-call]
 
-
-def _parse_location(loc: str) -> list[tuple[int, int]]:
-    """Parse a GenBank location string into numeric ranges."""
-
-    loc = re.sub(r"complement\((.*)\)", r"\1", loc)
-    if loc.startswith("join("):
-        loc = loc[5:-1]
-    ranges: list[tuple[int, int]] = []
-    for part in loc.split(","):
-        match = re.match(r"(\d+)\.\.(\d+)", part.strip())
-        if match:
-            ranges.append((int(match.group(1)), int(match.group(2))))
-    return ranges
-
-
-def _parse_genbank(text: str, accession: str) -> GenBankRecord:
-    """Parse GenBank *text* into a :class:`GenBankRecord`.
-
-    :param text: GenBank flat file content.
-    :type text: str
-    :param accession: Accession identifier.
-    :type accession: str
-    :returns: Parsed GenBank record with sequence and gene features.
-    :rtype: GenBankRecord
-    """
-
-    feat_match = re.search(
-        r"FEATURES\s+Location/Qualifiers\n(.*)\nORIGIN", text, re.DOTALL
-    )
-    feature_lines = feat_match.group(1).splitlines() if feat_match else []
     features: list[GeneFeature] = []
-    i = 0
-    while i < len(feature_lines):
-        line = feature_lines[i]
-        if line.startswith("     gene") or line.startswith("     CDS"):
-            location = line[21:].strip()
-            i += 1
-            gene_name = None
-            while i < len(feature_lines) and feature_lines[i].startswith(
-                "                     "
-            ):
-                qual = feature_lines[i].strip()
-                if qual.startswith("/gene="):
-                    gene_name = qual.split("=", 1)[1].strip("\"")
-                elif qual.startswith(
-                    "/product="
-                ) and gene_name is None:  # pragma: no cover
-                    gene_name = qual.split("=", 1)[1].strip("\"")
-                i += 1
-            if gene_name:
-                features.append(
-                    GeneFeature(gene_name, _parse_location(location))
-                )
+    for feat in record.features:
+        if feat.type not in {"gene", "CDS"}:
             continue
-        i += 1  # pragma: no cover - loop exit
+        gene_name = (
+            feat.qualifiers.get("gene")
+            or feat.qualifiers.get("product")
+            or [None]
+        )[0]
+        if gene_name is None:
+            continue
+        location = feat.location
+        parts: Iterable = (
+            location.parts
+            if isinstance(location, CompoundLocation)
+            else [location]
+        )
+        ranges = [(int(p.start) + 1, int(p.end)) for p in parts]
+        features.append(GeneFeature(name=cast(str, gene_name), ranges=ranges))
 
-    seq_match = re.search(r"ORIGIN\n(.*)\n//", text, re.DOTALL)
-    seq_lines = seq_match.group(1).splitlines() if seq_match else []
-    sequence = "".join(
-        re.sub(r"[^acgtACGT]", "", ln) for ln in seq_lines
-    ).upper()
-    return GenBankRecord(accession, sequence, features)
-
-
-def _fetch_record(accession: str) -> GenBankRecord:
-    """Retrieve a GenBank record for *accession*.
-
-    :param accession: GenBank accession identifier.
-    :type accession: str
-    :returns: Parsed GenBank record.
-    :rtype: GenBankRecord
-    :raises Exception: If the accession cannot be fetched.
-    """
-
-    text = _download_genbank(accession)
-    return _parse_genbank(text, accession)
+    return GenBankRecord(
+        accession=accession, sequence=str(record.seq), features=features
+    )
 
 
 def _prompt_genbank_fragments(
@@ -150,8 +99,11 @@ def _prompt_genbank_fragments(
         questionary.Choice(f"{feat.name} {feat.ranges}", value=feat)
         for feat in record.features
     ]
+    default = [choice.value for choice in choices]
     selected: list[GeneFeature] = questionary.checkbox(
-        "Select fragments to add:", choices=choices
+        "Select fragments to add:",
+        choices=choices,
+        default=default,  # type: ignore[arg-type]
     ).ask()
     fragments: list[dict[str, object]] = []
     for feat in selected:
@@ -181,17 +133,111 @@ def _prompt_manual_fragments() -> list[dict[str, object]]:
     return frags
 
 
-def _auto_assembly(
-    fragments: list[dict[str, object]],
-) -> list[dict[str, object]]:
-    """Generate assembly regions from fragments with ``geneName``."""
+def _auto_assembly_options(
+    fragments: list[dict[str, object]]
+) -> list[list[dict[str, object]]]:
+    """Return possible assembly configurations derived from *fragments*.
 
-    assemblies: list[dict[str, object]] = []
-    for frag in fragments:
-        gene = frag.get("geneName")
-        if gene:
-            assemblies.append({"geneName": gene})
-    return assemblies
+    The function sorts fragments by genomic coordinates and fills gaps with
+    inter-fragment regions. Overlaps are resolved by trimming either
+    the left or right fragment. When overlaps exist, both trimming
+    strategies are returned.
+
+    ``trim`` entries are 1-based inclusive ranges relative to the fragment.
+
+    :param fragments: Fragment configuration list.
+    :type fragments: list[dict[str, object]]
+    :returns: Candidate assembly configurations.
+    :rtype: list[list[dict[str, object]]]
+    """
+
+    main = next((f for f in fragments if "refSequence" in f), None)
+    if main is None:
+        return []
+    main_name = cast(str, main["fragmentName"])
+    main_len = len(cast(str, main["refSequence"]))
+
+    genes = [f for f in fragments if f.get("geneName")]
+    if not genes:
+        return [[{
+            "name": main_name,
+            "fromFragment": main_name,
+            "refStart": 1,
+            "refEnd": main_len,
+        }]]
+
+    def span(frag: dict[str, object]) -> tuple[int, int]:
+        ranges = cast(list[tuple[int, int]], frag["refRanges"])
+        starts = [r[0] for r in ranges]
+        ends = [r[1] for r in ranges]
+        return min(starts), max(ends)
+
+    ordered = sorted(genes, key=lambda f: span(f)[0])
+
+    def build(bias: str) -> list[dict[str, object]]:
+        assemblies: list[dict[str, object]] = []
+        prev_end = 0
+        prev_gene = None
+        prev_frag = None
+        prev_idx = None
+
+        for frag in ordered:
+            start, end = span(frag)
+            if start > prev_end + 1:
+                assemblies.append(
+                    {
+                        "name": f"{prev_gene or 'start'}-{frag['geneName']}",
+                        "fromFragment": main_name,
+                        "refStart": prev_end + 1,
+                        "refEnd": start - 1,
+                    }
+                )
+            overlap = prev_end - start + 1 if prev_end >= start else 0
+            entry: dict[str, object] = {"geneName": frag["geneName"]}
+            if overlap > 0:
+                if bias == "left":
+                    entry["trim"] = [[1, overlap]]
+                    start = prev_end + 1
+                elif (
+                    bias == "right"
+                    and prev_idx is not None
+                    and prev_frag is not None
+                ):
+                    prev_len = sum(
+                        r[1] - r[0] + 1
+                        for r in cast(
+                            list[tuple[int, int]], prev_frag["refRanges"]
+                        )
+                    )
+                    trim_range = [prev_len - overlap + 1, prev_len]
+                    trim_list = cast(
+                        list[Any], assemblies[prev_idx].setdefault("trim", [])
+                    )
+                    trim_list.append(trim_range)
+                    prev_end = start - 1
+            assemblies.append(entry)
+            prev_end = end
+            prev_gene = cast(str, frag["geneName"])
+            prev_frag = frag
+            prev_idx = len(assemblies) - 1
+
+        if prev_end < main_len:
+            assemblies.append(
+                {
+                    "name": f"{prev_gene}-end",
+                    "fromFragment": main_name,
+                    "refStart": prev_end + 1,
+                    "refEnd": main_len,
+                }
+            )
+        return assemblies
+
+    left = build("left")
+    right = build("right")
+    options = [left]
+    if right != left:
+        options.append(right)
+    return options
 
 
 def _prompt_manual_assemblies() -> list[dict[str, object]]:
@@ -252,6 +298,12 @@ def validate(
     print("[green]Profile is valid[/green]")
 
 
+def validate_main() -> None:
+    """CLI entry point for quick profile validation."""
+
+    typer.run(validate)  # pragma: no cover - CLI entry point
+
+
 @app.command()
 def create(
     output: Annotated[
@@ -294,9 +346,24 @@ def create(
 
     fragments.extend(_prompt_manual_fragments())
 
-    assemblies = _auto_assembly(fragments)
-    print(f"Suggested assembly: {assemblies}")
-    if not questionary.confirm("Use this assembly configuration?").ask():
+    options = _auto_assembly_options(fragments)
+    assemblies: list[dict[str, object]]
+    if options:
+        choice = options[0]
+        if len(options) > 1:
+            choice = questionary.select(
+                "Select an assembly strategy:",
+                choices=[
+                    questionary.Choice(f"Option {i+1}", value=opt)
+                    for i, opt in enumerate(options)
+                ],
+            ).ask()  # pragma: no cover - interactive selection
+        print(f"Suggested assembly: {choice}")
+        if questionary.confirm("Use this assembly configuration?").ask():
+            assemblies = choice
+        else:
+            assemblies = _prompt_manual_assemblies()
+    else:  # pragma: no cover - no fragments scenario
         assemblies = _prompt_manual_assemblies()
 
     profile_data = {

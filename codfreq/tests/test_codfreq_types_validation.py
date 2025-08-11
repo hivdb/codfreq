@@ -40,6 +40,13 @@ def test_sequence_assembly_config_rejects_extra() -> None:
         SequenceAssemblyConfig(name="a", unknown=1)  # type: ignore[call-arg]
 
 
+def test_sequence_assembly_trim_normalization() -> None:
+    """Single integers become ``(n, n)`` ranges."""
+
+    cfg = SequenceAssemblyConfig(trim=[1, (5, 6)])
+    assert cfg.trim == [(1, 1), (5, 6)]
+
+
 def test_profile_rejects_extra() -> None:
     """``Profile`` raises on unknown fields."""
     with pytest.raises(ValidationError):

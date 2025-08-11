@@ -154,6 +154,9 @@ class SequenceAssemblyConfig(BaseModel):
     :type refStart: int | None
     :param refEnd: End position in reference coordinates.
     :type refEnd: int | None
+    :param trim: Ranges to exclude from the fragment. Each tuple is a
+        1-based inclusive interval relative to the fragment.
+    :type trim: list[tuple[NAPos, NAPos]] | None
     """
 
     model_config = ConfigDict(frozen=True, extra='forbid')
@@ -163,6 +166,26 @@ class SequenceAssemblyConfig(BaseModel):
     fromFragment: str | None = None
     refStart: int | None = None
     refEnd: int | None = None
+    trim: list[tuple[NAPos, NAPos]] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_trim(cls, data: Any) -> Any:
+        """Normalize ``trim`` entries to ``(start, end)`` tuples."""
+
+        if (
+            isinstance(data, dict)
+            and "trim" in data
+            and data["trim"] is not None
+        ):
+            norm = []
+            for item in data["trim"]:
+                if isinstance(item, int):
+                    norm.append((item, item))
+                else:
+                    norm.append((item[0], item[1]))
+            data["trim"] = norm
+        return data
 
 
 class NARegionConfig(BaseModel):
