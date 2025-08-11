@@ -108,14 +108,17 @@ def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
     qualities = {("fragA", 1): Counter({"AAA": 50, "CCC": 20})}
     lookup = {"fragA": [("geneX", 0)]}
     rows = s2c.get_codonfreq(fragpos, qualities, lookup)
-    assert rows == [
+    assert [
+        {**row.model_dump(), "codon": row.codon.decode()}
+        for row in rows
+    ] == [
         {
             "gene": "geneX",
             "position": 1,
             "total": 3,
             "codon": "AAA",
             "count": 2,
-            "total_quality_score": 50,
+            "total_quality_score": 50.0,
         },
         {
             "gene": "geneX",
@@ -123,7 +126,7 @@ def test_to_codon_counter_by_fragpos_and_get_codonfreq() -> None:
             "total": 3,
             "codon": "CCC",
             "count": 1,
-            "total_quality_score": 20,
+            "total_quality_score": 20.0,
         },
     ]
 
@@ -184,14 +187,17 @@ def test_sam2codfreq_all() -> None:
 
         rows = s2c.sam2codfreq_all("sample", (None, None), profile, workers=1)
 
-    assert rows == [
+    assert [
+        {**row.model_dump(), "codon": row.codon.decode()}
+        for row in rows
+    ] == [
         {
             "gene": "geneX",
             "position": 1,
             "total": 1,
             "codon": "AAA",
             "count": 1,
-            "total_quality_score": 30,
+            "total_quality_score": 30.0,
         }
     ]
 

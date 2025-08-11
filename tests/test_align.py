@@ -23,7 +23,11 @@ from codfreq.align import (
     REQUIRED_PROFILE_VERSION,
 )
 from codfreq.enums import LogFormat, Program  # noqa: E402
-from codfreq.codfreq_types import PairedFASTQ, Profile  # noqa: E402
+from codfreq.codfreq_types import (
+    PairedFASTQ,
+    Profile,
+    CodFreqRow,
+)  # noqa: E402
 from codfreq.cmdwrappers.fastp import FASTPConfig  # noqa: E402
 from codfreq.cmdwrappers.ivar import TrimConfig  # noqa: E402
 from codfreq.cmdwrappers.cutadapt import CutadaptConfig  # noqa: E402
@@ -45,7 +49,7 @@ def test_find_paired_fastq_patterns_autopairing() -> None:
     """Autopairing groups matching pairs and singles."""
     files = ["sample_R1.fastq", "sample_R2.fastq", "single.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=True))
-    assert patterns == [
+    assert [p.model_dump() for p in patterns] == [
         {
             "name": "sample",
             "pair": ("sample_R1.fastq", "sample_R2.fastq"),
@@ -59,7 +63,7 @@ def test_find_paired_fastq_patterns_no_autopair() -> None:
     """Without autopairing every file is treated as single-ended."""
     files = ["a.fastq", "b.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=False))
-    assert patterns == [
+    assert [p.model_dump() for p in patterns] == [
         {"name": "a", "pair": ("a.fastq", None), "n": 1},
         {"name": "b", "pair": ("b.fastq", None), "n": 1},
     ]
@@ -70,8 +74,8 @@ def test_find_paired_fastq_patterns_invalid_pairs() -> None:
     files = ["a_R1.fastq", "b_R2.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=True))
     assert len(patterns) == 2
-    assert {p["pair"][0] for p in patterns} == set(files)
-    assert all(p["pair"][1] is None and p["n"] == 1 for p in patterns)
+    assert {p.pair[0] for p in patterns} == set(files)
+    assert all(p.pair[1] is None and p.n == 1 for p in patterns)
 
 
 def test_find_paired_fastq_patterns_sorts_pairs() -> None:
@@ -79,7 +83,7 @@ def test_find_paired_fastq_patterns_sorts_pairs() -> None:
 
     files = ["sample_R2.fastq", "sample_R1.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=True))
-    assert patterns == [
+    assert [p.model_dump() for p in patterns] == [
         {
             "name": "sample",
             "pair": ("sample_R1.fastq", "sample_R2.fastq"),
@@ -91,10 +95,10 @@ def test_find_paired_fastq_patterns_sorts_pairs() -> None:
 def test_complete_paired_fastqs_expands_paths() -> None:
     """Relative paths are joined with the directory path."""
     pairs: list[PairedFASTQ] = [
-        {"name": "a", "pair": ("r1.fq", "r2.fq"), "n": 2}
+        PairedFASTQ(name="a", pair=("r1.fq", "r2.fq"), n=2)
     ]
     result = list(complete_paired_fastqs(pairs, "/work"))
-    assert result == [
+    assert [r.model_dump() for r in result] == [
         {
             "name": "/work/a",
             "pair": ("/work/r1.fq", "/work/r2.fq"),
@@ -105,11 +109,11 @@ def test_complete_paired_fastqs_expands_paths() -> None:
 
 def test_fastp_preprocess_invokes_wrapper(tmp_path: Path) -> None:
     """Fastp wrapper is called and merged filename returned."""
-    pfq: PairedFASTQ = {
-        "name": "sample",
-        "pair": (str(tmp_path / "r1.fq"), str(tmp_path / "r2.fq")),
-        "n": 2,
-    }
+    pfq = PairedFASTQ(
+        name="sample",
+        pair=(str(tmp_path / "r1.fq"), str(tmp_path / "r2.fq")),
+        n=2,
+    )
     config: FASTPConfig = {}
     with (
         patch("codfreq.align.fastp.fastp") as mock_fastp,
@@ -118,24 +122,24 @@ def test_fastp_preprocess_invokes_wrapper(tmp_path: Path) -> None:
         result = fastp_preprocess(pfq, config, LogFormat.text)
     mock_fastp.assert_called_once()
     mock_print.assert_any_call("Pre-processing sample using fastp...")
-    assert result["pair"][0].endswith("sample.merged.fastq.gz")
+    assert result.pair[0].endswith("sample.merged.fastq.gz")
 
 
 def test_fastp_preprocess_json_logs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """JSON log format prints structured progress messages."""
-    pfq: PairedFASTQ = {
-        "name": "sample",
-        "pair": (str(tmp_path / "r1.fq"), str(tmp_path / "r2.fq")),
-        "n": 2,
-    }
+    pfq = PairedFASTQ(
+        name="sample",
+        pair=(str(tmp_path / "r1.fq"), str(tmp_path / "r2.fq")),
+        n=2,
+    )
     config: FASTPConfig = {}
     with patch("codfreq.align.fastp.fastp") as mock_fastp:
         result = fastp_preprocess(pfq, config, LogFormat.json)
     out = capsys.readouterr().out
     assert '"op": "preprocess"' in out
-    assert result["pair"][0].endswith("sample.merged.fastq.gz")
+    assert result.pair[0].endswith("sample.merged.fastq.gz")
     mock_fastp.assert_called_once()
 
 
@@ -145,7 +149,7 @@ def test_find_paired_fastqs_reads_pairinfo(tmp_path: Path) -> None:
     pairinfo = tmp_path / "pairinfo.json"
     pairinfo.write_text(json.dumps(data))
     results = list(find_paired_fastqs(str(tmp_path), autopairing=False))
-    assert results == [
+    assert [r.model_dump() for r in results] == [
         {
             "name": os.path.join(str(tmp_path), "samp"),
             "pair": (os.path.join(str(tmp_path), "a.fastq"), None),
@@ -185,20 +189,20 @@ def test_cutadapt_trim_json_logs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """cutadapt.cutadapt is called and emits JSON progress."""
-    merged: PairedFASTQ = {
-        "name": "sample",
-        "pair": (str(tmp_path / "sample.merged.fastq.gz"), None),
-        "n": 1,
-    }
+    merged = PairedFASTQ(
+        name="sample",
+        pair=(str(tmp_path / "sample.merged.fastq.gz"), None),
+        n=1,
+    )
     config: CutadaptConfig = {}
     with patch("codfreq.align.cutadapt.cutadapt") as mock_cut:
         result = cutadapt_trim(merged, config, LogFormat.json)
     out = capsys.readouterr().out
     assert '"command": "cutadapt"' in out
     mock_cut.assert_called_once_with(
-        merged["pair"][0], result["pair"][0], **config
+        merged.pair[0], result.pair[0], **config
     )
-    assert result["pair"][0].endswith("merged-trimed.fastq.gz")
+    assert result.pair[0].endswith("merged-trimed.fastq.gz")
 
 
 def test_find_paired_fastq_patterns_chunk_mismatch() -> None:
@@ -207,7 +211,7 @@ def test_find_paired_fastq_patterns_chunk_mismatch() -> None:
     files = ["a_extra_R1.fastq", "b_R2.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=True))
     assert len(patterns) == 2
-    assert all(p["pair"][1] is None for p in patterns)
+    assert all(p.pair[1] is None for p in patterns)
 
 
 def test_find_paired_fastq_patterns_multiple_marker_diffs() -> None:
@@ -216,7 +220,7 @@ def test_find_paired_fastq_patterns_multiple_marker_diffs() -> None:
     files = ["s_R1_1_x.fastq", "s_R2_2_x.fastq"]
     patterns = list(find_paired_fastq_patterns(files, autopairing=True))
     assert len(patterns) == 2
-    assert all(p["pair"][1] is None for p in patterns)
+    assert all(p.pair[1] is None for p in patterns)
 
 
 def test_ivar_trim_json_logs(
@@ -237,11 +241,11 @@ def test_ivar_trim_json_logs(
 def test_cutadapt_trim_text_logs(tmp_path: Path) -> None:
     """cutadapt.cutadapt emits human-readable progress in text mode."""
 
-    merged: PairedFASTQ = {
-        "name": "sample",
-        "pair": (str(tmp_path / "sample.merged.fastq.gz"), None),
-        "n": 1,
-    }
+    merged = PairedFASTQ(
+        name="sample",
+        pair=(str(tmp_path / "sample.merged.fastq.gz"), None),
+        n=1,
+    )
     config: CutadaptConfig = {}
     with (
         patch("codfreq.align.cutadapt.cutadapt") as mock_cut,
@@ -250,15 +254,15 @@ def test_cutadapt_trim_text_logs(tmp_path: Path) -> None:
         result = cutadapt_trim(merged, config, LogFormat.text)
     mock_print.assert_any_call("Trimming sample using cutadapt...")
     mock_cut.assert_called_once_with(
-        merged["pair"][0], result["pair"][0], **config
+        merged.pair[0], result.pair[0], **config
     )
-    assert result["pair"][0].endswith("merged-trimed.fastq.gz")
+    assert result.pair[0].endswith("merged-trimed.fastq.gz")
 
 
 def test_align_with_profile_replaces_without_trim(tmp_path: Path) -> None:
     """When no trimming is configured files are renamed after alignment."""
 
-    paired: PairedFASTQ = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    paired = PairedFASTQ(name="samp", pair=("r1.fq", "r2.fq"), n=2)
     profile = Profile.model_validate(
         {
             "version": "1",
@@ -294,7 +298,7 @@ def test_align_with_profile_trims_and_logs_json(
 ) -> None:
     """Alignment path uses cutadapt and ivar trimming when configured."""
 
-    paired: PairedFASTQ = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    paired = PairedFASTQ(name="samp", pair=("r1.fq", "r2.fq"), n=2)
     profile = Profile.model_validate(
         {
             "version": "1",
@@ -349,7 +353,7 @@ def test_align_runs_pipeline(tmp_path: Path) -> None:
         "fragmentConfig": [],
         "sequenceAssemblyConfig": [],
     }
-    pairobj = {"name": "samp", "pair": ("r1", "r2"), "n": 2}
+    pairobj = PairedFASTQ(name="samp", pair=("r1", "r2"), n=2)
     with (
         profile.open() as fp,
         patch("codfreq.align.json.load", return_value=profile_obj),
@@ -366,7 +370,16 @@ def test_align_runs_pipeline(tmp_path: Path) -> None:
         patch("codfreq.align.csv.DictWriter") as mock_writer,
         patch(
             "codfreq.align.sam2codfreq_all",
-            return_value=[{"codon": b"AAA"}],
+            return_value=[
+                CodFreqRow(
+                    gene="g",
+                    position=1,
+                    total=1,
+                    codon=b"AAA",
+                    count=1,
+                    total_quality_score=1.0,
+                )
+            ],
         ),
         patch(
             "codfreq.align.create_untrans_region_consensus"

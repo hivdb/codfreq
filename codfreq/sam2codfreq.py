@@ -169,18 +169,20 @@ def get_codonfreq(
         for codon, count in codons.items():
             qua = qualities_by_fragpos[(fragment_name, refpos)][codon]
             for gene, gene_offset in frag_gene_lookup[fragment_name]:
-                rows.append({
-                    'gene': gene,
-                    'position': refpos + gene_offset,
-                    'total': total,
-                    'codon': codon,
-                    'count': count,
-                    'total_quality_score': round(qua, 2)
-                })
+                rows.append(
+                    CodFreqRow(
+                        gene=gene,
+                        position=refpos + gene_offset,
+                        total=total,
+                        codon=codon,
+                        count=count,
+                        total_quality_score=round(qua, 2)
+                    )
+                )
     rows.sort(key=lambda row: (
-        ordered_genes.index(row['gene']),
-        row['position'],
-        row['codon']
+        ordered_genes.index(row.gene),
+        row.position,
+        row.codon
     ))
     return rows
 

@@ -2,10 +2,16 @@
 
 from collections import Counter
 from unittest.mock import patch
+
 from codfreq.codonalign_consensus import (
     aapos_to_napos,
     assemble_alignment,
     codonalign_consensus,
+)
+from codfreq.codfreq_types import (
+    MainFragmentConfig,
+    DerivedFragmentConfig,
+    CodonAlignmentConfig,
 )
 
 
@@ -24,7 +30,11 @@ def test_assemble_alignment_handles_codon_sizes() -> None:
         ("F", 1): Counter({b"AA": 1}),
         ("F", 3): Counter({b"AAAA": 1}),
     }
-    fragment = {"fragmentName": "F", "refRanges": [(1, 9)]}
+    fragment = DerivedFragmentConfig(
+        fragmentName="F",
+        fromFragment="ref",
+        refRanges=[(1, 9)]
+    )
     refseq = bytearray(b"AAACCCGGG")
 
     ref_obj, query_obj, first, last = assemble_alignment(
@@ -46,26 +56,28 @@ def test_codonalign_consensus_updates_counters() -> None:
         ("frag", 1): Counter({b"AAA": 5}),
         ("skip", 1): Counter({b"CCC": 3}),
     }
-    ref = {"fragmentName": "ref", "refSequence": "AAACCC"}
+    ref = MainFragmentConfig(fragmentName="ref", refSequence="AAACCC")
     fragments = [
-        {
-            "fragmentName": "skip",
-            "refRanges": [(1, 3)],
-            "codonAlignment": False,
-        },
-        {
-            "fragmentName": "frag",
-            "refRanges": [(1, 3)],
-            "codonAlignment": [
-                {
-                    "relRefStart": 0,
-                    "relRefEnd": 15,
-                    "minGapDistance": 5,
-                    "windowSize": 7,
-                    "relGapPlacementScore": "0:0-1=1",
-                }
+        DerivedFragmentConfig(
+            fragmentName="skip",
+            fromFragment="ref",
+            refRanges=[(1, 3)],
+            codonAlignment=False,
+        ),
+        DerivedFragmentConfig(
+            fragmentName="frag",
+            fromFragment="ref",
+            refRanges=[(1, 3)],
+            codonAlignment=[
+                CodonAlignmentConfig(
+                    relRefStart=0,
+                    relRefEnd=15,
+                    minGapDistance=5,
+                    windowSize=7,
+                    relGapPlacementScore="0:0-1=1",
+                )
             ],
-        },
+        ),
     ]
 
     codonalign_consensus(codonstat, quals, ref, fragments)
@@ -80,7 +92,11 @@ def test_codonalign_consensus_updates_counters() -> None:
 def test_assemble_alignment_returns_none_without_codons() -> None:
     """Fragments without codons yield ``None`` results."""
     codonstat: dict[tuple[str, int], Counter[bytes]] = {}
-    fragment = {"fragmentName": "F", "refRanges": [(1, 3)]}
+    fragment = DerivedFragmentConfig(
+        fragmentName="F",
+        fromFragment="ref",
+        refRanges=[(1, 3)]
+    )
     refseq = bytearray(b"AAA")
 
     ref_obj, query_obj, first, last = assemble_alignment(
@@ -94,8 +110,14 @@ def test_codonalign_consensus_skips_empty_fragment() -> None:
     """Fragments without statistics are ignored."""
     codonstat: dict[tuple[str, int], Counter[bytes]] = {}
     quals: dict[tuple[str, int], Counter[bytes]] = {}
-    ref = {"fragmentName": "ref", "refSequence": "AAA"}
-    fragments = [{"fragmentName": "frag", "refRanges": [(1, 3)]}]
+    ref = MainFragmentConfig(fragmentName="ref", refSequence="AAA")
+    fragments = [
+        DerivedFragmentConfig(
+            fragmentName="frag",
+            fromFragment="ref",
+            refRanges=[(1, 3)]
+        )
+    ]
 
     result = codonalign_consensus(codonstat, quals, ref, fragments)
     assert result == (codonstat, quals)
@@ -105,8 +127,14 @@ def test_codonalign_consensus_alignment_failure_skips_fragment() -> None:
     """Alignment failures lead to early fragment skipping."""
     codonstat = {("frag", 1): Counter({b"AAA": 1})}
     quals = {("frag", 1): Counter({b"AAA": 1})}
-    ref = {"fragmentName": "ref", "refSequence": "AAA"}
-    fragments = [{"fragmentName": "frag", "refRanges": [(1, 3)]}]
+    ref = MainFragmentConfig(fragmentName="ref", refSequence="AAA")
+    fragments = [
+        DerivedFragmentConfig(
+            fragmentName="frag",
+            fromFragment="ref",
+            refRanges=[(1, 3)]
+        )
+    ]
 
     with patch(
         "codfreq.codonalign_consensus.codon_align",
@@ -122,7 +150,15 @@ def test_codonalign_consensus_skips_positions_missing_quality() -> None:
         ("frag", 2): Counter({b"CCC": 1}),
     }
     quals = {("frag", 1): Counter({b"AAA": 1})}
-    ref = {"fragmentName": "ref", "refSequence": "AAA CCC".replace(" ", "")}
-    fragments = [{"fragmentName": "frag", "refRanges": [(1, 6)]}]
+    ref = MainFragmentConfig(
+        fragmentName="ref", refSequence="AAA CCC".replace(" ", "")
+    )
+    fragments = [
+        DerivedFragmentConfig(
+            fragmentName="frag",
+            fromFragment="ref",
+            refRanges=[(1, 6)]
+        )
+    ]
 
     codonalign_consensus(codonstat, quals, ref, fragments)

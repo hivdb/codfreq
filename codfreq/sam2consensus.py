@@ -41,9 +41,9 @@ def make_consensus(
     refpos: NAPos
     idx: int
 
-    name: str = region['name']
-    refpos_start: NAPos = region['refStart']
-    refpos_end: NAPos = region['refEnd']
+    name: str = region.name
+    refpos_start: NAPos = region.refStart
+    refpos_end: NAPos = region.refEnd
     consarr: bytearray = bytearray()
 
     for refpos in range(refpos_start, refpos_end + 1):
@@ -57,12 +57,12 @@ def make_consensus(
                 break
             consarr.append(na)
             idx += 1
-    return {
-        'name': name,
-        'refStart': refpos_start,
-        'refEnd': refpos_end,
-        'consensus': consarr.decode(ENCODING)
-    }
+    return RegionalConsensus(
+        name=name,
+        refStart=refpos_start,
+        refEnd=refpos_end,
+        consensus=consarr.decode(ENCODING)
+    )
 
 
 def sam2consensus(
@@ -86,9 +86,9 @@ def sam2consensus(
 
     for _, posnas in get_posnas_in_genome_region(
         sampath,
-        ref_name=region['fromFragment'],
-        ref_start=region['refStart'],
-        ref_end=region['refEnd']
+        ref_name=region.fromFragment,
+        ref_start=region.refStart,
+        ref_end=region.refEnd
     ):
         for refpos, idx, na, _ in posnas:
             nafreqs[(refpos, idx)][na] += 1
@@ -154,13 +154,13 @@ def create_untrans_region_consensus(
             results.append(
                 sam2consensus(
                     samfile,
-                    {
-                        'name': region.name,
-                        'fromFragment': region.fromFragment,
-                        'refStart': region.refStart,
-                        'refEnd': region.refEnd,
-                    },
+                    NARegionConfig(
+                        name=region.name,
+                        fromFragment=region.fromFragment,
+                        refStart=region.refStart,
+                        refEnd=region.refEnd,
+                    ),
                 )
             )
     with open(f'{seqname}.untrans.json', 'w') as fp:
-        json.dump(results, fp)
+        json.dump([r.model_dump() for r in results], fp)

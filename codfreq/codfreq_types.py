@@ -1,4 +1,4 @@
-from typing import TypedDict, Literal, Any
+from typing import Literal, Any
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 FASTQFileName = str
@@ -16,13 +16,29 @@ MultiAAText = bytes
 NAPosRange = tuple[NAPos, NAPos]
 
 
-class PairedFASTQ(TypedDict):
+class PairedFASTQ(BaseModel):
+    """Metadata for a paired FASTQ sample.
+
+    :param name: Sample identifier.
+    :type name: Header
+    :param pair: Tuple of R1/R2 FASTQ filenames. ``None`` for single-end reads.
+    :type pair: tuple[FASTQFileName, FASTQFileName | None]
+    :param n: Number of FASTQ files in the pair.
+    :type n: int
+    """
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: Header
     pair: tuple[FASTQFileName, FASTQFileName | None]
     n: int
 
 
-class Sequence(TypedDict):
+class Sequence(BaseModel):
+    """FASTA sequence entry."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     header: Header
     sequence: SeqText
 
@@ -57,7 +73,7 @@ class CodonAlignmentConfig(BaseModel):
     :type relGapPlacementScore: str | None
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     relRefStart: NAPos
     relRefEnd: NAPos
@@ -82,7 +98,7 @@ class DerivedFragmentConfig(BaseModel):
     :type codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     fragmentName: Header
     fromFragment: Header
@@ -140,6 +156,8 @@ class SequenceAssemblyConfig(BaseModel):
     :type refEnd: int | None
     """
 
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str | None = None
     geneName: str | None = None
     fromFragment: str | None = None
@@ -147,14 +165,22 @@ class SequenceAssemblyConfig(BaseModel):
     refEnd: int | None = None
 
 
-class NARegionConfig(TypedDict):
+class NARegionConfig(BaseModel):
+    """Definition of a nucleotide assembly region."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str
     fromFragment: str
     refStart: int
     refEnd: int
 
 
-class RegionalConsensus(TypedDict):
+class RegionalConsensus(BaseModel):
+    """Consensus sequence for an assembly region."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str
     refStart: NAPos
     refEnd: NAPos
@@ -172,20 +198,38 @@ class Profile(BaseModel):
     :type sequenceAssemblyConfig: list[SequenceAssemblyConfig]
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra='forbid')
 
     version: str
     fragmentConfig: list[FragmentConfig]
     sequenceAssemblyConfig: list[SequenceAssemblyConfig]
 
 
-class CodFreqRow(TypedDict):
+class CodFreqRow(BaseModel):
+    """Single CodFreq output row.
+
+    :param gene: Gene name.
+    :type gene: GeneText
+    :param position: Amino acid position.
+    :type position: AAPos
+    :param total: Total codons observed at the position.
+    :type total: int
+    :param codon: Codon sequence encoded as bytes.
+    :type codon: CodonText
+    :param count: Number of reads supporting the codon.
+    :type count: int
+    :param total_quality_score: Sum of base qualities supporting the codon.
+    :type total_quality_score: float
+    """
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     gene: GeneText
     position: AAPos
     total: int
     codon: CodonText
     count: int
-    total_quality_score: int
+    total_quality_score: float
 
 
 #                                 refStart refEnd

@@ -9,9 +9,7 @@ from postalign.models.sequence import (
     NAPosition
 )
 from operator import itemgetter
-from typing import (
-    Literal
-)
+from typing import Literal
 from collections import Counter
 
 from .sam2codfreq_types import CodonCounterByFragPos
@@ -111,8 +109,8 @@ def assemble_alignment(
     cons_codon_bytes: bytes
     cons_codon_size: int
     codons: Counter[CodonText] | None
-    fragment_name: Header = fragment['fragmentName']
-    frag_refranges: list[NAPosRange] = fragment['refRanges']
+    fragment_name: Header = fragment.fragmentName
+    frag_refranges: list[NAPosRange] = fragment.refRanges
     frag_refseq: bytearray = bytearray()
     frag_queryseq: bytearray = bytearray()
     refsize: int = sum(end - start + 1 for start, end in frag_refranges)
@@ -166,7 +164,13 @@ def codonalign_consensus(
     ref: MainFragmentConfig,
     fragments: list[DerivedFragmentConfig],
 ) -> tuple[CodonCounterByFragPos, CodonCounterByFragPos]:
-    """Derive codon consensus for aligned fragments."""
+    """Derive codon consensus for aligned fragments.
+
+    :param ref: Reference fragment configuration.
+    :type ref: MainFragmentConfig
+    :param fragments: Derived fragment configurations.
+    :type fragments: list[DerivedFragmentConfig]
+    """
 
     fragment_name: Header
     fragment: DerivedFragmentConfig
@@ -182,19 +186,21 @@ def codonalign_consensus(
     querycodon: list[NAPosition]
     codons: Counter[CodonText] | None
 
-    refseq: bytearray = bytearray(ref['refSequence'], ENCODING)
+    refseq: bytearray = bytearray(ref.refSequence, ENCODING)
     for fragment in fragments:
-        fragment_name = fragment['fragmentName']
+        fragment_name = fragment.fragmentName
         codon_align_config: None | (
             Literal[False] | list[CodonAlignmentConfig]
-        ) = fragment.get('codonAlignment')
+        ) = fragment.codonAlignment
 
         if codon_align_config is False:
             # skip this gene if explicitly defined codonAlignment=False
             continue
 
         if not codon_align_config:
-            codon_align_config = [{}]
+            codon_align_config = [
+                CodonAlignmentConfig(relRefStart=0, relRefEnd=0)
+            ]
 
         # assemble consensus codon reads into pairwise alignment
         (frag_refseq_obj,
@@ -218,8 +224,8 @@ def codonalign_consensus(
 
         # apply codon alignment (CDA) to pairwise alignment
         for cda_config in codon_align_config:
-            refstart = cda_config.get('relRefStart', seq_refstart)
-            refend = cda_config.get('relRefEnd', seq_refend)
+            refstart = cda_config.relRefStart or seq_refstart
+            refend = cda_config.relRefEnd or seq_refend
 
             # Codon alignment shouldn't exceed query sequence boundary
             if refstart < seq_refend and refend > seq_refstart:
@@ -227,16 +233,15 @@ def codonalign_consensus(
                 refend = min(refend, seq_refend)
 
             # Load minGapDistance, windowSize and gapPlacementScore from config
-            min_gap_distance = cda_config.get(
-                'minGapDistance'
-            ) or CODON_ALIGN_MIN_GAP_DISTANCE
-            window_size = cda_config.get(
-                'windowSize'
-            ) or CODON_ALIGN_WINDOW_SIZE
+            min_gap_distance = (
+                cda_config.minGapDistance or CODON_ALIGN_MIN_GAP_DISTANCE
+            )
+            window_size = cda_config.windowSize or CODON_ALIGN_WINDOW_SIZE
             gap_placement_score: dict[
                 int, dict[tuple[int, int], int]
             ] = parse_gap_placement_score(
-                cda_config.get('relGapPlacementScore') or '')
+                cda_config.relGapPlacementScore or ''
+            )
 
             # perform postalign's codon_align
             (frag_refseq_obj,
