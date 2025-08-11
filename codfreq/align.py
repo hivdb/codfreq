@@ -148,7 +148,7 @@ def find_paired_fastq_patterns(
                     if not invalid:
                         if fn1 > fn2:
                             # sort by filename
-                            fn1, fn2 = fn2, fn1  # pragma: no cover - swap
+                            fn1, fn2 = fn2, fn1
                         patterns[(
                             delimiter,
                             diffoffset,

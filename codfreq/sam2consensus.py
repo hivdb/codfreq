@@ -140,12 +140,12 @@ def create_untrans_region_consensus(
         refname = fragment.fragmentName
         samfile = name_bamfile(seqname, refname, is_trimmed=True)
         for region in profile.sequenceAssemblyConfig:
+            if region.fromFragment is None:
+                continue
             if region.fromFragment != refname:
                 continue
             if region.name is None:
                 continue
-            if region.fromFragment is None:
-                continue  # pragma: no cover - validated above
             if region.refStart is None:
                 continue
             if region.refEnd is None:

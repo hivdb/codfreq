@@ -74,6 +74,20 @@ def test_find_paired_fastq_patterns_invalid_pairs() -> None:
     assert all(p["pair"][1] is None and p["n"] == 1 for p in patterns)
 
 
+def test_find_paired_fastq_patterns_sorts_pairs() -> None:
+    """Input order does not affect output pair ordering."""
+
+    files = ["sample_R2.fastq", "sample_R1.fastq"]
+    patterns = list(find_paired_fastq_patterns(files, autopairing=True))
+    assert patterns == [
+        {
+            "name": "sample",
+            "pair": ("sample_R1.fastq", "sample_R2.fastq"),
+            "n": 2,
+        }
+    ]
+
+
 def test_complete_paired_fastqs_expands_paths() -> None:
     """Relative paths are joined with the directory path."""
     pairs: list[PairedFASTQ] = [
@@ -244,9 +258,13 @@ def test_cutadapt_trim_text_logs(tmp_path: Path) -> None:
 def test_align_with_profile_replaces_without_trim(tmp_path: Path) -> None:
     """When no trimming is configured files are renamed after alignment."""
 
-    paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    paired: PairedFASTQ = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
     profile = Profile.model_validate(
-        {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+        {
+            "version": "1",
+            "fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}],
+            "sequenceAssemblyConfig": [],
+        }
     )
     with (
         patch("codfreq.align.fastp_preprocess", return_value=paired),
@@ -276,9 +294,13 @@ def test_align_with_profile_trims_and_logs_json(
 ) -> None:
     """Alignment path uses cutadapt and ivar trimming when configured."""
 
-    paired = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
+    paired: PairedFASTQ = {"name": "samp", "pair": ("r1.fq", "r2.fq"), "n": 2}
     profile = Profile.model_validate(
-        {"fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}]}
+        {
+            "version": "1",
+            "fragmentConfig": [{"fragmentName": "F", "refSequence": "AAA"}],
+            "sequenceAssemblyConfig": [],
+        }
     )
     with (
         patch("codfreq.align.fastp_preprocess", return_value=paired),
@@ -322,7 +344,11 @@ def test_align_runs_pipeline(tmp_path: Path) -> None:
 
     profile = tmp_path / "p.json"
     profile.write_text("{}")
-    profile_obj = {"version": REQUIRED_PROFILE_VERSION, "fragmentConfig": []}
+    profile_obj = {
+        "version": REQUIRED_PROFILE_VERSION,
+        "fragmentConfig": [],
+        "sequenceAssemblyConfig": [],
+    }
     pairobj = {"name": "samp", "pair": ("r1", "r2"), "n": 2}
     with (
         profile.open() as fp,

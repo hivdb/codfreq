@@ -1,5 +1,5 @@
-from typing import TypedDict, Literal
-from pydantic import BaseModel
+from typing import TypedDict, Literal, Any
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 FASTQFileName = str
 Header = str
@@ -33,20 +33,22 @@ class MainFragmentConfig(BaseModel):
     :param fragmentName: Name of the fragment.
     :type fragmentName: Header
     :param refSequence: Reference nucleotide sequence.
-    :type refSequence: SeqText | None
+    :type refSequence: SeqText
     """
 
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     fragmentName: Header
-    refSequence: SeqText | None = None
+    refSequence: SeqText
 
 
 class CodonAlignmentConfig(BaseModel):
     """Configuration options for codon alignment.
 
     :param relRefStart: Start position relative to the reference.
-    :type relRefStart: NAPos | None
+    :type relRefStart: NAPos
     :param relRefEnd: End position relative to the reference.
-    :type relRefEnd: NAPos | None
+    :type relRefEnd: NAPos
     :param windowSize: Sliding window size in amino acids.
     :type windowSize: AAPos | None
     :param minGapDistance: Minimum nucleotide distance between gaps.
@@ -55,8 +57,10 @@ class CodonAlignmentConfig(BaseModel):
     :type relGapPlacementScore: str | None
     """
 
-    relRefStart: NAPos | None = None
-    relRefEnd: NAPos | None = None
+    model_config = ConfigDict(frozen=True)
+
+    relRefStart: NAPos
+    relRefEnd: NAPos
     windowSize: AAPos | None = None
     minGapDistance: NAPos | None = None
     relGapPlacementScore: str | None = None
@@ -72,17 +76,50 @@ class DerivedFragmentConfig(BaseModel):
     :param geneName: Gene identifier if any.
     :type geneName: GeneText | None
     :param refRanges: Reference coordinate ranges.
-    :type refRanges: list[NAPosRange] | None
+    :type refRanges: list[NAPosRange]
     :param codonAlignment: Codon alignment configuration or ``False`` to
         disable alignment.
-    :type codonAlignment: None | (Literal[False] | list[CodonAlignmentConfig])
+    :type codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None
     """
+
+    model_config = ConfigDict(frozen=True)
 
     fragmentName: Header
     fromFragment: Header
     geneName: GeneText | None = None
-    refRanges: list[NAPosRange] | None = None
-    codonAlignment: None | (Literal[False] | list[CodonAlignmentConfig]) = None
+    refRanges: list[NAPosRange]
+    codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def merge_ref_ranges(cls, data: Any) -> Any:
+        """Merge ``refStart``/``refEnd`` into ``refRanges`` if provided.
+
+        :param data: Raw input data.
+        :type data: Any
+        :returns: Normalized data with ``refRanges`` populated.
+        :rtype: Any
+        """
+
+        if isinstance(data, dict):
+            refstart = data.pop("refStart", None)
+            refend = data.pop("refEnd", None)
+            if (
+                "refRanges" not in data
+                and isinstance(refstart, int)
+                and isinstance(refend, int)
+            ):
+                data["refRanges"] = [(refstart, refend)]
+        return data
+
+    @field_validator("refRanges")
+    @classmethod
+    def ensure_ref_ranges(cls, value: list[NAPosRange]) -> list[NAPosRange]:
+        """Ensure ``refRanges`` is not empty."""
+
+        if not value:
+            raise ValueError("refRanges cannot be empty")
+        return value
 
 
 FragmentConfig = MainFragmentConfig | DerivedFragmentConfig
@@ -135,9 +172,11 @@ class Profile(BaseModel):
     :type sequenceAssemblyConfig: list[SequenceAssemblyConfig]
     """
 
-    version: str = ''
-    fragmentConfig: list[FragmentConfig] = []
-    sequenceAssemblyConfig: list[SequenceAssemblyConfig] = []
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    fragmentConfig: list[FragmentConfig]
+    sequenceAssemblyConfig: list[SequenceAssemblyConfig]
 
 
 class CodFreqRow(TypedDict):

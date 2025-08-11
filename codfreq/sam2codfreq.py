@@ -4,17 +4,12 @@ from tqdm import tqdm  # type: ignore
 from collections import Counter
 from more_itertools import unique_everseen
 
-from typing import (
-    Any,
-    Mapping
-)
-from pydantic import BaseModel
+from typing import Any
 from concurrent.futures import ProcessPoolExecutor
 
 from .codfreq_types import (
     Header,
     AAPos,
-    NAPosRange,
     Profile,
     GeneText,
     CodFreqRow,
@@ -44,6 +39,7 @@ CODFREQ_HEADER: list[str] = [
     'total_quality_score'
 ]
 
+
 ENCODING: str = 'UTF-8'
 
 
@@ -51,54 +47,20 @@ ENCODING: str = 'UTF-8'
 @cython.inline
 @cython.returns(list)
 def build_fragment_intervals(
-    fragments: list[DerivedFragmentConfig | Mapping[str, Any]]
+    fragments: list[DerivedFragmentConfig]
 ) -> list[FragmentInterval]:
     """Extract fragment reference intervals for codon processing.
 
     :param fragments: Fragment configurations to convert.
-    :type fragments: list[DerivedFragmentConfig | Mapping[str, Any]]
+    :type fragments: list[DerivedFragmentConfig]
     :returns: Intervals paired with fragment names.
     :rtype: list[FragmentInterval]
     """
 
-    intervals: list[FragmentInterval] = []
-    for fragment in fragments:
-        if isinstance(fragment, DerivedFragmentConfig):
-            ranges = fragment.refRanges or []
-            name = fragment.fragmentName
-        else:
-            ranges = fragment.get('refRanges', [])
-            name = fragment.get('fragmentName', '')
-        intervals.append((ranges, name))
-    return intervals
-
-
-@cython.cfunc
-@cython.inline
-@cython.returns(list)
-def get_ref_ranges(config: Mapping[str, Any] | BaseModel) -> list[NAPosRange]:
-    """Normalize reference range definitions.
-
-    :param config: Fragment or region configuration.
-    :type config: Mapping[str, Any] | BaseModel
-    :returns: List of reference coordinate ranges.
-    :rtype: list[NAPosRange]
-    """
-
-    if isinstance(config, BaseModel):
-        refstart = getattr(config, 'refStart', None)
-        refend = getattr(config, 'refEnd', None)
-        orig_refranges = getattr(config, 'refRanges', None)
-    else:
-        refstart = config.get('refStart')
-        refend = config.get('refEnd')
-        orig_refranges = config.get('refRanges')
-    refranges: list[NAPosRange] = []
-    if isinstance(orig_refranges, list):
-        refranges = [(start, end) for start, end in orig_refranges]
-    elif isinstance(refstart, int) and isinstance(refend, int):
-        refranges = [(refstart, refend)]
-    return refranges
+    return [
+        (fragment.refRanges, fragment.fragmentName)
+        for fragment in fragments
+    ]
 
 
 @cython.cfunc
@@ -127,17 +89,8 @@ def get_ref_fragments(
     for config in profile.fragmentConfig:
         if not isinstance(config, DerivedFragmentConfig):
             continue
-        refranges = get_ref_ranges(config)
-        if not refranges:
-            continue  # pragma: no cover - validated above
-        derived = DerivedFragmentConfig(
-            fragmentName=config.fragmentName,
-            fromFragment=config.fromFragment,
-            geneName=config.geneName,
-            refRanges=refranges,
-            codonAlignment=config.codonAlignment,
-        )
-        ref_fragments[config.fromFragment]['fragments'].append(derived)
+        refranges = config.refRanges
+        ref_fragments[config.fromFragment]['fragments'].append(config)
         frag_size_lookup[config.fragmentName] = sum(
             (end - start + 1) for start, end in refranges
         ) // 3
@@ -155,7 +108,7 @@ def get_ref_fragments(
         if refname not in frag_gene_lookup:
             frag_gene_lookup[refname] = []
         frag_gene_lookup[refname].append((gene, gene_offsets[gene]))
-        gene_offsets[gene] += frag_size_lookup.get(refname, 0)
+        gene_offsets[gene] += frag_size_lookup[refname]
 
     return [
         (refname, pair['ref'], pair['fragments'])

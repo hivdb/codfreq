@@ -131,8 +131,12 @@ def test_create_untrans_region_consensus_writes_results(
     profile_dict: dict[str, Any] = {
         "version": "1",
         "fragmentConfig": [
-            {"fragmentName": "F1"},
-            {"fragmentName": "F2", "fromFragment": "other"},
+            {"fragmentName": "F1", "refSequence": "AAA"},
+            {
+                "fragmentName": "F2",
+                "fromFragment": "other",
+                "refRanges": [(1, 2)],
+            },
         ],
         "sequenceAssemblyConfig": [
             {
@@ -205,3 +209,31 @@ def test_create_untrans_region_consensus_writes_results(
     m.assert_called_once_with("seq1.untrans.json", "w")
     written = "".join(call.args[0] for call in m().write.call_args_list)
     assert json.loads(written) == [result_cons]
+
+
+@patch("codfreq.sam2consensus.sam2consensus")
+@patch("codfreq.sam2consensus.name_bamfile")
+def test_create_untrans_region_consensus_skips_missing_fromfragment(
+    mock_name_bamfile: MagicMock,
+    mock_sam2consensus: MagicMock,
+) -> None:
+    """Regions lacking ``fromFragment`` are ignored."""
+
+    profile = Profile.model_validate(
+        {
+            "version": "1",
+            "fragmentConfig": [{"fragmentName": "F1", "refSequence": "AAA"}],
+            "sequenceAssemblyConfig": [
+                {
+                    "name": "R1",
+                    "refStart": 1,
+                    "refEnd": 2,
+                }
+            ],
+        }
+    )
+    mock_name_bamfile.return_value = "file.bam"
+    m = mock_open()
+    with patch("codfreq.sam2consensus.open", m, create=True):
+        create_untrans_region_consensus("seq1", profile)
+    mock_sam2consensus.assert_not_called()
