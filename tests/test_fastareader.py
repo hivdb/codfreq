@@ -10,7 +10,7 @@ def test_load_reads_sequences() -> None:
 
     data = ">seq1\nATcg\n#comment\n>seq2\nGG\n"
     sequences = fastareader.load(StringIO(data))
-    assert sequences == [
+    assert [s.model_dump() for s in sequences] == [
         {"header": "seq1", "sequence": "ATCG"},
         {"header": "seq2", "sequence": "GG"},
     ]

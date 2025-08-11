@@ -1,4 +1,4 @@
-from typing import TypedDict, Literal, Any
+from typing import Literal, Any
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 FASTQFileName = str
@@ -16,13 +16,29 @@ MultiAAText = bytes
 NAPosRange = tuple[NAPos, NAPos]
 
 
-class PairedFASTQ(TypedDict):
+class PairedFASTQ(BaseModel):
+    """Metadata for a paired FASTQ sample.
+
+    :param name: Sample identifier.
+    :type name: Header
+    :param pair: Tuple of R1/R2 FASTQ filenames. ``None`` for single-end reads.
+    :type pair: tuple[FASTQFileName, FASTQFileName | None]
+    :param n: Number of FASTQ files in the pair.
+    :type n: int
+    """
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: Header
     pair: tuple[FASTQFileName, FASTQFileName | None]
     n: int
 
 
-class Sequence(TypedDict):
+class Sequence(BaseModel):
+    """FASTA sequence entry."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     header: Header
     sequence: SeqText
 
@@ -147,14 +163,22 @@ class SequenceAssemblyConfig(BaseModel):
     refEnd: int | None = None
 
 
-class NARegionConfig(TypedDict):
+class NARegionConfig(BaseModel):
+    """Definition of a nucleotide assembly region."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str
     fromFragment: str
     refStart: int
     refEnd: int
 
 
-class RegionalConsensus(TypedDict):
+class RegionalConsensus(BaseModel):
+    """Consensus sequence for an assembly region."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     name: str
     refStart: NAPos
     refEnd: NAPos
@@ -179,7 +203,11 @@ class Profile(BaseModel):
     sequenceAssemblyConfig: list[SequenceAssemblyConfig]
 
 
-class CodFreqRow(TypedDict):
+class CodFreqRow(BaseModel):
+    """Single CodFreq output row."""
+
+    model_config = ConfigDict(frozen=True, extra='forbid')
+
     gene: GeneText
     position: AAPos
     total: int

@@ -19,7 +19,7 @@ from collections.abc import Iterable, Generator
 import rich
 import typer
 
-from .codfreq_types import Profile, PairedFASTQ, CodFreqRow
+from .codfreq_types import Profile, PairedFASTQ, CodFreqRow, MainFragmentConfig
 
 from .sam2codfreq import (
     sam2codfreq_all,
@@ -178,36 +178,43 @@ def find_paired_fastq_patterns(
             if not invalid:
                 covered |= known
                 for pair in pairs:
-                    yield {
-                        'name': suggest_pair_name(pair, pattern),
-                        'pair': pair,
-                        'n': 2
-                    }
+                    yield PairedFASTQ(
+                        name=suggest_pair_name(pair, pattern),
+                        pair=pair,
+                        n=2
+                    )
     if len(filenames) > len(covered):
         remains: list[str] = sorted(set(filenames) - covered)
         pattern = ('', -1, -1, -1)
         for left in remains:
-            yield {
-                'name': suggest_pair_name((left, None), pattern),
-                'pair': (left, None),
-                'n': 1
-            }
+            yield PairedFASTQ(
+                name=suggest_pair_name((left, None), pattern),
+                pair=(left, None),
+                n=1
+            )
 
 
 def complete_paired_fastqs(
     paired_fastqs: Iterable[PairedFASTQ],
     dirpath: str
 ) -> Generator[PairedFASTQ, None, None]:
+    """Expand relative paths in :class:`PairedFASTQ` records."""
+
     for pairobj in paired_fastqs:
-        yield {
-            'name': os.path.join(dirpath, pairobj['name']),
-            'pair': (
-                os.path.join(dirpath, pairobj['pair'][0]),
-                os.path.join(dirpath, pairobj['pair'][1])
-                if pairobj['pair'][1] else None
+        pfq = (
+            pairobj
+            if isinstance(pairobj, PairedFASTQ)
+            else PairedFASTQ.model_validate(pairobj)
+        )
+        yield PairedFASTQ(
+            name=os.path.join(dirpath, pfq.name),
+            pair=(
+                os.path.join(dirpath, pfq.pair[0]),
+                os.path.join(dirpath, pfq.pair[1])
+                if pfq.pair[1] else None
             ),
-            'n': pairobj['n']
-        }
+            n=pfq.n
+        )
 
 
 def find_paired_fastqs(
@@ -217,10 +224,11 @@ def find_paired_fastqs(
     pairinfo: str = os.path.join(workdir, 'pairinfo.json')
     if os.path.isfile(pairinfo):
         with open(pairinfo) as fp:
-            yield from complete_paired_fastqs(
-                json.load(fp),
-                workdir
-            )
+            data = json.load(fp)
+        yield from complete_paired_fastqs(
+            [PairedFASTQ.model_validate(p) for p in data],
+            workdir
+        )
     else:
         pairinfo_list: list[PairedFASTQ] = []
         for dirpath, _, filenames in os.walk(workdir, followlinks=True):
@@ -240,7 +248,7 @@ def find_paired_fastqs(
                 rel_dirpath
             ))
         with open(pairinfo, 'w') as fp:
-            json.dump(pairinfo_list, fp, indent=2)
+            json.dump([p.model_dump() for p in pairinfo_list], fp, indent=2)
         yield from complete_paired_fastqs(pairinfo_list, workdir)
 
 
@@ -259,30 +267,29 @@ def fastp_preprocess(
     """
     if log_format == LogFormat.text:
         rich.print(
-            'Pre-processing {} using fastp...'
-            .format(paired_fastq['name'])
+            f'Pre-processing {paired_fastq.name} using fastp...'
         )
     else:
         print(json.dumps({
             'op': 'preprocess',
             'status': 'working',
-            'query': paired_fastq['name']
+            'query': paired_fastq.name
         }))
-    merged_fastq: PairedFASTQ = {
-        'name': paired_fastq['name'],
-        'pair': (
+    merged_fastq = PairedFASTQ(
+        name=paired_fastq.name,
+        pair=(
             os.path.join(
-                os.path.dirname(paired_fastq['pair'][0]),
-                '{}.merged.fastq.gz'.format(paired_fastq['name'])
+                os.path.dirname(paired_fastq.pair[0]),
+                f'{paired_fastq.name}.merged.fastq.gz'
             ),
             None
         ),
-        'n': 1
-    }
+        n=1
+    )
     fastp.fastp(
-        paired_fastq['pair'][0],
-        paired_fastq['pair'][1],
-        merged_fastq['pair'][0],
+        paired_fastq.pair[0],
+        paired_fastq.pair[1],
+        merged_fastq.pair[0],
         **fastp_config
     )
     if log_format == LogFormat.text:
@@ -291,7 +298,7 @@ def fastp_preprocess(
         print(json.dumps({
             'op': 'preprocess',
             'status': 'done',
-            'query': paired_fastq['name']
+            'query': paired_fastq.name
         }))
     return merged_fastq
 
@@ -353,18 +360,18 @@ def cutadapt_trim(
     :type log_format: LogFormat
     :returns: Metadata for the trimmed FASTQ file.
     """
-    name: str = merged_fastq['name']
-    output_fastq: PairedFASTQ = {
-        'name': merged_fastq['name'],
-        'pair': (
+    name: str = merged_fastq.name
+    output_fastq = PairedFASTQ(
+        name=merged_fastq.name,
+        pair=(
             os.path.join(
-                os.path.dirname(merged_fastq['pair'][0]),
-                '{}.merged-trimed.fastq.gz'.format(merged_fastq['name'])
+                os.path.dirname(merged_fastq.pair[0]),
+                f'{merged_fastq.name}.merged-trimed.fastq.gz'
             ),
             None
         ),
-        'n': 1
-    }
+        n=1
+    )
     if log_format == LogFormat.text:
         rich.print(
             'Trimming {} using cutadapt...'
@@ -378,8 +385,8 @@ def cutadapt_trim(
             'query': name
         }))
     cutadapt.cutadapt(
-        merged_fastq['pair'][0],
-        output_fastq['pair'][0],
+        merged_fastq.pair[0],
+        output_fastq.pair[0],
         **cutadapt_config
     )
     if log_format == LogFormat.text:
@@ -427,42 +434,42 @@ def align_with_profile(
         refinit = get_refinit(program.value)
         alignfunc = get_align(program.value)
         for config in profile.fragmentConfig:
-            if config.refSequence is None:
-                continue  # pragma: no cover - missing refSequence
+            if not isinstance(config, MainFragmentConfig):
+                continue  # pragma: no cover - skip non-main fragment
             refname = config.fragmentName
             refseq = config.refSequence
             with open(refpath, 'w') as fp:
                 fp.write(f'>{refname}\n{refseq}\n\n')
 
             orig_bamfile = name_bamfile(
-                paired_fastq['name'],
+                paired_fastq.name,
                 refname,
                 is_trimmed=False)
             trimmed_bamfile = name_bamfile(
-                paired_fastq['name'],
+                paired_fastq.name,
                 refname,
                 is_trimmed=True)
             refinit(refpath)
             if log_format == LogFormat.text:
                 rich.print(
                     'Aligning {} with {}...'
-                    .format(paired_fastq['name'], refname)
+                    .format(paired_fastq.name, refname)
                 )
             else:
                 print(json.dumps({
                     'op': 'alignment',
                     'status': 'working',
-                    'query': paired_fastq['name'],
+                    'query': paired_fastq.name,
                     'target': refname
                 }))
-            alignfunc(refpath, *paired_fastq['pair'], orig_bamfile)
+            alignfunc(refpath, *paired_fastq.pair, orig_bamfile)
             if log_format == LogFormat.text:
                 rich.print('Done')
             else:
                 print(json.dumps({
                     'op': 'alignment',
                     'status': 'done',
-                    'query': paired_fastq['name'],
+                    'query': paired_fastq.name,
                     'target': refname
                 }))
             if ivar_trim_config is None:
@@ -535,24 +542,24 @@ def align(
             cutadapt_config=cutadapt_config,
             ivar_trim_config=ivar_trim_config
         )
-        codfreqfile = name_codfreq(pairobj['name'])
+        codfreqfile = name_codfreq(pairobj.name)
         with open(codfreqfile, 'w', encoding='utf-8-sig') as fp:
             writer = csv.DictWriter(fp, CODFREQ_HEADER)
             writer.writeheader()
             for row in sam2codfreq_all(
-                name=pairobj['name'],
-                fnpair=pairobj['pair'],
+                name=pairobj.name,
+                fnpair=pairobj.pair,
                 profile=profile_obj,
                 workers=workers,
                 log_format=log_format
             ):
                 writer.writerow({
-                    **row,
-                    'codon': row['codon'].decode(ENCODING)
+                    **row.model_dump(),
+                    'codon': row.codon.decode(ENCODING)
                 })
 
         create_untrans_region_consensus(
-            pairobj['name'],
+            pairobj.name,
             profile_obj
         )
 

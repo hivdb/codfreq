@@ -33,7 +33,11 @@ from codfreq.sam2consensus import (  # noqa: E402
     make_consensus,
     sam2consensus,
 )
-from codfreq.codfreq_types import NARegionConfig, Profile  # noqa: E402
+from codfreq.codfreq_types import (  # noqa: E402
+    NARegionConfig,
+    Profile,
+    RegionalConsensus,
+)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -50,18 +54,15 @@ def _cleanup_modules() -> Iterator[None]:
 def test_make_consensus_handles_gaps_and_insertions() -> None:
     """Missing bases yield gaps and insertions are appended."""
 
-    region: NARegionConfig = {
-        "name": "gag",
-        "fromFragment": "frag",
-        "refStart": 1,
-        "refEnd": 2,
-    }
+    region = NARegionConfig(
+        name="gag", fromFragment="frag", refStart=1, refEnd=2
+    )
     nacons_lookup: dict[tuple[int, int], int] = {
         (2, 0): ord("C"),
         (2, 1): ord("T"),
     }
     result = make_consensus(nacons_lookup, region)
-    assert result == {
+    assert result.model_dump() == {
         "name": "gag",
         "refStart": 1,
         "refEnd": 2,
@@ -101,14 +102,11 @@ def test_sam2consensus_keeps_frequent_insertions(
             ],
         ),
     ]
-    region: NARegionConfig = {
-        "name": "gag",
-        "fromFragment": "frag",
-        "refStart": 1,
-        "refEnd": 2,
-    }
+    region = NARegionConfig(
+        name="gag", fromFragment="frag", refStart=1, refEnd=2
+    )
     result = sam2consensus("sample.sam", region)
-    assert result == {
+    assert result.model_dump() == {
         "name": "gag",
         "refStart": 1,
         "refEnd": 2,
@@ -197,14 +195,16 @@ def test_create_untrans_region_consensus_writes_results(
         "refEnd": 2,
         "consensus": "AT",
     }
-    mock_sam2consensus.return_value = result_cons
+    mock_sam2consensus.return_value = RegionalConsensus(**result_cons)
     m = mock_open()
     with patch("codfreq.sam2consensus.open", m, create=True):
         create_untrans_region_consensus("seq1", profile)
     mock_name_bamfile.assert_called_once_with("seq1", "F1", is_trimmed=True)
     mock_sam2consensus.assert_called_once_with(
         "file.bam",
-        {"name": "R1", "fromFragment": "F1", "refStart": 1, "refEnd": 2},
+        NARegionConfig(
+            name="R1", fromFragment="F1", refStart=1, refEnd=2
+        ),
     )
     m.assert_called_once_with("seq1.untrans.json", "w")
     written = "".join(call.args[0] for call in m().write.call_args_list)
