@@ -22,6 +22,7 @@ cython_stub.cfunc = _decorator  # type: ignore[attr-defined]
 cython_stub.ccall = _decorator  # type: ignore[attr-defined]
 cython_stub.inline = _decorator  # type: ignore[attr-defined]
 cython_stub.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
+cython_stub.void = None  # type: ignore[attr-defined]
 sys.modules["cython"] = cython_stub
 
 from codfreq.sam2consensus import (  # noqa: E402

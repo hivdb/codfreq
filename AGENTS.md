@@ -11,6 +11,8 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 - **Dependencies**: keep them up to date with minimal, safe upgrades.
 - **Changes**: when you touch code, you also add/update tests.
 - **Cleanup**: remove unused and unexposed code.
+- **External deps**: do not vendor or stub third-party packages in the repo;
+  tests should use ``unittest.mock`` (e.g. ``mock.patch``) to simulate them.
 
 
 ## Environment & packaging

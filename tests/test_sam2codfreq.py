@@ -2,9 +2,16 @@ from collections import Counter
 from typing import cast
 
 from unittest.mock import MagicMock, patch
+import sys
 
-import codfreq.sam2codfreq as s2c
-from codfreq.codfreq_types import (
+from .mock_postalign import mock_postalign
+
+_POSTALIGN = mock_postalign()
+_POSTALIGN.__enter__()
+sys.modules.pop("codfreq.codonalign_consensus", None)
+sys.modules.pop("codfreq.sam2codfreq", None)
+import codfreq.sam2codfreq as s2c  # noqa: E402
+from codfreq.codfreq_types import (  # noqa: E402
     DerivedFragmentConfig,
     MainFragmentConfig,
     Profile,
