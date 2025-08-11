@@ -7,12 +7,18 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 - **Python**: use **Python 3.13**. If the project is not yet on 3.13, upgrade it and CI accordingly.
 - **Static checks**: enforce `mypy` and `flake8` on all tracked Python files.
 - **Tests**: run `pytest` with `pytest-cov`; fail if coverage drops below the configured threshold.
+- **Coverage**: ensure test coverage remains at **100%**. For statements that cannot
+  sensibly be executed (e.g., defensive branches), annotate them with
+  ``# pragma: no cover`` and a short explanation. Do not apply the pragma to an
+  entire file.
 - **Docs**: use **Sphinx docstring style**. When you touch a file, add/refresh docstrings.
 - **Dependencies**: keep them up to date with minimal, safe upgrades.
 - **Changes**: when you touch code, you also add/update tests.
 - **Cleanup**: remove unused and unexposed code.
-- **External deps**: do not vendor or stub third-party packages in the repo;
-  tests should use ``unittest.mock`` (e.g. ``mock.patch``) to simulate them.
+- **External deps**: never check in stand‑ins for third‑party packages
+  (e.g. ``pysam`` or ``cython``).  When a dependency is heavy or absent,
+  tests must patch it at runtime using ``unittest.mock`` (such as
+  ``patch.dict(sys.modules, {"pkg": stub})``) rather than vendoring files.
 
 
 ## Environment & packaging

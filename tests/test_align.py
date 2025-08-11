@@ -6,18 +6,11 @@ import json
 import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
-import sys
 
 import pytest
 import typer
 
-from .mock_postalign import mock_postalign
-
-_POSTALIGN = mock_postalign()
-_POSTALIGN.__enter__()
-sys.modules.pop("codfreq.codonalign_consensus", None)
-sys.modules.pop("codfreq.sam2codfreq", None)
-from codfreq.align import (  # noqa: E402
+from codfreq.align import (
     find_paired_marker,
     find_paired_fastq_patterns,
     complete_paired_fastqs,

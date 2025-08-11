@@ -5,7 +5,8 @@ from typing import Any, Iterator, List
 
 from unittest.mock import MagicMock, patch
 
-from codfreq.sam_prep import count_indel_positions, prepare_sam, squash_gaps
+import codfreq.sam_prep as sam_prep
+from codfreq.sam_prep import count_indel_positions, squash_gaps
 
 
 def test_squash_gaps_merges_indels() -> None:
@@ -74,10 +75,10 @@ def test_prepare_sam_processes_reads() -> None:
             af.write.side_effect = lambda r: written.append(r)
         return af
 
-    with patch(
-        "codfreq.sam_prep.AlignmentFile", side_effect=alignmentfile_factory
+    with patch.object(
+        sam_prep, "AlignmentFile", side_effect=alignmentfile_factory
     ):
-        prepare_sam("in.sam", "out.sam")
+        sam_prep.prepare_sam("in.sam", "out.sam")
 
     assert len(written) == 2
     assert written[1].cigartuples == [(0, 5), (1, 1), (0, 7)]

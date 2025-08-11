@@ -6,7 +6,8 @@ import json
 import sys
 import types
 from unittest.mock import MagicMock, mock_open, patch
-from typing import cast, Any
+from typing import Any, Iterator, cast
+import pytest
 
 # Stub cython decorators
 cython_stub = types.ModuleType("cython")
@@ -23,7 +24,9 @@ cython_stub.ccall = _decorator  # type: ignore[attr-defined]
 cython_stub.inline = _decorator  # type: ignore[attr-defined]
 cython_stub.returns = lambda *a, **k: _decorator  # type: ignore[attr-defined]
 cython_stub.void = None  # type: ignore[attr-defined]
-sys.modules["cython"] = cython_stub
+
+_patch = patch.dict(sys.modules, {"cython": cython_stub})
+_patch.start()
 
 from codfreq.sam2consensus import (  # noqa: E402
     create_untrans_region_consensus,
@@ -31,6 +34,17 @@ from codfreq.sam2consensus import (  # noqa: E402
     sam2consensus,
 )
 from codfreq.codfreq_types import NARegionConfig, Profile  # noqa: E402
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _cleanup_modules() -> Iterator[None]:
+    """Remove the ``cython`` stub after tests.
+
+    Yields:
+        Iterator[None]: ``None``.
+    """
+    yield
+    _patch.stop()
 
 
 def test_make_consensus_handles_gaps_and_insertions() -> None:

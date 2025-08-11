@@ -1,16 +1,11 @@
+"""Tests for the :mod:`codfreq.align` CLI wrapper."""
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
-import sys
 
-from .mock_postalign import mock_postalign
-
-_POSTALIGN = mock_postalign()
-_POSTALIGN.__enter__()
-sys.modules.pop("codfreq.codonalign_consensus", None)
-sys.modules.pop("codfreq.sam2codfreq", None)
-from codfreq.align import app as align_app  # noqa: E402
+from codfreq.align import app as align_app
 
 
 def test_align_cli_invalid_program(tmp_path: Path) -> None:
@@ -72,3 +67,24 @@ def test_align_cli_enable_profiling(tmp_path: Path) -> None:
     prof_cls.assert_called_once()
     mock_align.assert_called_once()
     stats_cls.return_value.print_stats.assert_called_once()
+
+
+def test_align_cli_runs_without_profiling(tmp_path: Path) -> None:
+    """Valid arguments call the core alignment function."""
+
+    profile = tmp_path / "profile.json"
+    profile.write_text("{}", encoding="utf-8")
+    runner = CliRunner()
+    with patch("codfreq.align.align") as mock_align:
+        result = runner.invoke(
+            align_app,
+            [
+                str(tmp_path),
+                "-p",
+                "bowtie2",
+                "-r",
+                str(profile),
+            ],
+        )
+    assert result.exit_code == 0
+    mock_align.assert_called_once()
