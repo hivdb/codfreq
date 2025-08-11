@@ -1,61 +1,102 @@
 """Tests for :mod:`codfreq.sam2codfreq`."""
 
 from collections import Counter
-from typing import cast
+from typing import Literal, cast
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+from pydantic import ValidationError
+
 import codfreq.sam2codfreq as s2c
-from codfreq.codfreq_types import Profile
+from codfreq.codfreq_types import (
+    Profile,
+    MainFragmentConfig,
+    DerivedFragmentConfig,
+)
 
 
-def test_build_fragment_intervals_and_get_ref_ranges() -> None:
+def test_build_fragment_intervals() -> None:
     fragments = [
-        {"refRanges": [(1, 3), (5, 7)], "fragmentName": "fragA"},
-        {"refRanges": [(8, 9)], "fragmentName": "fragB"},
+        DerivedFragmentConfig(
+            fragmentName="fragA",
+            fromFragment="refA",
+            refRanges=[(1, 3), (5, 7)],
+        ),
+        DerivedFragmentConfig(
+            fragmentName="fragB",
+            fromFragment="refA",
+            refRanges=[(8, 9)],
+        ),
     ]
     assert s2c.build_fragment_intervals(fragments) == [
         ([(1, 3), (5, 7)], "fragA"),
         ([(8, 9)], "fragB"),
     ]
 
-    assert s2c.get_ref_ranges({"refRanges": [(1, 3)]}) == [(1, 3)]
-    assert s2c.get_ref_ranges({"refStart": 4, "refEnd": 6}) == [(4, 6)]
+
+def test_derived_fragment_config_merges_refstart_refend() -> None:
+    frag = DerivedFragmentConfig.model_validate(
+        {
+            "fragmentName": "fragC",
+            "fromFragment": "refA",
+            "refStart": 4,
+            "refEnd": 6,
+        }
+    )
+    assert frag.refRanges == [(4, 6)]
+
+
+def test_derived_fragment_config_requires_ref_ranges() -> None:
+    with pytest.raises(ValidationError):
+        DerivedFragmentConfig.model_validate(
+            {
+                "fragmentName": "fragD",
+                "fromFragment": "refA",
+                "refRanges": [],
+            }
+        )
 
 
 def test_get_ref_fragments() -> None:
-    profile = {
-        "fragmentConfig": [
-            {"fragmentName": "refA", "refSequence": "AAA"},
-            {
-                "fragmentName": "fragA",
-                "fromFragment": "refA",
-                "geneName": "geneX",
-                "refRanges": [(1, 3)],
-                "codonAlignment": [{
-                    "relRefStart": 1,
-                    "relRefEnd": 3,
-                    "windowSize": 3,
-                    "minGapDistance": 5,
-                    "relGapPlacementScore": "0:0-1=1",
-                }],
-            },
-            {
-                "fragmentName": "fragB",
-                "fromFragment": "refA",
-                "geneName": "geneY",
-                "refRanges": [(4, 6)],
-                "codonAlignment": False,
-            },
-        ]
-    }
-    refs, lookup = s2c.get_ref_fragments(profile)
-    assert refs[0][2][0]["codonAlignment"][0]["relRefEnd"] == 3
-    assert refs[0][2][0]["codonAlignment"][0]["minGapDistance"] == 5
-    assert (
-        refs[0][2][0]["codonAlignment"][0]["relGapPlacementScore"] == "0:0-1=1"
+    profile = Profile.model_validate(
+        {
+            "version": "1",
+            "fragmentConfig": [
+                {"fragmentName": "refA", "refSequence": "AAA"},
+                {
+                    "fragmentName": "fragA",
+                    "fromFragment": "refA",
+                    "geneName": "geneX",
+                    "refRanges": [(1, 3)],
+                    "codonAlignment": [
+                        {
+                            "relRefStart": 1,
+                            "relRefEnd": 3,
+                            "windowSize": 3,
+                            "minGapDistance": 5,
+                            "relGapPlacementScore": "0:0-1=1",
+                        }
+                    ],
+                },
+                {
+                    "fragmentName": "fragB",
+                    "fromFragment": "refA",
+                    "geneName": "geneY",
+                    "refRanges": [(4, 6)],
+                    "codonAlignment": False,
+                },
+            ],
+            "sequenceAssemblyConfig": [],
+        }
     )
-    assert refs[0][2][1]["codonAlignment"] is False
+    refs, lookup = s2c.get_ref_fragments(profile)
+    assert refs[0][2][0].codonAlignment[0].relRefEnd == 3
+    assert refs[0][2][0].codonAlignment[0].minGapDistance == 5
+    assert (
+        refs[0][2][0].codonAlignment[0].relGapPlacementScore == "0:0-1=1"
+    )
+    assert refs[0][2][1].codonAlignment is False
     assert lookup["fragB"] == [("geneY", 0)]
 
 
@@ -125,9 +166,9 @@ def test_sam2codfreq_all() -> None:
     ), patch(
         "codfreq.sam2codfreq.name_bamfile", return_value="file.bam"
     ):
-        profile = cast(
-            Profile,
+        profile = Profile.model_validate(
             {
+                "version": "1",
                 "fragmentConfig": [
                     {"fragmentName": "refA", "refSequence": "AAA"},
                     {
@@ -136,8 +177,9 @@ def test_sam2codfreq_all() -> None:
                         "geneName": "geneX",
                         "refRanges": [(1, 3)],
                     },
-                ]
-            },
+                ],
+                "sequenceAssemblyConfig": [],
+            }
         )
 
         rows = s2c.sam2codfreq_all("sample", (None, None), profile, workers=1)
@@ -166,7 +208,7 @@ def test_sam2codfreq_accumulates_and_reports_progress() -> None:
         def __enter__(self) -> "DummyExecutor":
             return self
 
-        def __exit__(self, *exc: object) -> bool:
+        def __exit__(self, *exc: object) -> Literal[False]:
             return False
 
         def map(self, func, *args):  # type: ignore[no-untyped-def]
@@ -196,13 +238,13 @@ def test_sam2codfreq_accumulates_and_reports_progress() -> None:
 
     progress = MagicMock()
 
-    ref = {"fragmentName": "refA", "refSequence": "AAA"}
+    ref = MainFragmentConfig(fragmentName="refA", refSequence="AAA")
     fragments = [
-        {
-            "fragmentName": "fragA",
-            "fromFragment": "refA",
-            "refRanges": [(1, 3)],
-        }
+        DerivedFragmentConfig(
+            fragmentName="fragA",
+            fromFragment="refA",
+            refRanges=[(1, 3)],
+        )
     ]
 
     with (
@@ -248,7 +290,7 @@ def test_sam2codfreq_supports_json_log_format() -> None:
         def __enter__(self) -> "DummyExecutor":
             return self
 
-        def __exit__(self, *exc: object) -> bool:
+        def __exit__(self, *exc: object) -> Literal[False]:
             return False
 
         def map(self, func, *args):  # type: ignore[no-untyped-def]
@@ -265,13 +307,13 @@ def test_sam2codfreq_supports_json_log_format() -> None:
 
     json_progress = MagicMock()
 
-    ref = {"fragmentName": "refA", "refSequence": "AAA"}
+    ref = MainFragmentConfig(fragmentName="refA", refSequence="AAA")
     fragments = [
-        {
-            "fragmentName": "fragA",
-            "fromFragment": "refA",
-            "refRanges": [(1, 3)],
-        }
+        DerivedFragmentConfig(
+            fragmentName="fragA",
+            fromFragment="refA",
+            refRanges=[(1, 3)],
+        )
     ]
 
     with (
