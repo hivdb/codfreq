@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "ab477d1d3c288dc0021711cc8b5502aa0b74e71b04232776d68fa7841c29c04f"
+            "sha256": "c8a3418e7884a7b4763f748ae86ad703c4e0d1d57525f86d2d43f8167b938896"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -465,7 +465,7 @@
             "version": "==0.2.0"
         },
         "post-align": {
-            "file": "https://github.com/hivdb/post-align/archive/6bcc53044ff6c73d97d3a56b0643fe6ba8bc862f.zip"
+            "file": "https://codeload.github.com/hivdb/post-align/zip/b91393151ea5ddea0c3b1316120325cc60772d00"
         },
         "prompt-toolkit": {
             "hashes": [

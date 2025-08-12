@@ -16,7 +16,7 @@ tqdm = "*"
 more-itertools = "*"
 urllib3 = ">=1.26.5"
 Pygments = ">=2.7.4"
-post-align = {file = "https://github.com/hivdb/post-align/archive/6bcc53044ff6c73d97d3a56b0643fe6ba8bc862f.zip"}
+post-align = {file = "https://codeload.github.com/hivdb/post-align/zip/b91393151ea5ddea0c3b1316120325cc60772d00"}
 typing-extensions = "*"
 typer = ">=0.16.0"
 cutadapt = ">=4.4"

@@ -1,5 +1,42 @@
 [project]
 name = "codfreq"
+dynamic = ["version", "dependencies"]
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Philip Tzou", email = "philiptz@stanford.edu"}]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.scripts]
+fastq2codfreq = "codfreq.align:app"
+compress-codfreq = "codfreq.compress_codfreq:app"
+make-response = "codfreq.make_response:app"
+codfreq-profile = "codfreq.profile:app"
+
+[tool.setuptools]
+zip-safe = true
+
+[tool.setuptools.dynamic]
+version = {attr = "codfreq.version.VERSION"}
+dependencies = {file = "requirements.txt"}
+
+[tool.setuptools.packages.find]
+include = ["codfreq*"]
+
+[tool.setuptools.package-data]
+codfreq = ["py.typed"]
 
 [tool.mypy]
 python_version = '3.13'

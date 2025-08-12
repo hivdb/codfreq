@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 from typing import Annotated, Iterable, cast
 
-from Bio import Entrez, SeqIO  # type: ignore[import-not-found]
-from Bio.SeqFeature import CompoundLocation  # type: ignore[import-not-found]
-import questionary  # type: ignore[import-not-found]
 import typer
-from pydantic import BaseModel, ConfigDict, ValidationError
+import questionary
 from rich import print
+from Bio import Entrez, SeqIO
+from Bio.SeqFeature import CompoundLocation
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .codfreq_types import (
     Profile,
@@ -22,6 +22,8 @@ from .codfreq_types import (
     RegionAssemblyConfig,
     SequenceAssemblyConfig,
 )
+
+PROFILE_VERSION = '20221213'
 
 
 class GeneFeature(BaseModel):
@@ -58,9 +60,9 @@ def _fetch_record(
     """
 
     Entrez.email = email  # type: ignore[assignment]
-    with Entrez.efetch(
+    with Entrez.efetch(  # type: ignore[no-untyped-call]
         db="nuccore", id=accession, rettype="gb", retmode="text"
-    ) as handle:  # type: ignore[no-untyped-call]
+    ) as handle:
         record = SeqIO.read(handle, "genbank")  # type: ignore[no-untyped-call]
 
     features: list[GeneFeature] = []
@@ -103,15 +105,24 @@ def _prompt_genbank_fragments(
 
     if not record.features:
         return []
-    choices = [
-        questionary.Choice(
-            f"{feat.name} {feat.ranges}", value=feat, checked=True
+    uniq_names: dict[str, int] = {}
+    choices = []
+    for feat in record.features:
+        suffix = ''
+        if feat.name in uniq_names:
+            suffix = f'_{uniq_names[feat.name]}'
+            uniq_names[feat.name] += 1
+        else:
+            uniq_names[feat.name] = 1
+        feat = feat.model_copy(update={"name": f"{feat.name}{suffix}"})
+        choices.append(
+            questionary.Choice(
+                f"{feat.name} {feat.ranges}", value=feat, checked=True
+            )
         )
-        for feat in record.features
-    ]
     selected: list[GeneFeature] = questionary.checkbox(
         "Select fragments to add:", choices=choices
-    ).ask()
+    ).unsafe_ask()
     fragments: list[FragmentConfig] = []
     for feat in selected:
         fragments.append(
@@ -143,10 +154,10 @@ def _prompt_manual_fragments(
 
     frags: list[FragmentConfig] = []
     if main_name is None:
-        main_name = questionary.text("Main fragment name:").ask()
+        main_name = questionary.text("Main fragment name:").unsafe_ask()
         seq = questionary.text(
             f"Reference sequence for {main_name}:"
-        ).ask()
+        ).unsafe_ask()
         frags.append(
             MainFragmentConfig(fragmentName=main_name, refSequence=seq)
         )
@@ -154,15 +165,15 @@ def _prompt_manual_fragments(
     while True:
         name = questionary.text(
             "Fragment name (leave blank to finish):"
-        ).ask()
+        ).unsafe_ask()
         if not name:
             break
         gene = questionary.text(
             "Gene name (same as fragment name if leave empty):"
-        ).ask()
+        ).unsafe_ask()
         ranges_text = questionary.text(
             "Reference ranges for this fragment (e.g., 1-5,8-10):"
-        ).ask()
+        ).unsafe_ask()
         ranges: list[tuple[int, int]] = []
         for part in ranges_text.split(","):
             part = part.strip()
@@ -246,7 +257,7 @@ def _auto_assembly(
                 )
             )
         overlap = prev_end - start + 1 if prev_end >= start else 0
-        trim = None
+        trim = []
         if overlap > 0:
             trim = [(1, overlap)]
             start = prev_end + 1
@@ -293,9 +304,9 @@ def _prompt_manual_assemblies(
 
     assemblies: list[SequenceAssemblyConfig] = []
     prev_end = 0
-    while questionary.confirm("Add an assembly region?").ask():
-        if questionary.confirm("Is this region a gene?").ask():
-            gene_name = questionary.text("Gene name:").ask()
+    while questionary.confirm("Add an assembly region?").unsafe_ask():
+        if questionary.confirm("Is this region a gene?").unsafe_ask():
+            gene_name = questionary.text("Gene name:").unsafe_ask()
             if gene_name not in gene_spans:
                 print(
                     f"[red]Unknown gene {gene_name}[/red]"
@@ -309,7 +320,7 @@ def _prompt_manual_assemblies(
                 continue  # pragma: no cover - user input validation
             trim_text = questionary.text(
                 "Trim ranges (e.g., 1-5,10)? leave blank for none:"
-            ).ask()
+            ).unsafe_ask()
             trim: list[tuple[int, int]] | None = None
             if trim_text:
                 trim = []
@@ -328,17 +339,17 @@ def _prompt_manual_assemblies(
             )
             prev_end = end
         else:
-            region_name = questionary.text("Region name:").ask()
-            from_fragment = questionary.text("Source fragment:").ask()
+            region_name = questionary.text("Region name:").unsafe_ask()
+            from_fragment = questionary.text("Source fragment:").unsafe_ask()
             ref_start = int(
                 questionary.text(
                     "Reference start position (1-based, inclusive):",
-                ).ask()
+                ).unsafe_ask()
             )
             ref_end = int(
                 questionary.text(
                     "Reference end position (1-based, inclusive):",
-                ).ask()
+                ).unsafe_ask()
             )
             if ref_start != prev_end + 1:
                 print(
@@ -380,16 +391,9 @@ def validate(
         Profile.model_validate_json(profile.read_text(encoding="utf-8"))
     except ValidationError as err:
         print("[red]Profile validation failed[/red]")
-        for e in err.errors():
-            loc = ".".join(str(item) for item in e["loc"])
-            print(f"{loc}: {e['msg']}")
+        print(err)
         raise typer.Exit(code=1)
-
-
-validate_app = typer.Typer(
-    pretty_exceptions_enable=False, help="Validate profile files"
-)
-validate_app.command()(validate)
+    print(f"[green]Profile {profile} is valid[/green]")
 
 
 @app.command()
@@ -411,26 +415,23 @@ def create(
     :type output: Path
     :raises typer.Exit: If the generated profile fails validation.
     """
-
-    version = questionary.text("Profile version:").ask()
-
     fragments: list[FragmentConfig] = []
     accession = questionary.text(
         "GenBank accession (leave blank for manual input):"
-    ).ask()
+    ).unsafe_ask()
     main_name: str | None = None
     if accession:
         try:
             email = questionary.text(
                 "Email address for NCBI queries:",
-            ).ask()
+            ).unsafe_ask()
             record = _fetch_record(accession, email)
         except Exception as err:  # pragma: no cover - network failure
             print(f"[red]Failed to fetch {accession}: {err}[/red]")
             raise typer.Exit(code=1)
         main_name = questionary.text(
             "Main fragment name:", default=record.accession
-        ).ask()
+        ).unsafe_ask()
         fragments.append(
             MainFragmentConfig(
                 fragmentName=main_name, refSequence=record.sequence
@@ -442,30 +443,28 @@ def create(
 
     assemblies = _auto_assembly(fragments)
     if assemblies:
-        print(f"Suggested assembly: {assemblies}")
+        print("Suggested assembly:")
+        for a in assemblies:
+            print(f"  {a}")
         if not questionary.confirm(
             "Use this assembly configuration?"
-        ).ask():
+        ).unsafe_ask():
             assemblies = _prompt_manual_assemblies(
                 fragments
             )
     else:
         assemblies = _prompt_manual_assemblies(fragments)
 
-    profile_data = {
-        "version": version,
-        "fragmentConfig": [f.model_dump() for f in fragments],
-        "sequenceAssemblyConfig": [a.model_dump() for a in assemblies],
-    }
-
     try:
-        Profile.model_validate(profile_data)
+        profile = Profile(
+            version=PROFILE_VERSION,
+            fragmentConfig=fragments,
+            sequenceAssemblyConfig=assemblies)
     except ValidationError as err:
         print("[red]Profile creation failed[/red]")
-        for e in err.errors():
-            loc = ".".join(str(item) for item in e["loc"])
-            print(f"{loc}: {e['msg']}")
+        print(err)
         raise typer.Exit(code=1)
+    profile_data = profile.model_dump(mode="json", exclude_none=True)
 
     output.write_text(json.dumps(profile_data, indent=2), encoding="utf-8")
     print(f"[green]Profile written to {output}[/green]")
