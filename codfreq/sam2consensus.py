@@ -7,9 +7,10 @@ from .codfreq_types import (
     Profile,
     FragmentConfig,
     SequenceAssemblyConfig,
-    NARegionConfig,
+    RegionAssemblyConfig,
     RegionalConsensus,
     DerivedFragmentConfig,
+    GeneAssemblyConfig,
 )
 from .posnas import get_posnas_in_genome_region
 
@@ -25,7 +26,7 @@ ENCODING = 'UTF-8'
 @cython.returns(dict)
 def make_consensus(
     nacons_lookup: dict[tuple[NAPos, int], NAChar],
-    region: NARegionConfig
+    region: RegionAssemblyConfig
 ) -> RegionalConsensus:
     """Build consensus sequence for a region from nucleotide counts.
 
@@ -33,7 +34,7 @@ def make_consensus(
         nucleotide's ordinal value.
     :type nacons_lookup: dict[tuple[NAPos, int], NAChar]
     :param region: Region definition including name and coordinate range.
-    :type region: NARegionConfig
+    :type region: RegionAssemblyConfig
     :returns: Consensus record for the region.
     :rtype: RegionalConsensus
     """
@@ -67,14 +68,14 @@ def make_consensus(
 
 def sam2consensus(
     sampath: str,
-    region: NARegionConfig,
+    region: RegionAssemblyConfig,
 ) -> RegionalConsensus:
     """Generate a consensus sequence for a region from a SAM file.
 
     :param sampath: Path to the SAM/BAM file.
     :type sampath: str
     :param region: Region configuration describing fragment and coordinates.
-    :type region: NARegionConfig
+    :type region: RegionAssemblyConfig
     :returns: Consensus nucleotides covering the region.
     :rtype: RegionalConsensus
     """
@@ -140,25 +141,25 @@ def create_untrans_region_consensus(
         refname = fragment.fragmentName
         samfile = name_bamfile(seqname, refname, is_trimmed=True)
         for region in profile.sequenceAssemblyConfig:
-            if region.fromFragment is None:
+            if isinstance(region, GeneAssemblyConfig):
                 continue
-            if region.fromFragment != refname:
+            rf = getattr(region, "fromFragment", None)
+            name = getattr(region, "name", None)
+            start = getattr(region, "refStart", None)
+            end = getattr(region, "refEnd", None)
+            if rf is None or rf != refname:
                 continue
-            if region.name is None:
-                continue
-            if region.refStart is None:
-                continue
-            if region.refEnd is None:
+            if name is None or start is None or end is None:
                 continue
 
             results.append(
                 sam2consensus(
                     samfile,
-                    NARegionConfig(
-                        name=region.name,
-                        fromFragment=region.fromFragment,
-                        refStart=region.refStart,
-                        refEnd=region.refEnd,
+                    RegionAssemblyConfig(
+                        name=name,
+                        fromFragment=rf,
+                        refStart=start,
+                        refEnd=end,
                     ),
                 )
             )

@@ -1,5 +1,5 @@
 requirements.txt: Pipfile Pipfile.lock
-	@pipenv requirements > requirements.txt
+	@pipenv requirements | grep -v '^-i' > requirements.txt
 
 login-ecr:
 	@aws ecr get-login-password --region us-west-2 | docker login \

@@ -15,10 +15,14 @@ This repo uses automation agents (local or CI) to keep code healthy and consiste
 - **Dependencies**: keep them up to date with minimal, safe upgrades.
 - **Changes**: when you touch code, you also add/update tests.
 - **Cleanup**: remove unused and unexposed code.
+- **CLI output**: use ``rich.print`` instead of ``typer.echo``/``typer.secho``.
+- **JSON output**: when emitting machine-readable JSON, use plain ``print``.
 - **External deps**: never check in stand‑ins for third‑party packages
   (e.g. ``pysam`` or ``cython``).  When a dependency is heavy or absent,
   tests must patch it at runtime using ``unittest.mock`` (such as
   ``patch.dict(sys.modules, {"pkg": stub})``) rather than vendoring files.
+- **Data models**: prefer frozen ``pydantic.BaseModel`` classes over
+  ``dataclass`` for new or modified structures.
 
 
 ## Environment & packaging
@@ -57,10 +61,10 @@ make requirements.txt
 ## CI expectations (example)
 - Use Python 3.13 runner.
 - Steps:
-  1. `pip install -e .[dev]`
-  2. `flake8 .`
-  3. `mypy .`
-  4. `pytest --cov=codfreq --cov-report=xml` (record artifact, enforce threshold)
+  1. `pipenv run pip install -e .[dev]`
+  2. `pipenv run flake8 .`
+  3. `pipenv run mypy .`
+  4. `pipenv run pytest --cov=codfreq --cov-report=xml` (record artifact, enforce threshold)
 
 ## Sphinx docstring style (minimal rules)
 - Use Sphinx fields: `:param name:`, `:type name:`, `:returns:`, `:rtype:`, `:raises:`.
@@ -72,23 +76,10 @@ make requirements.txt
 # With pipenv
 pipenv update           # safe minor/patch upgrades per constraints
 pipenv update <pkg>
-
-# If using pip/requirements:
-pip list --outdated
-pip install -U <pkg>
-# If using pip-tools:
-pip-compile --upgrade
-pip-sync
 ```
+
 - Pin in requirements/lockfile as appropriate.
 - Run tests and type checks after any upgrade.
-
-## Pre-commit (recommended)
-```bash
-pip install pre-commit
-pre-commit install
-# Example hooks: flake8, mypy (via local hook), trailing-whitespace, end-of-file-fixer
-```
 
 ## Pull request checklist
 - [ ] Code runs on Python 3.13.

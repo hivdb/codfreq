@@ -1,5 +1,6 @@
-from typing import Literal, Any
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from typing import Literal, Any, Annotated
+from pydantic import (BaseModel, Field, ConfigDict,
+                      field_validator, model_validator)
 
 FASTQFileName = str
 Header = str
@@ -14,6 +15,9 @@ AAChar = int
 MultiAAText = bytes
 
 NAPosRange = tuple[NAPos, NAPos]
+
+DEFAULT_CODON_ALIGN_WINDOW_SIZE = 10
+DEFAULT_CODON_ALIGN_MIN_GAP_DISTANCE = 30
 
 
 class PairedFASTQ(BaseModel):
@@ -66,20 +70,20 @@ class CodonAlignmentConfig(BaseModel):
     :param relRefEnd: End position relative to the reference.
     :type relRefEnd: NAPos
     :param windowSize: Sliding window size in amino acids.
-    :type windowSize: AAPos | None
+    :type windowSize: AAPos
     :param minGapDistance: Minimum nucleotide distance between gaps.
-    :type minGapDistance: NAPos | None
+    :type minGapDistance: NAPos
     :param relGapPlacementScore: Relative gap placement score string.
     :type relGapPlacementScore: str | None
     """
 
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    relRefStart: NAPos
-    relRefEnd: NAPos
-    windowSize: AAPos | None = None
-    minGapDistance: NAPos | None = None
-    relGapPlacementScore: str | None = None
+    relRefStart: NAPos | None = None
+    relRefEnd: NAPos | None = None
+    windowSize: AAPos = DEFAULT_CODON_ALIGN_WINDOW_SIZE
+    minGapDistance: NAPos = DEFAULT_CODON_ALIGN_MIN_GAP_DISTANCE
+    relGapPlacementScore: str = ''
 
 
 class DerivedFragmentConfig(BaseModel):
@@ -95,7 +99,7 @@ class DerivedFragmentConfig(BaseModel):
     :type refRanges: list[NAPosRange]
     :param codonAlignment: Codon alignment configuration or ``False`` to
         disable alignment.
-    :type codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None
+    :type codonAlignment: list[CodonAlignmentConfig] | Literal[False] | None
     """
 
     model_config = ConfigDict(frozen=True, extra='forbid')
@@ -104,7 +108,7 @@ class DerivedFragmentConfig(BaseModel):
     fromFragment: Header
     geneName: GeneText | None = None
     refRanges: list[NAPosRange]
-    codonAlignment: Literal[False] | list[CodonAlignmentConfig] | None = None
+    codonAlignment: list[CodonAlignmentConfig] | Literal[False] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -141,39 +145,74 @@ class DerivedFragmentConfig(BaseModel):
 FragmentConfig = MainFragmentConfig | DerivedFragmentConfig
 
 
-class SequenceAssemblyConfig(BaseModel):
-    """Configuration for assembling sequences from fragments.
+class GeneAssemblyConfig(BaseModel):
+    """Assembly configuration for a gene region.
 
-    :param name: Name of the assembly region.
-    :type name: str | None
-    :param geneName: Associated gene name.
-    :type geneName: str | None
-    :param fromFragment: Source fragment name.
-    :type fromFragment: str | None
-    :param refStart: Start position in reference coordinates.
-    :type refStart: int | None
-    :param refEnd: End position in reference coordinates.
-    :type refEnd: int | None
+    :param geneName: Gene identifier referenced in ``fragmentConfig``.
+    :type geneName: str
+    :param trim: Ranges to exclude from the assembled gene. Each tuple is a
+        1-based inclusive interval relative to the fragment.
+    :type trim: list[tuple[NAPos, NAPos]]
     """
 
-    model_config = ConfigDict(frozen=True, extra='forbid')
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str | None = None
-    geneName: str | None = None
-    fromFragment: str | None = None
-    refStart: int | None = None
-    refEnd: int | None = None
+    geneName: str
+    trim: Annotated[list[tuple[NAPos, NAPos]], Field(default_factory=list)]
+
+    def __str__(self) -> str:
+        """String representation of the gene assembly configuration."""
+        trim_text = ','.join(
+            f"-{start}-{end}" for start, end in self.trim
+        ) or "all"
+        return f"{self.geneName}:{trim_text}"
+
+    @field_validator("trim", mode="before")
+    @classmethod
+    def normalize_trim(
+        cls, value: list[tuple[int, int]] | list[int] | None
+    ) -> list[tuple[int, int]] | None:
+        """Normalize ``trim`` entries to ``(start, end)`` tuples."""
+
+        if value is None:
+            return None
+        norm: list[tuple[int, int]] = []
+        for item in value:
+            if isinstance(item, int):
+                norm.append((item, item))
+            else:
+                norm.append((item[0], item[1]))
+        return norm
 
 
-class NARegionConfig(BaseModel):
-    """Definition of a nucleotide assembly region."""
+class RegionAssemblyConfig(BaseModel):
+    """Inter-gene assembly configuration defined by explicit coordinates.
 
-    model_config = ConfigDict(frozen=True, extra='forbid')
+    :param name: Region name.
+    :type name: str
+    :param fromFragment: Source fragment name.
+    :type fromFragment: str
+    :param refStart: Start position in reference coordinates (1-based,
+        inclusive).
+    :type refStart: int
+    :param refEnd: End position in reference coordinates (1-based,
+        inclusive).
+    :type refEnd: int
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     fromFragment: str
     refStart: int
     refEnd: int
+
+    def __str__(self) -> str:
+        """String representation of the region."""
+        return f"{self.name}[{self.fromFragment}]:{self.refStart}-{self.refEnd}"
+
+
+SequenceAssemblyConfig = GeneAssemblyConfig | RegionAssemblyConfig
 
 
 class RegionalConsensus(BaseModel):
@@ -200,9 +239,26 @@ class Profile(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra='forbid')
 
-    version: str
-    fragmentConfig: list[FragmentConfig]
+    version: Literal['20221213']
+    fragmentConfig: list[
+        Annotated[FragmentConfig, Field(union_mode='left_to_right')]
+    ]
     sequenceAssemblyConfig: list[SequenceAssemblyConfig]
+
+    @field_validator("fragmentConfig", mode="after")
+    @classmethod
+    def ensure_fragment_name_unique(
+        cls, value: list[FragmentConfig]
+    ) -> list[FragmentConfig]:
+        """Ensure each fragment has a unique name."""
+        names = set()
+        for fragment in value:
+            if fragment.fragmentName in names:
+                raise ValueError(
+                    f"Duplicate fragment name: {fragment.fragmentName}"
+                )
+            names.add(fragment.fragmentName)
+        return value
 
 
 class CodFreqRow(BaseModel):

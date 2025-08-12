@@ -28,8 +28,6 @@ from .codfreq_types import (
 ENCODING = 'UTF-8'
 GAP = ord(b'-')
 DEL_CODON = b'---'
-CODON_ALIGN_WINDOW_SIZE = 10
-CODON_ALIGN_MIN_GAP_DISTANCE = 30
 
 
 def get_sequence_obj(
@@ -234,13 +232,13 @@ def codonalign_consensus(
 
             # Load minGapDistance, windowSize and gapPlacementScore from config
             min_gap_distance = (
-                cda_config.minGapDistance or CODON_ALIGN_MIN_GAP_DISTANCE
+                cda_config.minGapDistance
             )
-            window_size = cda_config.windowSize or CODON_ALIGN_WINDOW_SIZE
+            window_size = cda_config.windowSize
             gap_placement_score: dict[
                 int, dict[tuple[int, int], int]
             ] = parse_gap_placement_score(
-                cda_config.relGapPlacementScore or ''
+                cda_config.relGapPlacementScore
             )
 
             # perform postalign's codon_align
